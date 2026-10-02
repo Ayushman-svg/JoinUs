@@ -33,6 +33,7 @@ function errorHandler(err, req, res, next) {
       code: isAppError ? error.code : 'INTERNAL_ERROR',
       // Never leak internal error details in production
       message: isAppError || !isProduction ? error.message : 'Something went wrong',
+      ...(isAppError && error.details ? { details: error.details } : {}),
     },
   });
 }

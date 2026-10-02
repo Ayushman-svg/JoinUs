@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const env = require('./config/env');
 const AppError = require('./utils/AppError');
 const healthRoutes = require('./routes/health.routes');
+const authRoutes = require('./routes/auth.routes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -32,6 +33,7 @@ app.use(
 app.use(express.json({ limit: '100kb' }));
 
 app.use('/api/health', healthRoutes);
+app.use('/api/auth', authRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
