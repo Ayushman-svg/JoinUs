@@ -1,7 +1,7 @@
 const dotenv = require('dotenv');
 const { z } = require('zod');
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 // Comma-separated list of origins -> array of normalized origins
 const originList = z.string().transform((value, ctx) => {
@@ -30,6 +30,12 @@ const originList = z.string().transform((value, ctx) => {
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(5000),
+  MONGODB_URI: z
+    .string()
+    .min(1, 'is required')
+    .refine((value) => /^mongodb(\+srv)?:\/\//.test(value), {
+      message: 'must start with mongodb:// or mongodb+srv://',
+    }),
   CLIENT_ORIGIN: originList,
 });
 
@@ -43,12 +49,13 @@ if (!result.success) {
   process.exit(1);
 }
 
-const { NODE_ENV, PORT, CLIENT_ORIGIN } = result.data;
+const { NODE_ENV, PORT, MONGODB_URI, CLIENT_ORIGIN } = result.data;
 
 module.exports = {
   nodeEnv: NODE_ENV,
   isProduction: NODE_ENV === 'production',
   isTest: NODE_ENV === 'test',
   port: PORT,
+  mongodbUri: MONGODB_URI,
   clientOrigins: CLIENT_ORIGIN,
 };
