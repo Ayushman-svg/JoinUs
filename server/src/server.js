@@ -3,9 +3,11 @@ const http = require('http');
 const env = require('./config/env');
 const { connectDB, disconnectDB } = require('./config/db');
 const app = require('./app');
+const { initSockets } = require('./sockets');
 
-// Plain http server so Socket.io can attach to it later
+// One http server shared by Express and Socket.io
 const server = http.createServer(app);
+const { io } = initSockets(server);
 
 async function start() {
   try {
@@ -25,7 +27,8 @@ function shutdown(signal) {
   // Force exit if connections refuse to close
   setTimeout(() => process.exit(1), 10000).unref();
 
-  server.close(async () => {
+  // Disconnects every socket and closes the underlying http server
+  io.close(async () => {
     await disconnectDB();
     process.exit(0);
   });
