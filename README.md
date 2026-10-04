@@ -4,7 +4,7 @@ A Zoom-style video meeting web app with custom WebRTC signaling. Create a meetin
 
 Built without third-party media SDKs: peer connections use raw WebRTC and signaling runs on a hand-written Socket.io protocol.
 
-**Live app:** (https://joinus-flame.vercel.app) · **API health:** (https://joinus-vobk.onrender.com)
+**Live app:** [joinus-flame.vercel.app](https://joinus-flame.vercel.app) · **API health:** [joinus-vobk.onrender.com/api/health](https://joinus-vobk.onrender.com/api/health)
 
 > The API runs on a free Render instance that sleeps when idle, so the first request after a pause can take up to a minute.
 
@@ -29,14 +29,19 @@ The server is API-first and client-agnostic: authentication uses `Authorization:
 
 ## Key Features
 
+Available now:
+
 - Register and log in with JWT authentication
 - Instant and scheduled meetings with shareable codes (e.g. `abc-defg-hij`)
 - Dashboard with upcoming and past meetings, join by code or link, and one-click invite links
+- Responsive, touch-friendly UI
+
+Planned:
+
 - Waiting room with host admit/deny controls
 - Multi-party audio and video with mute, camera toggle and screen share
 - In-meeting chat and meeting history
 - Automatic reconnects, device switching and a connection-quality indicator
-- Responsive, touch-friendly UI
 
 ## Tech Stack
 
@@ -160,8 +165,8 @@ The server validates its environment at startup and exits with a clear message i
 
 | Component | Platform | URL |
 | --- | --- | --- |
-| Client | Vercel | [https://joinus-flame.vercel.app](https://joinus-flame.vercel.app) |
-| Server | Render | [https://joinus-vobk.onrender.com](https://joinus-vobk.onrender.com) |
+| Client | Vercel | https://joinus-flame.vercel.app |
+| Server | Render | https://joinus-vobk.onrender.com |
 | Database | MongoDB Atlas | private |
 
 1. **MongoDB Atlas:** create an M0 cluster and a database user. Under Network Access allow `0.0.0.0/0` (Render's outbound IPs change). Copy the `mongodb+srv://` connection string and add `/joinus` as the database name.
