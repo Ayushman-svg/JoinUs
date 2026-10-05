@@ -6,6 +6,7 @@ const AppError = require('../utils/AppError');
 const { verifyToken } = require('../utils/token');
 const User = require('../models/User');
 const RoomRegistry = require('./roomRegistry');
+const { registerHandlers } = require('./handlers');
 
 // socket.io delivers err.message and err.data to the client's "connect_error" handler
 function toConnectError(err) {
@@ -53,14 +54,10 @@ function initSockets(httpServer) {
   io.on('connection', (socket) => {
     if (env.nodeEnv === 'development') {
       console.log(`socket connected: ${socket.id} (${socket.data.user.name})`);
+      socket.on('disconnect', () => console.log(`socket disconnected: ${socket.id}`));
     }
 
-    socket.on('disconnect', () => {
-      registry.leave(socket.id);
-      if (env.nodeEnv === 'development') {
-        console.log(`socket disconnected: ${socket.id}`);
-      }
-    });
+    registerHandlers(io, socket, registry);
   });
 
   return { io, registry };
