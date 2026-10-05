@@ -83,10 +83,48 @@ joinus/
 │   │   ├── models/      # Mongoose models
 │   │   ├── routes/      # route definitions
 │   │   ├── schemas/     # zod request schemas
+│   │   ├── sockets/     # Socket.io wiring, event handlers, room registry
 │   │   └── utils/       # tokens, meeting codes, errors
 │   └── tests/           # Jest + Supertest suites
 └── README.md
 ```
+
+### Signaling protocol
+
+Realtime signaling runs on Socket.io, on the same origin as the REST API. The protocol is plain JSON events, so any client (web or mobile) can implement it.
+
+**Connecting.** Pass the same JWT used for REST in the handshake: `io(API_URL, { auth: { token } })`. A refused connection fires `connect_error` with `err.data = { code, message }`, where `code` is `UNAUTHORIZED`, `INVALID_TOKEN` or `TOKEN_EXPIRED`.
+
+**Identity.** The peer id is the `socket.id`. The user id and display name always come from the verified token, never from an event payload.
+
+**Acknowledgements.** Every client-to-server event takes an ack callback that receives `{ ok: true, ...data }` or `{ ok: false, error: { code, message } }`.
+
+Client to server:
+
+| Event | Payload | Ack data | Error codes |
+| --- | --- | --- | --- |
+| `room:join` | `{ code }` | `{ peerId, peers: [{ peerId, user: { id, name } }] }` | `VALIDATION_ERROR`, `MEETING_NOT_FOUND`, `MEETING_CANCELLED`, `ROOM_FULL`, `ALREADY_IN_ROOM` |
+| `room:leave` | none | `{}` | none (safe to call twice) |
+| `signal` | `{ to, description?, candidate? }` | `{}` | `VALIDATION_ERROR`, `NOT_IN_ROOM`, `PEER_NOT_FOUND` |
+
+Server to client:
+
+| Event | Payload | Meaning |
+| --- | --- | --- |
+| `room:peer-joined` | `{ peerId, user: { id, name } }` | Someone joined your room |
+| `room:peer-left` | `{ peerId }` | Someone left, disconnected or was replaced by a newer session |
+| `room:kicked` | `{ reason }` | You were removed from the room. `reason` is `JOINED_ELSEWHERE` |
+| `signal` | `{ from, description?, candidate? }` | A relayed WebRTC message from a peer in your room |
+
+**Rules**
+
+- A meeting is joinable only if it exists and is active. Unknown codes return `MEETING_NOT_FOUND` and cancelled meetings return `MEETING_CANCELLED`.
+- A room holds at most 2 peers for now. Another join returns `ROOM_FULL`.
+- If the same user joins again (refresh or a second tab), the newer session wins: the older socket receives `room:kicked`, and the other peers see `room:peer-left` followed by `room:peer-joined`.
+- `signal` carries exactly one of `description` (`{ type, sdp }`, where a `rollback` has no `sdp`) or `candidate` (`{ candidate, sdpMid, sdpMLineIndex, usernameFragment }`). The end-of-candidates `null` is not sent.
+- `signal` is relayed only between two different peers in the same room. A target in another room or an unknown id returns `PEER_NOT_FOUND`. The `from` field is set by the server, and unlisted payload fields are dropped.
+- Disconnecting removes the peer from its room and notifies the others.
+- Messages are limited to 100 KB.
 
 ## API Reference
 
