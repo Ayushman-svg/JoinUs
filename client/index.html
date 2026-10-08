@@ -3,8 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#2563eb" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#F8FAFC" />
     <title>JoinUs</title>
+
+    <!-- Paints the right background before any CSS or JS loads, so there is no white flash.
+         Keep these two colors equal to --color-background in styles/tokens/light.css and dark.css. -->
+    <style>
+      html { background: #f8fafc; }
+      html[data-theme='dark'] { background: #0b1220; }
+    </style>
+    <script>
+      (function () {
+        var preference = 'system';
+        try {
+          preference = localStorage.getItem('joinus-theme') || 'system';
+        } catch (e) {}
+        var dark =
+          preference === 'dark' ||
+          (preference !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', dark ? '#0B1220' : '#F8FAFC');
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

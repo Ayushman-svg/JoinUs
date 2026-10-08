@@ -1,0 +1,51 @@
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-active: #1e40af;
+  --color-primary-light: #eff6ff;
+  --color-primary-text: #1d4ed8;
+  --color-on-primary: #ffffff;
+  --color-link: #2563eb;
+  --color-focus: #2563eb;
+  --color-focus-ring: rgb(37 99 235 / 0.25);
+
+  --color-background: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-border-input: #8190a5;
+  --color-text: #0f172a;
+  --color-text-secondary: #5b6b82;
+  --color-text-muted: #94a3b8; /* decorative and disabled only, never essential text */
+
+  --color-success: #16a34a;
+  --color-success-text: #15803d;
+  --color-success-solid: #15803d;
+  --color-success-light: #f0fdf4;
+  --color-warning: #f59e0b;
+  --color-warning-text: #b45309;
+  --color-warning-light: #fffbeb;
+  --color-danger: #dc2626;
+  --color-danger-text: #b91c1c;
+  --color-danger-solid: #dc2626;
+  --color-danger-solid-hover: #b91c1c;
+  --color-danger-light: #fef2f2;
+
+  --color-brand-surface: #1e3a8a;
+  --color-on-brand: #ffffff;
+  --color-on-brand-muted: #bfdbfe;
+  --color-on-brand-subtle: rgb(255 255 255 / 0.12);
+
+  --color-skeleton: #e2e8f0;
+  --color-scrollbar: #cbd5e1;
+  --color-scrollbar-hover: #94a3b8;
+  --color-selection: rgb(37 99 235 / 0.2);
+  --overlay: rgb(15 23 42 / 0.5);
+
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.06);
+  --shadow-md: 0 4px 14px rgb(15 23 42 / 0.08);
+  --shadow-lg: 0 14px 36px rgb(15 23 42 / 0.14);
+}

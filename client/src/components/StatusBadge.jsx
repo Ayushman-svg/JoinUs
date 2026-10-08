@@ -1,11 +1,13 @@
+import Badge from './ui/Badge.jsx';
+
 const KINDS = {
-  scheduled: { label: 'Scheduled', className: 'badge-scheduled' },
-  instant: { label: 'Instant', className: 'badge-neutral' },
-  ended: { label: 'Ended', className: 'badge-neutral' },
-  cancelled: { label: 'Cancelled', className: 'badge-danger' },
+  scheduled: { label: 'Scheduled', variant: 'primary' },
+  instant: { label: 'Instant', variant: 'neutral' },
+  ended: { label: 'Ended', variant: 'neutral' },
+  cancelled: { label: 'Cancelled', variant: 'danger' },
 };
 
 export default function StatusBadge({ kind }) {
-  const { label, className } = KINDS[kind] || KINDS.instant;
-  return <span className={`badge ${className}`}>{label}</span>;
+  const { label, variant } = KINDS[kind] || KINDS.instant;
+  return <Badge variant={variant}>{label}</Badge>;
 }

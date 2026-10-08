@@ -1,0 +1,73 @@
+/* Theme-independent design tokens: type, spacing, radius, motion, layering */
+:root {
+  --font-sans: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  /* Type scale */
+  --text-hero: clamp(3rem, 2.1rem + 3.4vw, 4.5rem); /* 48-72px */
+  --text-h1: clamp(2rem, 1.7rem + 1.2vw, 2.5rem); /* 32-40px, page heading */
+  --text-h2: clamp(1.5rem, 1.35rem + 0.6vw, 1.875rem); /* 24-30px, section */
+  --text-h3: clamp(1rem, 0.95rem + 0.35vw, 1.25rem); /* 16-20px, card heading */
+  --text-body: clamp(0.9375rem, 0.92rem + 0.1vw, 1rem); /* 15-16px */
+  --text-sm: clamp(0.8125rem, 0.8rem + 0.1vw, 0.875rem); /* 13-14px, secondary */
+  --text-xs: clamp(0.75rem, 0.74rem + 0.05vw, 0.8125rem); /* 12-13px, meta */
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.3;
+  --leading-normal: 1.5;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Spacing (4px base) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 999px;
+
+  /* Control heights: touch targets are at least 44px on touch devices */
+  --control-height-sm: 2.25rem;
+  --control-height: 2.75rem;
+  --control-height-lg: 3rem;
+
+  /* Motion */
+  --duration-fast: 150ms;
+  --duration: 200ms;
+  --duration-slow: 300ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Layering */
+  --z-dropdown: 50;
+  --z-modal: 100;
+  --z-toast: 110;
+  --z-tooltip: 120;
+
+  /* Avatar palette: every pair keeps white text above 4.5:1 */
+  --avatar-1: #2563eb;
+  --avatar-2: #7c3aed;
+  --avatar-3: #0f766e;
+  --avatar-4: #b45309;
+  --avatar-5: #be185d;
+  --avatar-6: #475569;
+}
+
+@media (pointer: coarse) {
+  :root {
+    --control-height-sm: 2.75rem;
+  }
+}

@@ -1,0 +1,14 @@
+/* The meeting room is always dark. Add class "theme-meeting" to its root element. */
+.theme-meeting {
+  --color-background: #0b0f14;
+  --color-surface: #151a21;
+  --color-surface-2: #1e252e;
+  --color-border: #2d3742;
+  --color-border-input: #5a6878;
+  --color-text: #f8fafc;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #7c8798;
+
+  background: var(--color-background);
+  color: var(--color-text);
+}

@@ -1,8 +1,10 @@
+import Spinner from './ui/Spinner.jsx';
+
 export default function FullPageLoader({ label = 'Loading…' }) {
   return (
-    <div className="center-screen" role="status" aria-live="polite">
-      <div className="spinner" aria-hidden="true" />
-      <p className="muted">{label}</p>
+    <div className="ui-fullpage" role="status" aria-live="polite">
+      <Spinner size="lg" />
+      <p>{label}</p>
     </div>
   );
 }
