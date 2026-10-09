@@ -1,7 +1,8 @@
+import { Lock, Mail, ShieldCheck, User } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import AuthLayout from '../components/AuthLayout.jsx';
+import AuthCard from '../components/AuthCard.jsx';
 import FormField from '../components/FormField.jsx';
 import PasswordStrength from '../components/PasswordStrength.jsx';
 import Alert from '../components/ui/Alert.jsx';
@@ -70,7 +71,7 @@ export default function Register() {
   }
 
   return (
-    <AuthLayout
+    <AuthCard
       title="Create your account"
       subtitle="It takes a few seconds."
       footer={
@@ -84,6 +85,7 @@ export default function Register() {
         <FormField
           id="name"
           label="Name"
+          leftIcon={User}
           type="text"
           autoComplete="name"
           placeholder="Your name"
@@ -94,6 +96,7 @@ export default function Register() {
         <FormField
           id="email"
           label="Email"
+          leftIcon={Mail}
           type="email"
           autoComplete="email"
           inputMode="email"
@@ -105,6 +108,7 @@ export default function Register() {
         <FormField
           id="password"
           label="Password"
+          leftIcon={Lock}
           type="password"
           autoComplete="new-password"
           placeholder="At least 8 characters"
@@ -117,6 +121,7 @@ export default function Register() {
         <FormField
           id="confirm"
           label="Confirm password"
+          leftIcon={ShieldCheck}
           type="password"
           autoComplete="new-password"
           placeholder="Repeat your password"
@@ -134,6 +139,6 @@ export default function Register() {
           </p>
         )}
       </form>
-    </AuthLayout>
+    </AuthCard>
   );
 }

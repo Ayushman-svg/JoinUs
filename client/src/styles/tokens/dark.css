@@ -39,6 +39,8 @@
   --color-on-brand: #ffffff;
   --color-on-brand-muted: #bfdbfe;
   --color-on-brand-subtle: rgb(255 255 255 / 0.1);
+  --color-on-brand-faint: rgb(255 255 255 / 0.06);
+  --color-on-brand-strong: rgb(255 255 255 / 0.24);
 
   --color-skeleton: #1e293b;
   --color-scrollbar: #334155;
@@ -49,4 +51,6 @@
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-md: 0 4px 14px rgb(0 0 0 / 0.4);
   --shadow-lg: 0 14px 36px rgb(0 0 0 / 0.5);
+  --shadow-primary: 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-glow: 0 8px 26px rgb(37 99 235 / 0.5);
 }

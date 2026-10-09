@@ -1,0 +1,201 @@
+/* Motion and highlight effects.
+   They only add feedback on top of the base components and never carry meaning on their own.
+   prefers-reduced-motion switches them off (see base.css). */
+
+@keyframes ui-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes ui-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  70% {
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes ui-shake {
+  20%,
+  60% {
+    transform: translateX(-5px);
+  }
+  40%,
+  80% {
+    transform: translateX(5px);
+  }
+}
+
+@keyframes ui-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes ui-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* ---------- Buttons: lift, glow, press and a light sheen ---------- */
+.ui-btn {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease),
+    box-shadow var(--duration) var(--ease),
+    transform var(--duration-fast) var(--ease);
+}
+
+.ui-btn svg {
+  transition: transform var(--duration) var(--ease-spring);
+}
+
+.ui-btn:hover:not(:disabled):not([aria-disabled='true']) {
+  transform: translateY(-1px);
+}
+
+.ui-btn:active:not(:disabled):not([aria-disabled='true']) {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 60ms;
+}
+
+.ui-btn--icon:hover:not(:disabled) svg {
+  transform: scale(1.12);
+}
+
+.ui-btn--primary {
+  box-shadow: var(--shadow-primary);
+}
+
+.ui-btn--primary:hover:not(:disabled) {
+  box-shadow: var(--shadow-glow);
+}
+
+.ui-btn--primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.28) 50%, transparent 65%);
+  transform: translateX(-130%);
+  transition: transform 650ms var(--ease);
+  pointer-events: none;
+}
+
+.ui-btn--primary:hover:not(:disabled)::after {
+  transform: translateX(130%);
+}
+
+.ui-btn--danger:hover:not(:disabled) {
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--color-danger-solid) 40%, transparent);
+}
+
+.ui-btn--success:hover:not(:disabled) {
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--color-success-solid) 40%, transparent);
+}
+
+.ui-btn--secondary:hover:not(:disabled),
+.ui-btn--outline:hover:not(:disabled) {
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---------- Inputs: icon highlight, focus glow, shake and pop ---------- */
+.ui-input {
+  box-shadow: 0 0 0 0 transparent;
+}
+
+.ui-input:hover:not(:focus-within):not(.is-invalid) {
+  border-color: var(--color-text-secondary);
+}
+
+.ui-input__icon {
+  display: inline-flex;
+  flex: none;
+  padding-left: var(--space-3);
+  color: var(--color-text-secondary);
+  transition:
+    color var(--duration) var(--ease),
+    transform var(--duration) var(--ease-spring);
+}
+
+.ui-input--icon .ui-input__control {
+  padding-left: var(--space-2);
+}
+
+.ui-input:focus-within .ui-input__icon {
+  color: var(--color-link);
+  transform: scale(1.15);
+}
+
+.ui-input.is-invalid .ui-input__icon {
+  color: var(--color-danger);
+}
+
+.ui-input.is-invalid {
+  animation: ui-shake 0.35s var(--ease);
+}
+
+.ui-field__label {
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.ui-field:focus-within .ui-field__label {
+  color: var(--color-primary-text);
+}
+
+.ui-field__message--error {
+  animation: ui-slide-down var(--duration) var(--ease);
+}
+
+.ui-field__message--success svg,
+.ui-input__status svg {
+  animation: ui-pop 0.4s var(--ease-spring);
+}
+
+.ui-strength__bar.is-filled {
+  transform-origin: left center;
+  animation: ui-grow var(--duration) var(--ease);
+}
+
+/* ---------- Cards: lift and highlight when they are clickable ---------- */
+.ui-card--interactive {
+  cursor: pointer;
+  transition:
+    transform var(--duration) var(--ease),
+    box-shadow var(--duration) var(--ease),
+    border-color var(--duration) var(--ease);
+}
+
+.ui-card--interactive:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+  box-shadow: var(--shadow-lg);
+}
+
+.ui-card--interactive:active {
+  transform: translateY(-1px);
+}
+
+/* ---------- Menus ---------- */
+.ui-dropdown__item svg:first-child {
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.ui-dropdown__item:hover svg:first-child,
+.ui-dropdown__item:focus-visible svg:first-child {
+  color: var(--color-link);
+}

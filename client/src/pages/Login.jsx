@@ -1,7 +1,8 @@
+import { Lock, Mail } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import AuthLayout from '../components/AuthLayout.jsx';
+import AuthCard from '../components/AuthCard.jsx';
 import FormField from '../components/FormField.jsx';
 import Alert from '../components/ui/Alert.jsx';
 import Button from '../components/ui/Button.jsx';
@@ -54,7 +55,7 @@ export default function Login() {
   }
 
   return (
-    <AuthLayout
+    <AuthCard
       title="Welcome back"
       subtitle="Log in to start or join a meeting."
       footer={
@@ -68,6 +69,7 @@ export default function Login() {
         <FormField
           id="email"
           label="Email"
+          leftIcon={Mail}
           type="email"
           autoComplete="email"
           inputMode="email"
@@ -79,6 +81,7 @@ export default function Login() {
         <FormField
           id="password"
           label="Password"
+          leftIcon={Lock}
           type="password"
           autoComplete="current-password"
           placeholder="Your password"
@@ -95,6 +98,6 @@ export default function Login() {
           </p>
         )}
       </form>
-    </AuthLayout>
+    </AuthCard>
   );
 }
