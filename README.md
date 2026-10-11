@@ -195,7 +195,7 @@ The suites run the real Express app against an in-memory MongoDB, so they never 
 
 | Variable | Description |
 | --- | --- |
-| `VITE_API_URL` | Base URL of the API server |
+| `VITE_API_URL` | Base URL of the API server. Used for REST requests and for the Socket.io signaling connection (same server, same address) |
 
 The server validates its environment at startup and exits with a clear message if anything is missing or malformed.
 

@@ -1,4 +1,5 @@
-const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/+$/, '');
+import { API_URL as BASE_URL } from '../config.js';
+
 const TOKEN_KEY = 'joinus_token';
 const AUTH_ERROR_CODES = ['UNAUTHORIZED', 'INVALID_TOKEN', 'TOKEN_EXPIRED'];
 
