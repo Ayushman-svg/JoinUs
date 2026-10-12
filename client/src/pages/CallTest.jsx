@@ -1,49 +1,19 @@
 // TEMPORARY page for trying the call between two browsers. Replaced by the real call page.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import AppHeader from '../components/AppHeader.jsx';
+import VideoView from '../components/VideoView.jsx';
 import Alert from '../components/ui/Alert.jsx';
 import Button from '../components/ui/Button.jsx';
+import { useMeetingMedia } from '../context/MeetingMediaContext.jsx';
 import useCall from '../hooks/useCall.js';
-import useLocalMedia from '../hooks/useLocalMedia.js';
 
-function VideoTile({ stream, label, muted = false }) {
-  const ref = useRef(null);
-  const [blocked, setBlocked] = useState(false);
-
-  useEffect(() => {
-    const video = ref.current;
-    if (!video) return;
-    video.srcObject = stream;
-    if (stream) {
-      // Browsers can refuse to start sound before the page has been clicked
-      video.play().then(
-        () => setBlocked(false),
-        (err) => err.name === 'NotAllowedError' && setBlocked(true)
-      );
-    }
-  }, [stream]);
-
+function Tile({ stream, label, muted = false, mirrored = false }) {
   return (
-    <div style={{ position: 'relative' }}>
-      <video
-        ref={ref}
-        autoPlay
-        playsInline
-        muted={muted}
-        style={{ width: '100%', aspectRatio: '16 / 10', background: '#000', borderRadius: 12, objectFit: 'cover' }}
-      />
+    <div style={{ position: 'relative', aspectRatio: '16 / 10', background: '#000', borderRadius: 12, overflow: 'hidden' }}>
+      <VideoView stream={stream} muted={muted} mirrored={mirrored} />
       <span style={{ position: 'absolute', left: 10, bottom: 10, color: '#fff', fontSize: 13 }}>{label}</span>
-      {blocked && (
-        <Button
-          size="sm"
-          style={{ position: 'absolute', top: 10, left: 10 }}
-          onClick={() => ref.current.play().then(() => setBlocked(false))}
-        >
-          Tap to play
-        </Button>
-      )}
     </div>
   );
 }
@@ -62,8 +32,20 @@ const STATUS_TEXT = {
 export default function CallTest() {
   const { code } = useParams();
   const navigate = useNavigate();
-  const media = useLocalMedia();
-  const call = useCall({ code, localStream: media.stream, enabled: media.status === 'ready' });
+  const media = useMeetingMedia();
+
+  // Opening this page directly (without the join screen) starts the devices here
+  const { status: mediaStatus, start: startMedia } = media;
+  useEffect(() => {
+    if (mediaStatus === 'idle') startMedia();
+  }, [mediaStatus, startMedia]);
+
+  // Joins once the devices are ready, or without them if they could not be started
+  const call = useCall({
+    code,
+    localStream: media.stream,
+    enabled: mediaStatus === 'ready' || mediaStatus === 'error',
+  });
 
   const summary = {
     media: media.status,
@@ -89,20 +71,27 @@ export default function CallTest() {
         {call.status === 'active' && call.peers.length === 0 && <p className="muted">Waiting for others…</p>}
 
         <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
-          <VideoTile stream={media.stream} label="You" muted />
+          <Tile stream={media.stream} label="You" muted mirrored />
           {call.peers.map((peer) => (
-            <VideoTile key={peer.peerId} stream={peer.stream} label={peer.user?.name ?? 'Guest'} />
+            <Tile key={peer.peerId} stream={peer.stream} label={peer.user?.name ?? 'Guest'} />
           ))}
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Button variant="secondary" onClick={media.toggleAudio}>
+          <Button variant="secondary" onClick={media.toggleAudio} disabled={!media.hasAudio}>
             {media.audioEnabled ? 'Mute' : 'Unmute'}
           </Button>
-          <Button variant="secondary" onClick={media.toggleVideo}>
+          <Button variant="secondary" onClick={media.toggleVideo} disabled={!media.hasVideo}>
             {media.videoEnabled ? 'Camera off' : 'Camera on'}
           </Button>
-          <Button variant="danger" onClick={() => navigate(`/m/${code}`)}>
+          <Button
+            variant="danger"
+            onClick={() => {
+              // Release the camera and microphone, then go back to the dashboard
+              media.stop();
+              navigate('/');
+            }}
+          >
             Leave
           </Button>
         </div>

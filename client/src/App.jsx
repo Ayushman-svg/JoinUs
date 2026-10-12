@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 
 import AuthLayout from './components/AuthLayout.jsx';
 import GuestRoute from './components/GuestRoute.jsx';
+import MeetingLayout from './components/MeetingLayout.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import CallTest from './pages/CallTest.jsx';
 import Dashboard from './pages/Dashboard.jsx';
@@ -21,8 +22,10 @@ export default function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/m/:code" element={<MeetingPage />} />
-        <Route path="/m/:code/call" element={<CallTest />} />
+        <Route element={<MeetingLayout />}>
+          <Route path="/m/:code" element={<MeetingPage />} />
+          <Route path="/m/:code/call" element={<CallTest />} />
+        </Route>
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

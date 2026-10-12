@@ -1,6 +1,8 @@
+import { Check, Link2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { copyText, inviteLink } from '../lib/meetingLink.js';
+import Button from './ui/Button.jsx';
 
 export default function CopyLinkButton({ code, label = 'Copy link' }) {
   const [state, setState] = useState('idle'); // idle | copied | failed
@@ -17,9 +19,14 @@ export default function CopyLinkButton({ code, label = 'Copy link' }) {
 
   return (
     <>
-      <button type="button" className="btn btn-secondary btn-small" onClick={onClick}>
+      <Button
+        variant="secondary"
+        size="sm"
+        leftIcon={state === 'copied' ? Check : Link2}
+        onClick={onClick}
+      >
         {state === 'copied' ? 'Copied' : state === 'failed' ? 'Copy failed' : label}
-      </button>
+      </Button>
       <span className="sr-only" role="status" aria-live="polite">
         {state === 'copied' ? 'Invite link copied' : ''}
       </span>

@@ -1,4 +1,4 @@
-/* Temporary styles for the Phase 1 Dashboard and invite pages.
+/* Temporary styles for the Phase 1 Dashboard page.
    They now use the design tokens, and are removed when those pages are rebuilt. */
 
 .muted { color: var(--color-text-secondary); }
@@ -10,12 +10,6 @@
 }
 
 .brand-link { text-decoration: none; }
-
-.hint {
-  margin: 0 0 var(--space-4);
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
-}
 
 .alert {
   margin-bottom: var(--space-4);
@@ -163,30 +157,6 @@
 .meeting-side { display: flex; align-items: center; gap: var(--space-2); }
 
 .list-state { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); padding: var(--space-2) 0; }
-
-.back-link { display: block; max-width: 35rem; margin: 0 auto var(--space-4); }
-
-.meeting-card { max-width: 35rem; margin: 0 auto; display: grid; gap: var(--space-2); }
-.meeting-heading { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
-.meeting-name { font-size: var(--text-h2); overflow-wrap: anywhere; }
-.meeting-when { font-weight: var(--weight-semibold); }
-.join-block { margin-top: var(--space-4); }
-.join-block .hint { margin: var(--space-2) 0 0; }
-.invite { margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--color-border); }
-.invite-title { margin-bottom: var(--space-2); font-size: var(--text-body); }
-.invite-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-
-.invite-link {
-  flex: 1 1 15rem;
-  min-width: 0;
-  padding: var(--space-3);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  overflow-wrap: anywhere;
-}
 
 @media (min-width: 640px) {
   .user-name { display: inline; }
