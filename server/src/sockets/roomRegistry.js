@@ -10,12 +10,12 @@ class RoomRegistry {
     this.peerRooms = new Map(); // peerId -> meeting code
   }
 
-  // Adds a peer to a room.
+  // Adds a peer to a room. audio/video say whether its microphone and camera are on.
   // Returns { peer, peers, replaced }:
   //   peers    - everyone else now in the room
   //   replaced - older sessions of the same user that were removed (newer session wins)
   // Throws ROOM_FULL or ALREADY_IN_ROOM without changing any state.
-  join(code, { peerId, userId, name }) {
+  join(code, { peerId, userId, name, audio = true, video = true }) {
     const currentCode = this.peerRooms.get(peerId);
     if (currentCode !== undefined && currentCode !== code) {
       throw new AppError(409, 'ALREADY_IN_ROOM', 'Leave your current meeting before joining another');
@@ -38,12 +38,22 @@ class RoomRegistry {
       this.peerRooms.delete(old.peerId);
     }
 
-    const peer = Object.freeze({ peerId, userId, name, joinedAt: Date.now() });
+    const peer = Object.freeze({ peerId, userId, name, audio, video, joinedAt: Date.now() });
     room.set(peerId, peer);
     this.rooms.set(code, room);
     this.peerRooms.set(peerId, code);
 
     return { peer, peers: this.#others(room, peerId), replaced };
+  }
+
+  // Records a peer's microphone and camera state. Returns { code, peer } or null if not in a room.
+  setMedia(peerId, { audio, video }) {
+    const code = this.peerRooms.get(peerId);
+    if (code === undefined) return null;
+    const room = this.rooms.get(code);
+    const peer = Object.freeze({ ...room.get(peerId), audio, video });
+    room.set(peerId, peer);
+    return { code, peer };
   }
 
   // Removes a peer. Returns { code, peer, remaining } or null if it was not in a room.

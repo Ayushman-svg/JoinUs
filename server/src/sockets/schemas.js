@@ -2,8 +2,17 @@ const { z } = require('zod');
 
 const { codeParamsSchema } = require('../schemas/meeting.schemas');
 
-// room:join { code }
-const joinSchema = codeParamsSchema;
+// room:join { code, audio?, video? }: audio and video are the starting microphone and camera state
+const joinSchema = codeParamsSchema.extend({
+  audio: z.boolean().optional(),
+  video: z.boolean().optional(),
+});
+
+// media:update { audio, video }
+const mediaSchema = z.object({
+  audio: z.boolean(),
+  video: z.boolean(),
+});
 
 // RTCSessionDescriptionInit: { type, sdp }. A rollback carries no sdp.
 const descriptionSchema = z
@@ -35,4 +44,4 @@ const signalSchema = z
     message: 'send either description or candidate',
   });
 
-module.exports = { joinSchema, signalSchema };
+module.exports = { joinSchema, mediaSchema, signalSchema };

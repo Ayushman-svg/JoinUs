@@ -1,11 +1,13 @@
 const AppError = require('../utils/AppError');
 const { MEETING_STATUS } = require('../config/constants');
 const Meeting = require('../models/Meeting');
-const { joinSchema, signalSchema } = require('./schemas');
+const { joinSchema, mediaSchema, signalSchema } = require('./schemas');
 
 const toPublicPeer = (peer) => ({
   peerId: peer.peerId,
   user: { id: peer.userId, name: peer.name },
+  audio: peer.audio,
+  video: peer.video,
 });
 
 function parse(schema, payload) {
@@ -47,7 +49,7 @@ function leaveRoom(io, registry, socket) {
 
 function registerHandlers(io, socket, registry) {
   on(socket, 'room:join', async (payload) => {
-    const { code } = parse(joinSchema, payload);
+    const { code, audio, video } = parse(joinSchema, payload);
 
     const meeting = await Meeting.findOne({ code }).select('status').lean();
     if (!meeting) throw new AppError(404, 'MEETING_NOT_FOUND', 'Meeting not found');
@@ -62,6 +64,8 @@ function registerHandlers(io, socket, registry) {
       peerId: socket.id,
       userId: user.id,
       name: user.name,
+      audio,
+      video,
     });
 
     // Newer session wins: the older tab is removed and told why, and the others
@@ -86,6 +90,17 @@ function registerHandlers(io, socket, registry) {
     }
 
     return { peerId: socket.id, peers: peers.map(toPublicPeer) };
+  });
+
+  // The microphone and camera state is shown on other people's screens, so it is relayed
+  on(socket, 'media:update', (payload) => {
+    const { audio, video } = parse(mediaSchema, payload);
+
+    const updated = registry.setMedia(socket.id, { audio, video });
+    if (!updated) throw new AppError(403, 'NOT_IN_ROOM', 'Join a meeting first');
+
+    socket.to(updated.code).emit('room:peer-updated', { peerId: socket.id, audio, video });
+    return {};
   });
 
   on(socket, 'room:leave', () => {
