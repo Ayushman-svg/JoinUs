@@ -6,7 +6,9 @@
 //   ...
 //   call.leave();
 //
-// state = { status, error, selfId, peers: [{ peerId, user, stream, connectionState }] }
+// state = { status, error, selfId, peers: [{ peerId, user, stream, connectionState, audio, video }] }
+// audio and video say whether that person's microphone and camera are on. The server relays
+// them, because WebRTC cannot tell the difference between a muted sender and a silent room.
 // A dropped connection is recovered by joining the room again from scratch: the server has
 // already removed the old session, so the old peer connections are replaced by new ones.
 import { Peer, DEFAULT_RTC_CONFIG } from './peer.js';
@@ -31,6 +33,8 @@ export class CallSession {
     url,
     getToken,
     localStream = null,
+    // Returns { audio, video }: whether our microphone and camera are on right now
+    getLocalMedia = () => ({ audio: true, video: true }),
     rtcConfig = DEFAULT_RTC_CONFIG,
     createSignalingClient = createSignaling,
   }) {
@@ -38,6 +42,7 @@ export class CallSession {
     this.url = url;
     this.getToken = getToken;
     this.localStream = localStream;
+    this.getLocalMedia = getLocalMedia;
     this.rtcConfig = rtcConfig;
     this.createSignalingClient = createSignalingClient;
 
@@ -74,12 +79,20 @@ export class CallSession {
       // Someone joined after us: they make the first offer
       signaling.on('room:peer-joined', (info) => this.#addPeer(info, { initiator: false })),
       signaling.on('room:peer-left', ({ peerId }) => this.#removePeer(peerId)),
+      signaling.on('room:peer-updated', (update) => this.#updatePeerMedia(update)),
       signaling.on('room:kicked', ({ reason }) => this.#finish(CallStatus.KICKED, { reason })),
       signaling.on('signal', (message) => this.#onSignal(message)),
     ];
 
     this.#update({ status: CallStatus.CONNECTING });
     signaling.connect();
+  }
+
+  // Tell the others that our microphone or camera was switched on or off
+  updateLocalMedia() {
+    if (this.state.status === CallStatus.ACTIVE && this.signaling?.connected) {
+      this.signaling.send('media:update', this.getLocalMedia());
+    }
   }
 
   // Leaves the room and closes everything. Safe to call more than once.
@@ -113,7 +126,10 @@ export class CallSession {
     this.#update({ status: CallStatus.JOINING });
 
     try {
-      const response = await this.signaling.request('room:join', { code: this.code });
+      const response = await this.signaling.request('room:join', {
+        code: this.code,
+        ...this.getLocalMedia(),
+      });
       if (this.finished || attempt !== this.joinAttempt) return;
 
       this.selfId = response.peerId;
@@ -131,14 +147,14 @@ export class CallSession {
     }
   }
 
-  #addPeer({ peerId, user }, { initiator }) {
+  #addPeer({ peerId, user, audio = true, video = true }, { initiator }) {
     if (this.finished || this.peers.has(peerId)) return;
     if (!this.selfId) {
-      this.earlyPeers.push({ peerId, user });
+      this.earlyPeers.push({ peerId, user, audio, video });
       return;
     }
 
-    const entry = { peer: null, user, stream: null, connectionState: 'new' };
+    const entry = { peer: null, user, stream: null, connectionState: 'new', audio, video };
     entry.peer = new Peer({
       remoteId: peerId,
       // Opposite roles on the two sides: the smaller id is the polite one
@@ -161,6 +177,14 @@ export class CallSession {
     this.#update();
 
     this.#replayPending(peerId, entry.peer);
+  }
+
+  #updatePeerMedia({ peerId, audio, video }) {
+    const entry = this.peers.get(peerId);
+    if (!entry) return;
+    entry.audio = audio;
+    entry.video = video;
+    this.#update();
   }
 
   #removePeer(peerId) {
@@ -221,6 +245,8 @@ export class CallSession {
         user: entry.user,
         stream: entry.stream,
         connectionState: entry.connectionState,
+        audio: entry.audio,
+        video: entry.video,
       })),
     };
     this.listeners.forEach((listener) => listener(this.state));

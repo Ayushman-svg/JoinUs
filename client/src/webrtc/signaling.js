@@ -19,7 +19,7 @@ export const SignalingStatus = Object.freeze({
   CLOSED: 'closed', // closed by us
 });
 
-const SERVER_EVENTS = ['room:peer-joined', 'room:peer-left', 'room:kicked', 'signal'];
+const SERVER_EVENTS = ['room:peer-joined', 'room:peer-left', 'room:peer-updated', 'room:kicked', 'signal'];
 const FATAL_CODES = new Set(['UNAUTHORIZED', 'INVALID_TOKEN', 'TOKEN_EXPIRED']);
 
 export class SignalingError extends Error {

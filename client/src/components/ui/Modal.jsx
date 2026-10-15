@@ -6,6 +6,7 @@ import Button from './Button.jsx';
 // Accessible dialog built on the native <dialog> element: it traps focus, closes on Escape,
 // makes the page behind inert and returns focus to the trigger when it closes.
 // size: sm | md | lg. Set dismissible={false} to ignore Escape and backdrop clicks.
+// Mark one element inside with data-autofocus to give it the first focus.
 export default function Modal({
   open,
   onClose,
@@ -23,7 +24,11 @@ export default function Modal({
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
+    if (open && !dialog.open) {
+      dialog.showModal();
+      // Start on the safe choice when a button is marked data-autofocus (for example "Stay")
+      dialog.querySelector('[data-autofocus]')?.focus();
+    }
     if (!open && dialog.open) dialog.close();
   }, [open]);
 

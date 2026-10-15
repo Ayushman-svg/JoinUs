@@ -103,7 +103,8 @@ Client to server:
 
 | Event | Payload | Ack data | Error codes |
 | --- | --- | --- | --- |
-| `room:join` | `{ code }` | `{ peerId, peers: [{ peerId, user: { id, name } }] }` | `VALIDATION_ERROR`, `MEETING_NOT_FOUND`, `MEETING_CANCELLED`, `ROOM_FULL`, `ALREADY_IN_ROOM` |
+| `room:join` | `{ code, audio?, video? }` | `{ peerId, peers: [{ peerId, user: { id, name }, audio, video }] }` | `VALIDATION_ERROR`, `MEETING_NOT_FOUND`, `MEETING_CANCELLED`, `ROOM_FULL`, `ALREADY_IN_ROOM` |
+| `media:update` | `{ audio, video }` | `{}` | `VALIDATION_ERROR`, `NOT_IN_ROOM` |
 | `room:leave` | none | `{}` | none (safe to call twice) |
 | `signal` | `{ to, description?, candidate? }` | `{}` | `VALIDATION_ERROR`, `NOT_IN_ROOM`, `PEER_NOT_FOUND` |
 
@@ -111,7 +112,8 @@ Server to client:
 
 | Event | Payload | Meaning |
 | --- | --- | --- |
-| `room:peer-joined` | `{ peerId, user: { id, name } }` | Someone joined your room |
+| `room:peer-joined` | `{ peerId, user: { id, name }, audio, video }` | Someone joined your room |
+| `room:peer-updated` | `{ peerId, audio, video }` | Someone switched their microphone or camera on or off |
 | `room:peer-left` | `{ peerId }` | Someone left, disconnected or was replaced by a newer session |
 | `room:kicked` | `{ reason }` | You were removed from the room. `reason` is `JOINED_ELSEWHERE` |
 | `signal` | `{ from, description?, candidate? }` | A relayed WebRTC message from a peer in your room |
@@ -123,6 +125,7 @@ Server to client:
 - If the same user joins again (refresh or a second tab), the newer session wins: the older socket receives `room:kicked`, and the other peers see `room:peer-left` followed by `room:peer-joined`.
 - `signal` carries exactly one of `description` (`{ type, sdp }`, where a `rollback` has no `sdp`) or `candidate` (`{ candidate, sdpMid, sdpMLineIndex, usernameFragment }`). The end-of-candidates `null` is not sent.
 - `signal` is relayed only between two different peers in the same room. A target in another room or an unknown id returns `PEER_NOT_FOUND`. The `from` field is set by the server, and unlisted payload fields are dropped.
+- `audio` and `video` say whether a person's microphone and camera are on. They start from the values sent with `room:join` (both default to on) and change with `media:update`. WebRTC itself cannot tell a muted sender from a silent one, so the server relays the state for the interface.
 - Disconnecting removes the peer from its room and notifies the others.
 - Messages are limited to 100 KB.
 
