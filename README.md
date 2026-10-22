@@ -144,6 +144,7 @@ All errors share one shape: `{ "error": { "code": "...", "message": "...", "deta
 | GET | `/api/meetings/:code` | none | Minimal public info for an invite page |
 | PATCH | `/api/meetings/:code` | Host | Edit title or scheduled time |
 | DELETE | `/api/meetings/:code` | Host | Cancel the meeting |
+| GET | `/api/ice-servers` | Bearer | ICE (STUN and optional TURN) server configuration |
 
 ## Local Setup
 
@@ -193,12 +194,19 @@ The suites run the real Express app against an in-memory MongoDB, so they never 
 | `JWT_SECRET` | Secret for signing JWTs, at least 32 characters |
 | `JWT_EXPIRES_IN` | Token lifetime, e.g. `7d` |
 | `CLIENT_ORIGIN` | Allowed CORS origin(s), comma-separated, no paths |
+| `TURN_URLS` | Optional comma-separated TURN server URLs (e.g. `turn:turn.example.com:3478?transport=udp`) |
+| `TURN_USERNAME` | Optional TURN username |
+| `TURN_CREDENTIAL` | Optional TURN password / credential |
 
 **`client/.env`**
 
 | Variable | Description |
 | --- | --- |
 | `VITE_API_URL` | Base URL of the API server. Used for REST requests and for the Socket.io signaling connection (same server, same address) |
+
+### Debugging and Forced TURN Relay
+
+To test and verify that TURN relaying works as expected across strict networks, append `?relay=1` to any call URL (e.g. `/m/abc-defg-hij/call?relay=1`). This sets `iceTransportPolicy: 'relay'`, forcing WebRTC to ignore direct peer candidates and communicate strictly via the configured TURN relay.
 
 The server validates its environment at startup and exits with a clear message if anything is missing or malformed.
 

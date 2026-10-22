@@ -42,6 +42,9 @@ const schema = z.object({
     .regex(/^\d+[smhd]$/, 'must look like 15m, 12h or 7d')
     .default('7d'),
   CLIENT_ORIGIN: originList,
+  TURN_URLS: z.string().optional(),
+  TURN_USERNAME: z.string().optional(),
+  TURN_CREDENTIAL: z.string().optional(),
 });
 
 const result = schema.safeParse(process.env);
@@ -54,7 +57,17 @@ if (!result.success) {
   process.exit(1);
 }
 
-const { NODE_ENV, PORT, MONGODB_URI, JWT_SECRET, JWT_EXPIRES_IN, CLIENT_ORIGIN } = result.data;
+const {
+  NODE_ENV,
+  PORT,
+  MONGODB_URI,
+  JWT_SECRET,
+  JWT_EXPIRES_IN,
+  CLIENT_ORIGIN,
+  TURN_URLS,
+  TURN_USERNAME,
+  TURN_CREDENTIAL,
+} = result.data;
 
 module.exports = {
   nodeEnv: NODE_ENV,
@@ -67,4 +80,11 @@ module.exports = {
   // Low cost in tests keeps the suite fast
   bcryptRounds: NODE_ENV === 'test' ? 4 : 12,
   clientOrigins: CLIENT_ORIGIN,
+  turnUrls: TURN_URLS
+    ? TURN_URLS.split(',')
+        .map((u) => u.trim())
+        .filter(Boolean)
+    : [],
+  turnUsername: TURN_USERNAME || '',
+  turnCredential: TURN_CREDENTIAL || '',
 };

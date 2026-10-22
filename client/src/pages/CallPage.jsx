@@ -2,6 +2,7 @@ import { Link2, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
+import { getIceServers } from '../api/ice.js';
 import { getMeeting } from '../api/meetings.js';
 import CallControls from '../components/call/CallControls.jsx';
 import CallProblem from '../components/call/CallProblem.jsx';
@@ -15,6 +16,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useMeetingMedia } from '../context/MeetingMediaContext.jsx';
 import useCall from '../hooks/useCall.js';
 import useSlowRequest from '../hooks/useSlowRequest.js';
+import { DEFAULT_RTC_CONFIG } from '../webrtc/peer.js';
 
 // Polite text for screen readers when someone joins or leaves
 function useAnnouncement(peers) {
@@ -41,6 +43,7 @@ export default function CallPage() {
 
   const [meeting, setMeeting] = useState(null);
   const [confirmingLeave, setConfirmingLeave] = useState(false);
+  const [rtcConfig, setRtcConfig] = useState(null);
 
   // The title is only decoration here: if it cannot be loaded the code is shown instead
   useEffect(() => {
@@ -48,6 +51,28 @@ export default function CallPage() {
     getMeeting(code, { signal: controller.signal }).then(setMeeting, () => {});
     return () => controller.abort();
   }, [code]);
+
+  // Fetch ICE / TURN configuration and check debug relay flag (?relay=1)
+  useEffect(() => {
+    const controller = new AbortController();
+    const isForcedRelay = new URLSearchParams(window.location.search).get('relay') === '1';
+
+    getIceServers({ signal: controller.signal })
+      .then((data) => {
+        setRtcConfig({
+          iceServers: data?.iceServers?.length ? data.iceServers : DEFAULT_RTC_CONFIG.iceServers,
+          ...(isForcedRelay ? { iceTransportPolicy: 'relay' } : {}),
+        });
+      })
+      .catch(() => {
+        setRtcConfig({
+          ...DEFAULT_RTC_CONFIG,
+          ...(isForcedRelay ? { iceTransportPolicy: 'relay' } : {}),
+        });
+      });
+
+    return () => controller.abort();
+  }, []);
 
   // Opening this page directly (without the join screen) starts the devices here
   const { status: mediaStatus, start: startMedia } = media;
@@ -60,7 +85,8 @@ export default function CallPage() {
     code,
     localStream: media.stream,
     localMedia: { audio: media.audioEnabled, video: media.videoEnabled },
-    enabled: mediaSettled,
+    enabled: mediaSettled && rtcConfig !== null,
+    rtcConfig: rtcConfig ?? DEFAULT_RTC_CONFIG,
   });
   const slow = useSlowRequest(call.status === 'connecting' || call.status === 'idle', 6000);
   const announcement = useAnnouncement(call.peers);

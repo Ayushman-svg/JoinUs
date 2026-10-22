@@ -8,6 +8,7 @@ const AppError = require('./utils/AppError');
 const healthRoutes = require('./routes/health.routes');
 const authRoutes = require('./routes/auth.routes');
 const meetingRoutes = require('./routes/meeting.routes');
+const iceRoutes = require('./routes/ice.routes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -37,6 +38,7 @@ app.use(express.json({ limit: '100kb' }));
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/meetings', meetingRoutes);
+app.use('/api/ice-servers', iceRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
