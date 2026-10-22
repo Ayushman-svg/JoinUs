@@ -168,11 +168,12 @@ function registerHandlers(io, socket, registry) {
         peerId,
         peers: peers.map(toPublicPeer),
       });
+      guestSocket.to(code).emit('room:peer-joined', toPublicPeer(peer));
+    } else {
+      io.to(code).emit('room:peer-joined', toPublicPeer(peer));
     }
 
-    socket.to(code).emit('room:peer-joined', toPublicPeer(peer));
     notifyHostWaitingUpdated(io, registry, code);
-
     return {};
   });
 
@@ -205,8 +206,10 @@ function registerHandlers(io, socket, registry) {
           peerId: item.peer.peerId,
           peers: item.peers.map(toPublicPeer),
         });
+        guestSocket.to(code).emit('room:peer-joined', toPublicPeer(item.peer));
+      } else {
+        io.to(code).emit('room:peer-joined', toPublicPeer(item.peer));
       }
-      socket.to(code).emit('room:peer-joined', toPublicPeer(item.peer));
     }
 
     notifyHostWaitingUpdated(io, registry, code);
