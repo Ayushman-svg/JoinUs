@@ -17,7 +17,11 @@ import { createSignaling, SignalingStatus } from './signaling.js';
 export const CallStatus = Object.freeze({
   CONNECTING: 'connecting', // opening the connection to the meeting server
   JOINING: 'joining', // connected, asking to enter the room
+  WAITING: 'waiting', // in waiting room, waiting for host admission
   ACTIVE: 'active', // in the room, alone or with others
+  DENIED: 'denied', // host denied admission
+  REMOVED: 'removed', // removed from meeting by host
+  ENDED: 'ended', // meeting ended by host
   RECONNECTING: 'reconnecting', // the connection dropped, retrying
   ERROR: 'error', // could not join, or the server refused us (see state.error)
   KICKED: 'kicked', // the same user joined from another tab
@@ -52,11 +56,20 @@ export class CallSession {
     this.peers = new Map(); // peerId -> { peer, user, stream, connectionState }
     this.pending = new Map(); // peerId -> signals that arrived before the peer was announced
     this.earlyPeers = [];
+    this.waitingList = [];
+    this.hostInRoom = true;
     this.selfId = null;
     this.joinAttempt = 0;
     this.finished = false;
 
-    this.state = { status: CallStatus.CONNECTING, error: null, selfId: null, peers: [] };
+    this.state = {
+      status: CallStatus.CONNECTING,
+      error: null,
+      selfId: null,
+      peers: [],
+      waitingList: [],
+      hostInRoom: true,
+    };
   }
 
   getState() {
@@ -81,11 +94,43 @@ export class CallSession {
       signaling.on('room:peer-left', ({ peerId }) => this.#removePeer(peerId)),
       signaling.on('room:peer-updated', (update) => this.#updatePeerMedia(update)),
       signaling.on('room:kicked', ({ reason }) => this.#finish(CallStatus.KICKED, { reason })),
+      signaling.on('room:waiting-updated', ({ waiting }) => this.#onWaitingUpdated(waiting)),
+      signaling.on('room:admitted', (data) => this.#onAdmitted(data)),
+      signaling.on('room:denied', () => this.#finish(CallStatus.DENIED)),
+      signaling.on('room:removed', ({ reason } = {}) =>
+        this.#finish(CallStatus.REMOVED, { reason: reason || 'REMOVED_BY_HOST' })
+      ),
+      signaling.on('room:ended', () => this.#finish(CallStatus.ENDED)),
       signaling.on('signal', (message) => this.#onSignal(message)),
     ];
 
     this.#update({ status: CallStatus.CONNECTING });
     signaling.connect();
+  }
+
+  async admitPeer(peerId) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    return this.signaling.request('host:admit', { peerId });
+  }
+
+  async denyPeer(peerId) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    return this.signaling.request('host:deny', { peerId });
+  }
+
+  async admitAllPeers() {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    return this.signaling.request('host:admit-all', {});
+  }
+
+  async removePeer(peerId) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    return this.signaling.request('host:remove', { peerId });
+  }
+
+  async endMeeting() {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    return this.signaling.request('host:end', {});
   }
 
   // Tell the others that our microphone or camera was switched on or off
@@ -132,6 +177,17 @@ export class CallSession {
       });
       if (this.finished || attempt !== this.joinAttempt) return;
 
+      if (response.status === 'waiting') {
+        this.selfId = null;
+        this.hostInRoom = response.hostInRoom !== false;
+        this.#update({
+          status: CallStatus.WAITING,
+          selfId: null,
+          hostInRoom: this.hostInRoom,
+        });
+        return;
+      }
+
       this.selfId = response.peerId;
       this.#update({ status: CallStatus.ACTIVE, selfId: this.selfId });
 
@@ -139,12 +195,34 @@ export class CallSession {
       // joined while the answer was on its way (earlyPeers) will send their own offers.
       const waiting = this.earlyPeers;
       this.earlyPeers = [];
-      for (const info of response.peers) this.#addPeer(info, { initiator: true });
+      for (const info of response.peers || []) this.#addPeer(info, { initiator: true });
       for (const info of waiting) this.#addPeer(info, { initiator: false });
     } catch (err) {
       if (this.finished || attempt !== this.joinAttempt) return;
+      if (err?.code === 'MEETING_ENDED') {
+        this.#finish(CallStatus.ENDED);
+        return;
+      }
       this.#finish(CallStatus.ERROR, { error: toCallError(err) });
     }
+  }
+
+  #onWaitingUpdated(waiting) {
+    if (this.finished) return;
+    this.waitingList = Array.isArray(waiting) ? waiting : [];
+    this.#update({ waitingList: this.waitingList });
+  }
+
+  #onAdmitted({ peerId, peers }) {
+    if (this.finished) return;
+    this.selfId = peerId;
+    this.#update({ status: CallStatus.ACTIVE, selfId: this.selfId });
+    this.updateLocalMedia();
+
+    const waiting = this.earlyPeers;
+    this.earlyPeers = [];
+    for (const info of peers || []) this.#addPeer(info, { initiator: true });
+    for (const info of waiting) this.#addPeer(info, { initiator: false });
   }
 
   #addPeer({ peerId, user, audio = true, video = true }, { initiator }) {
@@ -237,9 +315,13 @@ export class CallSession {
   }
 
   #update(patch = {}) {
+    if ('waitingList' in patch) this.waitingList = patch.waitingList;
+    if ('hostInRoom' in patch) this.hostInRoom = patch.hostInRoom;
     this.state = {
       ...this.state,
       ...patch,
+      waitingList: this.waitingList,
+      hostInRoom: this.hostInRoom,
       peers: [...this.peers.entries()].map(([peerId, entry]) => ({
         peerId,
         user: entry.user,

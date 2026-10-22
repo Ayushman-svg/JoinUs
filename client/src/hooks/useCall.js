@@ -4,15 +4,22 @@ import { tokenStorage } from '../api/client.js';
 import { API_URL } from '../config.js';
 import { CallSession } from '../webrtc/call.js';
 
-const INITIAL = { status: 'idle', error: null, selfId: null, peers: [] };
+const INITIAL = {
+  status: 'idle',
+  error: null,
+  selfId: null,
+  peers: [],
+  waitingList: [],
+  hostInRoom: true,
+};
 
 // Joins the meeting `code` once `enabled` is true and leaves when the component unmounts,
 // the inputs change or the tab closes.
 //   localMedia: { audio, video } booleans for the microphone and camera. Changes are sent to
 //   the other participants without restarting the call.
 // Returns the CallSession state:
-//   { status, error, selfId, peers: [{ peerId, user, stream, connectionState, audio, video }] }
-// plus retry(), which starts a fresh session (for example after "meeting is full").
+//   { status, error, selfId, peers, waitingList, hostInRoom }
+// plus retry(), which starts a fresh session, and host actions (admitPeer, denyPeer, etc.).
 // Keep `rtcConfig` stable between renders (define it outside the component or memoize it).
 export default function useCall({ code, localStream, localMedia, enabled = true, rtcConfig }) {
   const [state, setState] = useState(INITIAL);
@@ -60,5 +67,19 @@ export default function useCall({ code, localStream, localMedia, enabled = true,
 
   const retry = useCallback(() => setAttempt((count) => count + 1), []);
 
-  return { ...state, retry };
+  const admitPeer = useCallback((peerId) => sessionRef.current?.admitPeer(peerId), []);
+  const denyPeer = useCallback((peerId) => sessionRef.current?.denyPeer(peerId), []);
+  const admitAllPeers = useCallback(() => sessionRef.current?.admitAllPeers(), []);
+  const removePeer = useCallback((peerId) => sessionRef.current?.removePeer(peerId), []);
+  const endMeeting = useCallback(() => sessionRef.current?.endMeeting(), []);
+
+  return {
+    ...state,
+    retry,
+    admitPeer,
+    denyPeer,
+    admitAllPeers,
+    removePeer,
+    endMeeting,
+  };
 }

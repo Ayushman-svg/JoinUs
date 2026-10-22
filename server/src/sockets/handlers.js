@@ -134,7 +134,7 @@ function registerHandlers(io, socket, registry) {
     if (joinResult.status === 'waiting') {
       // Waiting sockets do NOT join the broadcast room and receive no peer signals
       notifyHostWaitingUpdated(io, registry, code);
-      return { status: 'waiting' };
+      return { status: 'waiting', hostInRoom: Boolean(joinResult.hostInRoom) };
     }
 
     // Admitted to active room
