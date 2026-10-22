@@ -4,6 +4,7 @@ import AuthLayout from './components/AuthLayout.jsx';
 import GuestRoute from './components/GuestRoute.jsx';
 import MeetingLayout from './components/MeetingLayout.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import AppShell from './components/shell/AppShell.jsx';
 import CallPage from './pages/CallPage.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Login from './pages/Login.jsx';
@@ -21,7 +22,9 @@ export default function App() {
       </Route>
 
       <Route element={<ProtectedRoute />}>
-        <Route path="/" element={<Dashboard />} />
+        <Route element={<AppShell />}>
+          <Route path="/" element={<Dashboard />} />
+        </Route>
         <Route element={<MeetingLayout />}>
           <Route path="/m/:code" element={<MeetingPage />} />
           <Route path="/m/:code/call" element={<CallPage />} />

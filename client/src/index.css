@@ -8,4 +8,6 @@
 @import './styles/auth.css';
 @import './styles/prejoin.css';
 @import './styles/call.css';
+@import './styles/shell.css';
+@import './styles/dashboard.css';
 @import './styles/legacy.css';
