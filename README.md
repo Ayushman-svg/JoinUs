@@ -33,15 +33,20 @@ Available now:
 
 - Register and log in with JWT authentication
 - Instant and scheduled meetings with shareable codes (e.g. `abc-defg-hij`)
-- Dashboard with upcoming and past meetings, join by code or link, and one-click invite links
-- Responsive, touch-friendly UI
+- Modern design system with dark and light modes, Inter variable typography, and accessible primitives
+- Authenticated app shell with collapsible sidebar, real-time client-side meeting search, and profile dropdown
+- Dashboard with quick actions (New meeting, Join, Schedule), upcoming meeting cards, stats, and recent meetings
+- Pre-join preview screen with camera preview, mic and camera toggles, and device permission guidance
+- 1:1 real-time WebRTC audio and video calls with perfect negotiation and STUN/TURN relay support
+- Realtime signaling on Socket.io with authenticated handshakes, newer-session-wins eviction, and media state sync
+- Responsive call room with adaptive video tiles, floating controls, and leave confirmation modal
 
 Planned:
 
-- Waiting room with host admit/deny controls
-- Multi-party audio and video with mute, camera toggle and screen share
-- In-meeting chat and meeting history
-- Automatic reconnects, device switching and a connection-quality indicator
+- Waiting room with host admit/deny controls (Phase 3)
+- Multi-party mesh audio and video up to 6 participants (Phase 3)
+- In-meeting chat and meeting history (Phase 4)
+- Screen share, automatic reconnects, device switching and connection-quality indicator (Phase 4)
 
 ## Tech Stack
 
