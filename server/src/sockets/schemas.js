@@ -44,4 +44,13 @@ const signalSchema = z
     message: 'send either description or candidate',
   });
 
-module.exports = { joinSchema, mediaSchema, signalSchema };
+// host:admit { peerId }, host:deny { peerId }, host:remove { peerId }
+const peerTargetSchema = z.object({
+  peerId: z.string().min(1).max(64),
+});
+
+// host:admit-all {}, host:end {}
+const emptySchema = z.record(z.string(), z.unknown()).optional().default({});
+
+module.exports = { joinSchema, mediaSchema, signalSchema, peerTargetSchema, emptySchema };
+

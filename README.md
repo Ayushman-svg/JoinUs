@@ -108,7 +108,12 @@ Client to server:
 
 | Event | Payload | Ack data | Error codes |
 | --- | --- | --- | --- |
-| `room:join` | `{ code, audio?, video? }` | `{ peerId, peers: [{ peerId, user: { id, name }, audio, video }] }` | `VALIDATION_ERROR`, `MEETING_NOT_FOUND`, `MEETING_CANCELLED`, `ROOM_FULL`, `ALREADY_IN_ROOM` |
+| `room:join` | `{ code, audio?, video? }` | `{ status: 'admitted', peerId, peers: [...] }` OR `{ status: 'waiting' }` | `VALIDATION_ERROR`, `MEETING_NOT_FOUND`, `MEETING_CANCELLED`, `MEETING_ENDED`, `ROOM_FULL`, `WAITING_FULL`, `ALREADY_IN_ROOM` |
+| `host:admit` | `{ peerId }` | `{}` | `VALIDATION_ERROR`, `NOT_IN_ROOM`, `FORBIDDEN`, `PEER_NOT_FOUND`, `ROOM_FULL` |
+| `host:deny` | `{ peerId }` | `{}` | `VALIDATION_ERROR`, `NOT_IN_ROOM`, `FORBIDDEN`, `PEER_NOT_FOUND` |
+| `host:admit-all` | `{}` | `{}` | `NOT_IN_ROOM`, `FORBIDDEN` |
+| `host:remove` | `{ peerId }` | `{}` | `VALIDATION_ERROR`, `NOT_IN_ROOM`, `FORBIDDEN`, `PEER_NOT_FOUND`, `CANNOT_REMOVE_SELF` |
+| `host:end` | `{}` | `{}` | `NOT_IN_ROOM`, `FORBIDDEN` |
 | `media:update` | `{ audio, video }` | `{}` | `VALIDATION_ERROR`, `NOT_IN_ROOM` |
 | `room:leave` | none | `{}` | none (safe to call twice) |
 | `signal` | `{ to, description?, candidate? }` | `{}` | `VALIDATION_ERROR`, `NOT_IN_ROOM`, `PEER_NOT_FOUND` |
@@ -120,18 +125,27 @@ Server to client:
 | `room:peer-joined` | `{ peerId, user: { id, name }, audio, video }` | Someone joined your room |
 | `room:peer-updated` | `{ peerId, audio, video }` | Someone switched their microphone or camera on or off |
 | `room:peer-left` | `{ peerId }` | Someone left, disconnected or was replaced by a newer session |
+| `room:waiting-updated` | `{ waiting: [{ peerId, user: { id, name } }] }` | Waiting list changed (sent to host only) |
+| `room:admitted` | `{ peerId, peers }` | The host admitted you into the room |
+| `room:denied` | `{}` | The host declined your admission |
+| `room:removed` | `{ reason: 'REMOVED_BY_HOST' }` | You were removed from the meeting by the host |
+| `room:ended` | `{}` | The host ended the meeting for everyone |
 | `room:kicked` | `{ reason }` | You were removed from the room. `reason` is `JOINED_ELSEWHERE` |
 | `signal` | `{ from, description?, candidate? }` | A relayed WebRTC message from a peer in your room |
 
 **Rules**
 
-- A meeting is joinable only if it exists and is active. Unknown codes return `MEETING_NOT_FOUND` and cancelled meetings return `MEETING_CANCELLED`.
-- A room holds at most 2 peers for now. Another join returns `ROOM_FULL`.
-- If the same user joins again (refresh or a second tab), the newer session wins: the older socket receives `room:kicked`, and the other peers see `room:peer-left` followed by `room:peer-joined`.
-- `signal` carries exactly one of `description` (`{ type, sdp }`, where a `rollback` has no `sdp`) or `candidate` (`{ candidate, sdpMid, sdpMLineIndex, usernameFragment }`). The end-of-candidates `null` is not sent.
-- `signal` is relayed only between two different peers in the same room. A target in another room or an unknown id returns `PEER_NOT_FOUND`. The `from` field is set by the server, and unlisted payload fields are dropped.
-- `audio` and `video` say whether a person's microphone and camera are on. They start from the values sent with `room:join` (both default to on) and change with `media:update`. WebRTC itself cannot tell a muted sender from a silent one, so the server relays the state for the interface.
-- Disconnecting removes the peer from its room and notifies the others.
+- A meeting is joinable only if it exists and is active. Unknown codes return `MEETING_NOT_FOUND`, cancelled meetings return `MEETING_CANCELLED`, and ended meetings return `MEETING_ENDED`.
+- The meeting host (`Meeting.host`) always joins directly and bypasses the waiting room.
+- If `meeting.waitingRoom` is true (default), non-host guests are placed into a waiting list until the host admits them.
+- Waiting sockets do NOT join the broadcast room, receive no peer events, and cannot send or relay WebRTC signals.
+- A user admitted by the host stays admitted for the life of that room, so a page refresh or reconnect does not send them back to waiting.
+- Same user joining again (refresh or second tab): the newer session wins. If in waiting, the older waiting socket receives `room:kicked`; if in the room, peers see `room:peer-left` then `room:peer-joined`.
+- Waiting list is capped at 20 per room (`WAITING_FULL`). Active room capacity is capped at `MAX_PARTICIPANTS` (`ROOM_FULL`).
+- Only the verified host can invoke `host:*` controls; unauthorized clients receive `FORBIDDEN`.
+- When the host ends a meeting (`host:end`), `Meeting.status` is set to `ended`, `room:ended` is sent to all peers and waiting guests, and the room is cleared.
+- `signal` carries exactly one of `description` or `candidate`, relayed only between two different peers in the same active room.
+- Disconnecting removes the peer from its room or waiting list and notifies peers / the host.
 - Messages are limited to 100 KB.
 
 ## API Reference
