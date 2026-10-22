@@ -7,9 +7,11 @@ import { getMeeting } from '../api/meetings.js';
 import CallControls from '../components/call/CallControls.jsx';
 import CallProblem from '../components/call/CallProblem.jsx';
 import CallStatusCard from '../components/call/CallStatusCard.jsx';
+import ParticipantsPanel from '../components/call/ParticipantsPanel.jsx';
 import ParticipantTile from '../components/call/ParticipantTile.jsx';
 import CopyLinkButton from '../components/CopyLinkButton.jsx';
 import Alert from '../components/ui/Alert.jsx';
+import Avatar from '../components/ui/Avatar.jsx';
 import Button from '../components/ui/Button.jsx';
 import Modal from '../components/ui/Modal.jsx';
 import Spinner from '../components/ui/Spinner.jsx';
@@ -44,6 +46,10 @@ export default function CallPage() {
 
   const [meeting, setMeeting] = useState(null);
   const [confirmingLeave, setConfirmingLeave] = useState(false);
+  const [activePanel, setActivePanel] = useState(null);
+  const [peerToRemove, setPeerToRemove] = useState(null);
+  const [toastGuest, setToastGuest] = useState(null);
+  const toastedIds = useRef(new Set());
   const [rtcConfig, setRtcConfig] = useState(null);
 
   // The title is only decoration here: if it cannot be loaded the code is shown instead
@@ -91,6 +97,31 @@ export default function CallPage() {
   });
   const slow = useSlowRequest(call.status === 'connecting' || call.status === 'idle', 6000);
   const announcement = useAnnouncement(call.peers);
+
+  const isHost = Boolean(
+    call.isHost ||
+      (meeting?.host?.id && user?.id ? String(meeting.host.id) === String(user.id) : false) ||
+      (meeting?.host?.name && user?.name ? meeting.host.name === user.name : false)
+  );
+
+  useEffect(() => {
+    if (!isHost || !call.waitingList?.length) return;
+    const newest = call.waitingList[call.waitingList.length - 1];
+    if (newest && !toastedIds.current.has(newest.peerId)) {
+      toastedIds.current.add(newest.peerId);
+      setToastGuest(newest);
+      const timer = setTimeout(() => {
+        setToastGuest((curr) => (curr?.peerId === newest.peerId ? null : curr));
+      }, 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [isHost, call.waitingList]);
+
+  useEffect(() => {
+    if (toastGuest && !call.waitingList?.some((w) => w.peerId === toastGuest.peerId)) {
+      setToastGuest(null);
+    }
+  }, [call.waitingList, toastGuest]);
 
   function leave() {
     media.stop(); // releases the camera and microphone; leaving the page ends the call
@@ -162,89 +193,238 @@ export default function CallPage() {
         )}
       </header>
 
-      <main className="call__stage">
-        {gettingReady && (
-          <div className="call__center" role="status">
-            <Spinner size="lg" />
-            <p>Getting your camera ready…</p>
-          </div>
-        )}
+      <div className="call__main-layout">
+        <main className="call__stage">
+          {gettingReady && (
+            <div className="call__center" role="status">
+              <Spinner size="lg" />
+              <p>Getting your camera ready…</p>
+            </div>
+          )}
 
-        {isStatusScreen && (
-          <div className="call__center">
-            <CallStatusCard
-              status={call.status}
-              hostInRoom={call.hostInRoom}
-              onRetry={call.retry}
-              onLeave={leave}
-            />
-          </div>
-        )}
+          {isStatusScreen && (
+            <div className="call__center">
+              <CallStatusCard
+                status={call.status}
+                hostInRoom={call.hostInRoom}
+                onRetry={call.retry}
+                onLeave={leave}
+              />
+            </div>
+          )}
 
-        {problemCode && (
-          <div className="call__center">
-            <CallProblem code={problemCode} onRetry={call.retry} onLogin={logInAgain} />
-          </div>
-        )}
+          {problemCode && (
+            <div className="call__center">
+              <CallProblem code={problemCode} onRetry={call.retry} onLogin={logInAgain} />
+            </div>
+          )}
+
+          {inCall && (
+            <>
+              <div className="call__notices">
+                {notice}
+                {media.error && (
+                  <Alert variant="warning" title="You joined without your camera and microphone">
+                    {media.error.message}
+                  </Alert>
+                )}
+                {!media.error && media.videoError && <Alert variant="warning">{media.videoError.message}</Alert>}
+                {!media.error && media.audioError && <Alert variant="warning">{media.audioError.message}</Alert>}
+                {media.deviceLost && (
+                  <Alert variant="warning">
+                    Your {media.deviceLost === 'video' ? 'camera' : 'microphone'} was disconnected.
+                  </Alert>
+                )}
+              </div>
+
+              <div className="call__grid" data-count={Math.min(call.peers.length + 1, 2)}>
+                <ParticipantTile
+                  local
+                  name={`${localName} (You)`}
+                  stream={media.stream}
+                  audioOn={media.audioEnabled}
+                  videoOn={media.videoEnabled}
+                />
+                {call.peers.map((peer) => (
+                  <ParticipantTile
+                    key={peer.peerId}
+                    name={peer.user?.name ?? 'Guest'}
+                    stream={peer.stream}
+                    audioOn={peer.audio}
+                    videoOn={peer.video}
+                    connectionState={peer.connectionState}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </main>
 
         {inCall && (
-          <>
-            <div className="call__notices">
-              {notice}
-              {media.error && (
-                <Alert variant="warning" title="You joined without your camera and microphone">
-                  {media.error.message}
-                </Alert>
-              )}
-              {!media.error && media.videoError && <Alert variant="warning">{media.videoError.message}</Alert>}
-              {!media.error && media.audioError && <Alert variant="warning">{media.audioError.message}</Alert>}
-              {media.deviceLost && (
-                <Alert variant="warning">
-                  Your {media.deviceLost === 'video' ? 'camera' : 'microphone'} was disconnected.
-                </Alert>
-              )}
-            </div>
-
-            <div className="call__grid" data-count={Math.min(call.peers.length + 1, 2)}>
-              <ParticipantTile
-                local
-                name={`${localName} (You)`}
-                stream={media.stream}
-                audioOn={media.audioEnabled}
-                videoOn={media.videoEnabled}
+          <div className={`call__panel-slot ${activePanel ? 'is-open' : ''}`}>
+            {activePanel === 'participants' && (
+              <ParticipantsPanel
+                isOpen={activePanel === 'participants'}
+                onClose={() => setActivePanel(null)}
+                isHost={isHost}
+                self={{
+                  name: localName,
+                  audioOn: media.audioEnabled,
+                  videoOn: media.videoEnabled,
+                }}
+                peers={call.peers}
+                waitingList={call.waitingList}
+                onAdmit={(peerId) => call.admitPeer(peerId)}
+                onDeny={(peerId) => call.denyPeer(peerId)}
+                onAdmitAll={() => call.admitAllPeers()}
+                onRemove={(peer) => setPeerToRemove(peer)}
               />
-              {call.peers.map((peer) => (
-                <ParticipantTile
-                  key={peer.peerId}
-                  name={peer.user?.name ?? 'Guest'}
-                  stream={peer.stream}
-                  audioOn={peer.audio}
-                  videoOn={peer.video}
-                  connectionState={peer.connectionState}
-                />
-              ))}
-            </div>
-          </>
+            )}
+          </div>
         )}
-      </main>
+      </div>
 
-      {inCall && <CallControls media={media} onLeave={() => setConfirmingLeave(true)} />}
+      {inCall && (
+        <CallControls
+          media={media}
+          onLeave={() => setConfirmingLeave(true)}
+          waitingCount={isHost ? call.waitingList.length : 0}
+          participantCount={call.peers.length + 1}
+          isPanelOpen={activePanel === 'participants'}
+          onToggleParticipants={() =>
+            setActivePanel((curr) => (curr === 'participants' ? null : 'participants'))
+          }
+        />
+      )}
 
+      {inCall && isHost && toastGuest && (
+        <aside className="call__waiting-toast" role="status" aria-live="polite">
+          <Avatar name={toastGuest.user?.name ?? 'Guest'} size="sm" />
+          <span className="call__waiting-toast-text">
+            <strong>{toastGuest.user?.name ?? 'Guest'}</strong> is waiting
+          </span>
+          <div className="call__waiting-toast-actions">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                call.admitPeer(toastGuest.peerId);
+                setToastGuest(null);
+              }}
+            >
+              Admit
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                call.denyPeer(toastGuest.peerId);
+                setToastGuest(null);
+              }}
+            >
+              Deny
+            </Button>
+          </div>
+        </aside>
+      )}
+
+      {/* Remove Confirm Modal */}
+      <Modal
+        open={Boolean(peerToRemove)}
+        onClose={() => setPeerToRemove(null)}
+        size="sm"
+        title={`Remove ${peerToRemove?.user?.name ?? 'participant'}?`}
+        description="They will be disconnected from the call and can ask to join again."
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              data-autofocus
+              onClick={() => setPeerToRemove(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                if (peerToRemove) {
+                  call.removePeer(peerToRemove.peerId);
+                  setPeerToRemove(null);
+                }
+              }}
+            >
+              Remove
+            </Button>
+          </>
+        }
+      />
+
+      {/* Leave Modal */}
       <Modal
         open={confirmingLeave}
         onClose={() => setConfirmingLeave(false)}
         size="sm"
         title="Leave meeting?"
-        description="You can rejoin later with the same link."
+        description={
+          isHost
+            ? undefined
+            : 'You can rejoin later with the same link.'
+        }
         footer={
-          <>
-            <Button variant="secondary" data-autofocus onClick={() => setConfirmingLeave(false)}>
-              Stay
-            </Button>
-            <Button variant="danger" onClick={leave}>
-              Leave
-            </Button>
-          </>
+          isHost ? (
+            <div className="leave-modal__actions">
+              <div className="leave-modal__option">
+                <Button
+                  variant="secondary"
+                  className="leave-modal__btn"
+                  onClick={() => {
+                    setConfirmingLeave(false);
+                    leave();
+                  }}
+                >
+                  Leave meeting
+                </Button>
+                <span className="leave-modal__help">
+                  Leave the meeting running for others to continue.
+                </span>
+              </div>
+              <div className="leave-modal__option">
+                <Button
+                  variant="danger"
+                  className="leave-modal__btn"
+                  onClick={() => {
+                    call.endMeeting();
+                    setConfirmingLeave(false);
+                  }}
+                >
+                  End meeting for all
+                </Button>
+                <span className="leave-modal__help">
+                  Disconnect everyone and close the room.
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                data-autofocus
+                onClick={() => setConfirmingLeave(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Button
+                variant="secondary"
+                data-autofocus
+                onClick={() => setConfirmingLeave(false)}
+              >
+                Stay
+              </Button>
+              <Button variant="danger" onClick={leave}>
+                Leave
+              </Button>
+            </>
+          )
         }
       />
 

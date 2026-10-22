@@ -58,6 +58,7 @@ export class CallSession {
     this.earlyPeers = [];
     this.waitingList = [];
     this.hostInRoom = true;
+    this.isHost = false;
     this.selfId = null;
     this.joinAttempt = 0;
     this.finished = false;
@@ -69,6 +70,7 @@ export class CallSession {
       peers: [],
       waitingList: [],
       hostInRoom: true,
+      isHost: false,
     };
   }
 
@@ -189,7 +191,8 @@ export class CallSession {
       }
 
       this.selfId = response.peerId;
-      this.#update({ status: CallStatus.ACTIVE, selfId: this.selfId });
+      this.isHost = Boolean(response.isHost);
+      this.#update({ status: CallStatus.ACTIVE, selfId: this.selfId, isHost: this.isHost });
 
       // Everyone already in the room is offered a connection by us, the newcomer. Peers that
       // joined while the answer was on its way (earlyPeers) will send their own offers.
@@ -209,8 +212,9 @@ export class CallSession {
 
   #onWaitingUpdated(waiting) {
     if (this.finished) return;
+    this.isHost = true;
     this.waitingList = Array.isArray(waiting) ? waiting : [];
-    this.#update({ waitingList: this.waitingList });
+    this.#update({ waitingList: this.waitingList, isHost: true });
   }
 
   #onAdmitted({ peerId, peers }) {
@@ -317,11 +321,13 @@ export class CallSession {
   #update(patch = {}) {
     if ('waitingList' in patch) this.waitingList = patch.waitingList;
     if ('hostInRoom' in patch) this.hostInRoom = patch.hostInRoom;
+    if ('isHost' in patch) this.isHost = patch.isHost;
     this.state = {
       ...this.state,
       ...patch,
       waitingList: this.waitingList,
       hostInRoom: this.hostInRoom,
+      isHost: this.isHost,
       peers: [...this.peers.entries()].map(([peerId, entry]) => ({
         peerId,
         user: entry.user,

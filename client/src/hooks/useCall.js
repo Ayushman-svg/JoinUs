@@ -11,6 +11,7 @@ const INITIAL = {
   peers: [],
   waitingList: [],
   hostInRoom: true,
+  isHost: false,
 };
 
 // Joins the meeting `code` once `enabled` is true and leaves when the component unmounts,

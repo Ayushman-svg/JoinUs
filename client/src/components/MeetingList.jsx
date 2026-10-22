@@ -6,7 +6,7 @@ import StatusBadge from './StatusBadge.jsx';
 
 function badgeKind(meeting, filter) {
   if (meeting.status === 'cancelled') return 'cancelled';
-  if (filter === 'past') return 'ended';
+  if (meeting.status === 'ended' || filter === 'past') return 'ended';
   return meeting.scheduledAt ? 'scheduled' : 'instant';
 }
 

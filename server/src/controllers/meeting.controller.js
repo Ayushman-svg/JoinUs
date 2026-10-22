@@ -67,7 +67,10 @@ async function getMeeting(req, res) {
       startsAt: meeting.startsAt,
       status: meeting.status,
       waitingRoom: meeting.waitingRoom,
-      host: { name: meeting.host?.name ?? 'Unknown' },
+      host: {
+        id: meeting.host?._id ? meeting.host._id.toString() : undefined,
+        name: meeting.host?.name ?? 'Unknown',
+      },
     },
   });
 }

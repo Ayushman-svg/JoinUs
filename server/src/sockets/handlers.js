@@ -152,6 +152,7 @@ function registerHandlers(io, socket, registry) {
       status: 'admitted',
       peerId: socket.id,
       peers: joinResult.peers.map(toPublicPeer),
+      isHost,
     };
   });
 

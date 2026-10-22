@@ -77,7 +77,9 @@ export default function MeetingPage() {
 
   const { meeting } = state;
   const cancelled = meeting?.status === 'cancelled';
-  const canJoin = state.status === 'ready' && !cancelled;
+  const ended = meeting?.status === 'ended';
+  const notJoinable = cancelled || ended;
+  const canJoin = state.status === 'ready' && !notJoinable;
 
   // The camera is only asked for once we know the meeting can be joined
   const { status: mediaStatus, start: startMedia } = media;
@@ -159,14 +161,14 @@ export default function MeetingPage() {
 
         {state.status === 'ready' && (
           <Card
-            className={`prejoin__card ${cancelled ? 'prejoin__card--single' : ''}`.trim()}
+            className={`prejoin__card ${notJoinable ? 'prejoin__card--single' : ''}`.trim()}
             padding="none"
             elevated
           >
             <header className="prejoin__head">
               <div className="prejoin__title-row">
                 <h1 className="prejoin__title">{meeting.title}</h1>
-                <StatusBadge kind={cancelled ? 'cancelled' : meeting.scheduledAt ? 'scheduled' : 'instant'} />
+                <StatusBadge kind={cancelled ? 'cancelled' : ended ? 'ended' : meeting.scheduledAt ? 'scheduled' : 'instant'} />
               </div>
               <p className="prejoin__host">
                 <Avatar name={meeting.host.name} size="sm" />
@@ -178,7 +180,7 @@ export default function MeetingPage() {
               </p>
             </header>
 
-            {!cancelled && (
+            {!notJoinable && (
               <section className="prejoin__preview" aria-label="Camera preview">
                 {preview}
                 {mediaStatus === 'ready' && media.videoError && (
@@ -199,6 +201,11 @@ export default function MeetingPage() {
               {cancelled && (
                 <Alert variant="warning" title="This meeting was cancelled">
                   The host cancelled it, so it can&apos;t be joined.
+                </Alert>
+              )}
+              {ended && (
+                <Alert variant="warning" title="This meeting has ended">
+                  The host has ended this meeting, so it can&apos;t be joined.
                 </Alert>
               )}
 
