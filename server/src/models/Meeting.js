@@ -39,6 +39,10 @@ const meetingSchema = new mongoose.Schema(
       enum: Object.values(MEETING_STATUS),
       default: MEETING_STATUS.ACTIVE,
     },
+    waitingRoom: {
+      type: Boolean,
+      default: true,
+    },
   },
   { timestamps: true }
 );

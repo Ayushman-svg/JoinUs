@@ -16,6 +16,7 @@ function toOwnerJSON(meeting) {
     scheduledAt: meeting.scheduledAt,
     startsAt: meeting.startsAt,
     status: meeting.status,
+    waitingRoom: meeting.waitingRoom,
     createdAt: meeting.createdAt,
   };
 }
@@ -30,7 +31,7 @@ async function findOwnedMeeting(code, user) {
 }
 
 async function createMeeting(req, res) {
-  const { title, scheduledAt } = req.body;
+  const { title, scheduledAt, waitingRoom } = req.body;
 
   let meeting;
   for (let attempt = 1; ; attempt += 1) {
@@ -41,6 +42,7 @@ async function createMeeting(req, res) {
         host: req.user._id,
         scheduledAt: scheduledAt || null,
         startsAt: scheduledAt || new Date(),
+        waitingRoom: waitingRoom !== undefined ? Boolean(waitingRoom) : true,
       });
       break;
     } catch (err) {
@@ -64,6 +66,7 @@ async function getMeeting(req, res) {
       scheduledAt: meeting.scheduledAt,
       startsAt: meeting.startsAt,
       status: meeting.status,
+      waitingRoom: meeting.waitingRoom,
       host: { name: meeting.host?.name ?? 'Unknown' },
     },
   });
@@ -83,7 +86,10 @@ async function listMeetings(req, res) {
   } else if (filter === 'past') {
     query = {
       ...mine,
-      $or: [{ status: MEETING_STATUS.CANCELLED }, { startsAt: { $lt: cutoff } }],
+      $or: [
+        { status: { $in: [MEETING_STATUS.CANCELLED, MEETING_STATUS.ENDED] } },
+        { startsAt: { $lt: cutoff } },
+      ],
     };
   }
 
@@ -96,6 +102,9 @@ async function updateMeeting(req, res) {
 
   if (meeting.status === MEETING_STATUS.CANCELLED) {
     throw new AppError(409, 'MEETING_CANCELLED', 'Cancelled meetings cannot be edited');
+  }
+  if (meeting.status === MEETING_STATUS.ENDED) {
+    throw new AppError(409, 'MEETING_ENDED', 'Ended meetings cannot be edited');
   }
 
   const { title, scheduledAt } = req.body;

@@ -23,6 +23,7 @@ const futureDate = z
 const createMeetingSchema = z.object({
   title: title.optional(),
   scheduledAt: futureDate.nullish(),
+  waitingRoom: z.boolean().optional(),
 });
 
 const updateMeetingSchema = z

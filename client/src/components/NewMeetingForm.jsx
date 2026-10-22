@@ -3,11 +3,13 @@ import { useState } from 'react';
 import { createMeeting } from '../api/meetings.js';
 import { nextFullHour, toLocalInputValue } from '../lib/datetime.js';
 import FormField from './FormField.jsx';
+import Toggle from './ui/Toggle.jsx';
 
 export default function NewMeetingForm({ onCreated }) {
   const [title, setTitle] = useState('');
   const [mode, setMode] = useState('instant'); // instant | scheduled
   const [scheduledAt, setScheduledAt] = useState(() => toLocalInputValue(nextFullHour()));
+  const [waitingRoom, setWaitingRoom] = useState(true);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -17,7 +19,7 @@ export default function NewMeetingForm({ onCreated }) {
     setError('');
     setFieldErrors({});
 
-    const payload = {};
+    const payload = { waitingRoom };
     if (title.trim()) payload.title = title.trim();
 
     if (mode === 'scheduled') {
@@ -104,6 +106,15 @@ export default function NewMeetingForm({ onCreated }) {
             required
           />
         )}
+
+        <Toggle
+          id="new-meeting-waiting-room"
+          label="Waiting room"
+          helper="Guests wait until you let them in"
+          checked={waitingRoom}
+          onChange={setWaitingRoom}
+          disabled={submitting}
+        />
 
         <button className="btn btn-primary" type="submit" disabled={submitting}>
           {submitting ? 'Creating…' : mode === 'instant' ? 'Start meeting' : 'Schedule meeting'}

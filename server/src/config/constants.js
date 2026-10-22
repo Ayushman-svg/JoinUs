@@ -1,6 +1,7 @@
 const MEETING_STATUS = Object.freeze({
   ACTIVE: 'active',
   CANCELLED: 'cancelled',
+  ENDED: 'ended',
 });
 
 // A meeting counts as "upcoming" until this long after its start time

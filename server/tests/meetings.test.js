@@ -28,7 +28,15 @@ describe('creating meetings', () => {
       title: 'Standup',
       scheduledAt: null,
       status: 'active',
+      waitingRoom: true,
     });
+
+    const noWaitingRoom = await request(app)
+      .post('/api/meetings')
+      .set(bearer(token))
+      .send({ title: 'Open sync', waitingRoom: false });
+    expect(noWaitingRoom.status).toBe(201);
+    expect(noWaitingRoom.body.meeting.waitingRoom).toBe(false);
   });
 
   it('schedules a future meeting, lists it as upcoming and rejects a past time', async () => {
@@ -73,6 +81,7 @@ describe('meeting access rules', () => {
       code,
       title: 'Design review',
       host: { name: 'Host Person' },
+      waitingRoom: true,
     });
     expect(publicView.body.meeting).not.toHaveProperty('id');
     expect(JSON.stringify(publicView.body)).not.toContain(host.user.email);
@@ -109,5 +118,35 @@ describe('meeting access rules', () => {
 
     const past = await request(app).get('/api/meetings?filter=past').set(bearer(host.token));
     expect(past.body.meetings.map((m) => m.code)).toContain(code);
+  });
+
+  it('ended meetings count as past and cannot be edited', async () => {
+    const host = await createUser({ name: 'Meeting Host' });
+    const Meeting = require('../src/models/Meeting');
+
+    const created = await request(app)
+      .post('/api/meetings')
+      .set(bearer(host.token))
+      .send({ title: 'Finished call' });
+    const { code } = created.body.meeting;
+
+    // Simulate ending the meeting
+    await Meeting.updateOne({ code }, { status: 'ended' });
+
+    // Should not appear in upcoming
+    const upcoming = await request(app).get('/api/meetings?filter=upcoming').set(bearer(host.token));
+    expect(upcoming.body.meetings.map((m) => m.code)).not.toContain(code);
+
+    // Should appear in past
+    const past = await request(app).get('/api/meetings?filter=past').set(bearer(host.token));
+    expect(past.body.meetings.map((m) => m.code)).toContain(code);
+
+    // Cannot be edited
+    const edit = await request(app)
+      .patch(`/api/meetings/${code}`)
+      .set(bearer(host.token))
+      .send({ title: 'Try editing ended' });
+    expect(edit.status).toBe(409);
+    expect(edit.body.error.code).toBe('MEETING_ENDED');
   });
 });

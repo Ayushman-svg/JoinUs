@@ -23,6 +23,7 @@ import ErrorState from '../components/ui/ErrorState.jsx';
 import Modal from '../components/ui/Modal.jsx';
 import Skeleton from '../components/ui/Skeleton.jsx';
 import { useToast } from '../components/ui/Toast.jsx';
+import Toggle from '../components/ui/Toggle.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { formatDateTime, nextFullHour, toLocalInputValue } from '../lib/datetime.js';
 import { extractMeetingCode } from '../lib/meetingLink.js';
@@ -46,6 +47,7 @@ export default function Dashboard() {
 
   // Form states for modals
   const [instantTitle, setInstantTitle] = useState('');
+  const [instantWaitingRoom, setInstantWaitingRoom] = useState(true);
   const [instantSubmitting, setInstantSubmitting] = useState(false);
   const [instantError, setInstantError] = useState('');
 
@@ -54,6 +56,7 @@ export default function Dashboard() {
 
   const [scheduleTitle, setScheduleTitle] = useState('');
   const [scheduleAt, setScheduleAt] = useState(() => toLocalInputValue(nextFullHour()));
+  const [scheduleWaitingRoom, setScheduleWaitingRoom] = useState(true);
   const [scheduleSubmitting, setScheduleSubmitting] = useState(false);
   const [scheduleError, setScheduleError] = useState('');
   const [scheduleFieldErrors, setScheduleFieldErrors] = useState({});
@@ -147,9 +150,11 @@ export default function Dashboard() {
     try {
       const meeting = await createMeeting({
         title: instantTitle.trim() || undefined,
+        waitingRoom: instantWaitingRoom,
       });
       setActiveModal(null);
       setInstantTitle('');
+      setInstantWaitingRoom(true);
       navigate(`/m/${meeting.code}`);
     } catch (err) {
       setInstantError(err.message || 'Failed to start instant meeting');
@@ -191,10 +196,12 @@ export default function Dashboard() {
       const meeting = await createMeeting({
         title: scheduleTitle.trim() || undefined,
         scheduledAt: date.toISOString(),
+        waitingRoom: scheduleWaitingRoom,
       });
       setActiveModal(null);
       setScheduleTitle('');
       setScheduleAt(toLocalInputValue(nextFullHour()));
+      setScheduleWaitingRoom(true);
       setReloadKey((k) => k + 1);
       toast({
         title: 'Meeting scheduled',
@@ -530,6 +537,14 @@ export default function Dashboard() {
             disabled={instantSubmitting}
             autoFocus
           />
+          <Toggle
+            id="instant-waiting-room"
+            label="Waiting room"
+            helper="Guests wait until you let them in"
+            checked={instantWaitingRoom}
+            onChange={setInstantWaitingRoom}
+            disabled={instantSubmitting}
+          />
           <div className="ui-modal__footer" style={{ padding: 0, marginTop: 'var(--space-6)' }}>
             <Button
               type="button"
@@ -618,6 +633,14 @@ export default function Dashboard() {
               setScheduleFieldErrors({});
             }}
             error={scheduleFieldErrors.scheduledAt}
+            disabled={scheduleSubmitting}
+          />
+          <Toggle
+            id="schedule-waiting-room"
+            label="Waiting room"
+            helper="Guests wait until you let them in"
+            checked={scheduleWaitingRoom}
+            onChange={setScheduleWaitingRoom}
             disabled={scheduleSubmitting}
           />
           <div className="ui-modal__footer" style={{ padding: 0, marginTop: 'var(--space-6)' }}>
