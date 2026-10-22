@@ -251,3 +251,81 @@
     transform: translate(-50%, 16px);
   }
 }
+
+/* ---------- Status Cards (waiting, denied, removed, ended) ---------- */
+.call-status-card {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5);
+  background: #151A21;
+  border: 1px solid #2D3742;
+  border-radius: 16px;
+  text-align: center;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  animation: ui-rise 0.35s var(--ease) both;
+}
+
+.call-status-card__circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: var(--space-4);
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  border-radius: var(--radius-full);
+}
+
+.call-status-card__circle--pulse .call-status-card__icon-pulse {
+  animation: status-pulse 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .call-status-card__circle--pulse .call-status-card__icon-pulse {
+    animation: none;
+  }
+}
+
+@keyframes status-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 0.75;
+  }
+}
+
+.call-status-card__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: #F0F4F8;
+  line-height: var(--leading-tight);
+}
+
+.call-status-card__description {
+  margin: 0 0 var(--space-6);
+  font-size: var(--text-sm);
+  color: #8C9BAE;
+  line-height: var(--leading-relaxed);
+}
+
+.call-status-card__actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+.call-status-card__actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  width: 100%;
+}
+

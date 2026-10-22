@@ -22,6 +22,23 @@ export default function CallProblem({ code, onRetry, onLogin }) {
           action={home}
         />
       );
+    case 'WAITING_FULL':
+      return (
+        <ErrorState
+          title="The waiting room is full"
+          description="Too many guests are waiting for this meeting right now. Try again in a moment."
+          onRetry={onRetry}
+          action={home}
+        />
+      );
+    case 'MEETING_ENDED':
+      return (
+        <ErrorState
+          title="This meeting has ended"
+          description="The host has ended the meeting for everyone."
+          action={home}
+        />
+      );
     case 'MEETING_CANCELLED':
       return (
         <ErrorState

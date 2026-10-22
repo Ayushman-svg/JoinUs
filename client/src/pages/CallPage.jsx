@@ -6,6 +6,7 @@ import { getIceServers } from '../api/ice.js';
 import { getMeeting } from '../api/meetings.js';
 import CallControls from '../components/call/CallControls.jsx';
 import CallProblem from '../components/call/CallProblem.jsx';
+import CallStatusCard from '../components/call/CallStatusCard.jsx';
 import ParticipantTile from '../components/call/ParticipantTile.jsx';
 import CopyLinkButton from '../components/CopyLinkButton.jsx';
 import Alert from '../components/ui/Alert.jsx';
@@ -101,10 +102,15 @@ export default function CallPage() {
     navigate('/login');
   }
 
+  const isStatusScreen = ['waiting', 'denied', 'removed', 'ended'].includes(call.status);
   const problemCode =
-    call.status === 'kicked' ? 'KICKED' : call.status === 'error' ? (call.error?.code ?? 'UNKNOWN') : null;
-  const gettingReady = !mediaSettled;
-  const inCall = !gettingReady && !problemCode;
+    call.status === 'kicked'
+      ? 'KICKED'
+      : call.status === 'error'
+      ? (call.error?.code ?? 'UNKNOWN')
+      : null;
+  const gettingReady = !mediaSettled && !isStatusScreen && !problemCode;
+  const inCall = !gettingReady && !problemCode && !isStatusScreen;
   const people = call.status === 'active' ? call.peers.length + 1 : null;
   const localName = user.name;
 
@@ -161,6 +167,17 @@ export default function CallPage() {
           <div className="call__center" role="status">
             <Spinner size="lg" />
             <p>Getting your camera ready…</p>
+          </div>
+        )}
+
+        {isStatusScreen && (
+          <div className="call__center">
+            <CallStatusCard
+              status={call.status}
+              hostInRoom={call.hostInRoom}
+              onRetry={call.retry}
+              onLeave={leave}
+            />
           </div>
         )}
 
