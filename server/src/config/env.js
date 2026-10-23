@@ -45,6 +45,8 @@ const schema = z.object({
   TURN_URLS: z.string().optional(),
   TURN_USERNAME: z.string().optional(),
   TURN_CREDENTIAL: z.string().optional(),
+  METERED_APP: z.string().optional(),
+  METERED_API_KEY: z.string().optional(),
 });
 
 const result = schema.safeParse(process.env);
@@ -67,6 +69,8 @@ const {
   TURN_URLS,
   TURN_USERNAME,
   TURN_CREDENTIAL,
+  METERED_APP,
+  METERED_API_KEY,
 } = result.data;
 
 module.exports = {
@@ -87,4 +91,6 @@ module.exports = {
     : [],
   turnUsername: TURN_USERNAME || '',
   turnCredential: TURN_CREDENTIAL || '',
+  meteredApp: METERED_APP || '',
+  meteredApiKey: METERED_API_KEY || '',
 };

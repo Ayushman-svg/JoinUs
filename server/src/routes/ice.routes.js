@@ -8,9 +8,30 @@ const router = express.Router();
 const DEFAULT_STUN = { urls: 'stun:stun.l.google.com:19302' };
 
 // GET /api/ice-servers: STUN plus TURN server configurations for WebRTC peer connections
-router.get('/', requireAuth, (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   const iceServers = [DEFAULT_STUN];
 
+  // If METERED_APP and METERED_API_KEY are configured, fetch credentials server-side
+  if (env.meteredApp && env.meteredApiKey) {
+    try {
+      const response = await fetch(
+        `https://${env.meteredApp}.metered.live/api/v1/turn/credentials?apiKey=${env.meteredApiKey}`,
+        { signal: AbortSignal.timeout(4000) }
+      );
+      if (response.ok) {
+        const meteredServers = await response.json();
+        if (Array.isArray(meteredServers) && meteredServers.length > 0) {
+          // Never expose the API key to the client
+          return res.json({ iceServers: meteredServers });
+        }
+      }
+    } catch (err) {
+      // Fall back to STUN-only / static config if fetch fails
+      console.warn('Failed to fetch Metered TURN credentials, falling back:', err.message);
+    }
+  }
+
+  // Fallback to static TURN credentials if provided
   if (env.turnUrls && env.turnUrls.length > 0) {
     const turnConfig = {
       urls: env.turnUrls,
