@@ -42,15 +42,14 @@ Available now:
 - Authenticated app shell with collapsible sidebar, real-time client-side meeting search, and profile dropdown
 - Dashboard with quick actions (New meeting, Join, Schedule), upcoming meeting cards, stats, and recent meetings
 - Pre-join preview screen with camera preview, mic and camera toggles, and device permission guidance
-- 1:1 real-time WebRTC audio and video calls with perfect negotiation and STUN/TURN relay support
-- Realtime signaling on Socket.io with authenticated handshakes, newer-session-wins eviction, and media state sync
-- Responsive call room with adaptive video tiles, floating controls, responsive 360px desktop panel / mobile 70dvh bottom sheet, and host/guest leave confirmation modals
+- Multi-party mesh audio and video up to 6 participants
+- In-meeting real-time and persisted chat: server-enforced access (admitted peers only), optimistic sending with retry states, 1000-character validation, rate-limited to 5 msgs / 5s, auto-growing input, unread count badge, stick-to-bottom with "New messages" pill, and mobile bottom sheet
+- Meeting activity & history tracking: automatic `startedAt`, `lastActiveAt`, and `durationMs` tracking, attendee set persistence, and authenticated `/api/history` endpoints
+- Meeting History page & transcripts: sidebar History navigation, searchable past meeting cards with duration and attendee counts, detailed view with attendee avatar row, read-only chat transcript, copy transcript button, and friendly 403 access control screen
 
 Planned:
 
-- Multi-party mesh audio and video up to 6 participants
-- In-meeting chat and meeting history (Phase 4)
-- Screen share, automatic reconnects, device switching and connection-quality indicator (Phase 4)
+- Screen share, automatic reconnects, device switching and connection-quality indicator
 
 ## Tech Stack
 
@@ -209,7 +208,17 @@ cd server
 npm test
 ```
 
-The suites run the real Express app against an in-memory MongoDB, so they never touch your database. The first run downloads a MongoDB binary and takes a little longer.
+The test suites run against an in-memory MongoDB (`mongodb-memory-server`) with zero external dependencies and 100% test isolation:
+
+- `tests/auth.test.js`: registration, login, token verification, session protection
+- `tests/meetings.test.js`: meeting creation, scheduling, edit/cancel authorization, `startedAt` / `lastActiveAt` activity tracking, `Message` model
+- `tests/history.test.js`: `/api/history`, `/api/history/:code`, `/api/meetings/:code/messages` authorization (host and attendees allowed, outsiders 403)
+- `tests/ice.test.js`: ICE / STUN / TURN credentials endpoint
+- `tests/socketAuth.test.js`: Socket.io handshake authentication and rejection
+- `tests/roomRegistry.test.js`: pure room registry, peer tracking, media updates, waiting room and host controls
+- `tests/rateLimit.test.js`: pure sliding-window rate limiter (5 messages per 5s)
+- `tests/waitingRoomSocket.test.js`: waiting list notification, host admit/deny, host end meeting
+- `tests/chatSocket.test.js`: in-meeting real-time chat, persistence, 403 on waiting guest, 1000 char validation, rate limiting, and room isolation
 
 ## Environment Variables
 
