@@ -1,4 +1,4 @@
-import { PhoneOff, Users } from 'lucide-react';
+import { MessageSquare, PhoneOff, Users } from 'lucide-react';
 
 import MediaToggleButton from '../MediaToggleButton.jsx';
 import Button from '../ui/Button.jsx';
@@ -12,7 +12,10 @@ export default function CallControls({
   waitingCount = 0,
   participantCount = 1,
   isPanelOpen = false,
+  isChatOpen = false,
+  unreadCount = 0,
   onToggleParticipants,
+  onToggleChat,
 }) {
   const isWaitingBadge = waitingCount > 0;
   const badgeCount = isWaitingBadge ? waitingCount : participantCount;
@@ -53,6 +56,25 @@ export default function CallControls({
           >
             {badgeCount}
           </span>
+        </Button>
+      </Tooltip>
+
+      <Tooltip label={isChatOpen ? 'Close chat' : unreadCount > 0 ? `Chat (${unreadCount} unread)` : 'Chat'} side="top">
+        <Button
+          iconOnly
+          size="lg"
+          variant={isChatOpen ? 'primary' : 'secondary'}
+          className="controls__chat-btn"
+          aria-label={unreadCount > 0 ? `Chat (${unreadCount} unread)` : 'Chat'}
+          aria-pressed={isChatOpen}
+          onClick={onToggleChat}
+        >
+          <MessageSquare size={22} aria-hidden="true" />
+          {unreadCount > 0 && !isChatOpen && (
+            <span className="controls__badge controls__badge--chat">
+              {unreadCount}
+            </span>
+          )}
         </Button>
       </Tooltip>
 

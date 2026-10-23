@@ -7,6 +7,7 @@ import { getMeeting } from '../api/meetings.js';
 import CallControls from '../components/call/CallControls.jsx';
 import CallProblem from '../components/call/CallProblem.jsx';
 import CallStatusCard from '../components/call/CallStatusCard.jsx';
+import ChatPanel from '../components/call/ChatPanel.jsx';
 import ParticipantsPanel from '../components/call/ParticipantsPanel.jsx';
 import ParticipantTile from '../components/call/ParticipantTile.jsx';
 import CopyLinkButton from '../components/CopyLinkButton.jsx';
@@ -123,6 +124,11 @@ export default function CallPage() {
       setToastGuest(null);
     }
   }, [call.waitingList, toastGuest]);
+
+  const { setChatOpen } = call;
+  useEffect(() => {
+    setChatOpen?.(activePanel === 'chat');
+  }, [activePanel, setChatOpen]);
 
   function leave() {
     media.stop(); // releases the camera and microphone; leaving the page ends the call
@@ -267,6 +273,8 @@ export default function CallPage() {
               <ParticipantsPanel
                 isOpen={activePanel === 'participants'}
                 onClose={() => setActivePanel(null)}
+                onSwitchToChat={() => setActivePanel('chat')}
+                unreadCount={call.unreadCount}
                 isHost={isHost}
                 self={{
                   name: localName,
@@ -281,6 +289,23 @@ export default function CallPage() {
                 onRemove={(peer) => setPeerToRemove(peer)}
               />
             )}
+            {activePanel === 'chat' && (
+              <ChatPanel
+                isOpen={activePanel === 'chat'}
+                onClose={() => setActivePanel(null)}
+                onSwitchToParticipants={() => setActivePanel('participants')}
+                participantCount={call.peers.length + 1}
+                waitingCount={isHost ? call.waitingList.length : 0}
+                messages={call.messages}
+                currentUser={user}
+                historyLoading={call.historyLoading}
+                historyError={call.historyError}
+                rateLimitHint={call.rateLimitHint}
+                onSendMessage={call.sendMessage}
+                onRetryMessage={call.retryMessage}
+                onRetryLoadHistory={call.loadHistory}
+              />
+            )}
           </div>
         )}
       </div>
@@ -292,8 +317,13 @@ export default function CallPage() {
           waitingCount={isHost ? call.waitingList.length : 0}
           participantCount={call.peers.length + 1}
           isPanelOpen={activePanel === 'participants'}
+          isChatOpen={activePanel === 'chat'}
+          unreadCount={call.unreadCount}
           onToggleParticipants={() =>
             setActivePanel((curr) => (curr === 'participants' ? null : 'participants'))
+          }
+          onToggleChat={() =>
+            setActivePanel((curr) => (curr === 'chat' ? null : 'chat'))
           }
         />
       )}

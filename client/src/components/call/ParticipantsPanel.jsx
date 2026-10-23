@@ -17,6 +17,8 @@ export default function ParticipantsPanel({
   onDeny,
   onAdmitAll,
   onRemove,
+  onSwitchToChat,
+  unreadCount = 0,
 }) {
   const inMeetingCount = peers.length + 1;
 
@@ -26,9 +28,30 @@ export default function ParticipantsPanel({
       aria-label="Participants"
       aria-hidden={!isOpen}
     >
-      <header className="participants-panel__header">
-        <h2 className="participants-panel__title">Participants ({inMeetingCount})</h2>
-        <Tooltip label="Close" side="left">
+      <header className="call-panel__header">
+        <nav className="call-panel__tabs" role="tablist" aria-label="Meeting panels">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={true}
+            className="call-panel__tab is-active"
+          >
+            Participants ({inMeetingCount})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={false}
+            className="call-panel__tab"
+            onClick={onSwitchToChat}
+          >
+            Chat
+            {unreadCount > 0 && (
+              <span className="call-panel__tab-badge">{unreadCount}</span>
+            )}
+          </button>
+        </nav>
+        <Tooltip label="Close panel" side="left">
           <Button
             variant="ghost"
             size="sm"
