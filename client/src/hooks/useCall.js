@@ -12,6 +12,11 @@ const INITIAL = {
   waitingList: [],
   hostInRoom: true,
   isHost: false,
+  messages: [],
+  unreadCount: 0,
+  historyLoading: false,
+  historyError: null,
+  rateLimitHint: null,
 };
 
 // Joins the meeting `code` once `enabled` is true and leaves when the component unmounts,
@@ -19,10 +24,17 @@ const INITIAL = {
 //   localMedia: { audio, video } booleans for the microphone and camera. Changes are sent to
 //   the other participants without restarting the call.
 // Returns the CallSession state:
-//   { status, error, selfId, peers, waitingList, hostInRoom }
-// plus retry(), which starts a fresh session, and host actions (admitPeer, denyPeer, etc.).
+//   { status, error, selfId, peers, waitingList, hostInRoom, messages, unreadCount, historyLoading, historyError, rateLimitHint }
+// plus retry(), which starts a fresh session, host actions and chat actions.
 // Keep `rtcConfig` stable between renders (define it outside the component or memoize it).
-export default function useCall({ code, localStream, localMedia, enabled = true, rtcConfig }) {
+export default function useCall({
+  code,
+  localStream,
+  localMedia,
+  enabled = true,
+  rtcConfig,
+  currentUser = null,
+}) {
   const [state, setState] = useState(INITIAL);
   const [attempt, setAttempt] = useState(0);
   const sessionRef = useRef(null);
@@ -41,6 +53,7 @@ export default function useCall({ code, localStream, localMedia, enabled = true,
       code,
       url: API_URL,
       getToken: tokenStorage.get,
+      currentUser,
       localStream,
       getLocalMedia: () => mediaRef.current ?? { audio: true, video: true },
       rtcConfig,
@@ -58,7 +71,7 @@ export default function useCall({ code, localStream, localMedia, enabled = true,
       session.leave();
       sessionRef.current = null;
     };
-  }, [code, enabled, localStream, rtcConfig, attempt]);
+  }, [code, enabled, localStream, rtcConfig, attempt, currentUser?.id]);
 
   const audio = localMedia?.audio;
   const video = localMedia?.video;
@@ -74,6 +87,12 @@ export default function useCall({ code, localStream, localMedia, enabled = true,
   const removePeer = useCallback((peerId) => sessionRef.current?.removePeer(peerId), []);
   const endMeeting = useCallback(() => sessionRef.current?.endMeeting(), []);
 
+  const sendMessage = useCallback((text) => sessionRef.current?.sendMessage(text), []);
+  const retryMessage = useCallback((id) => sessionRef.current?.retryMessage(id), []);
+  const clearUnread = useCallback(() => sessionRef.current?.clearUnread(), []);
+  const setChatOpen = useCallback((isOpen) => sessionRef.current?.setChatOpen(isOpen), []);
+  const loadHistory = useCallback(() => sessionRef.current?.loadHistory(), []);
+
   return {
     ...state,
     retry,
@@ -82,5 +101,10 @@ export default function useCall({ code, localStream, localMedia, enabled = true,
     admitAllPeers,
     removePeer,
     endMeeting,
+    sendMessage,
+    retryMessage,
+    clearUnread,
+    setChatOpen,
+    loadHistory,
   };
 }

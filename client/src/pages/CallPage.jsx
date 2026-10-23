@@ -94,6 +94,7 @@ export default function CallPage() {
     localMedia: { audio: media.audioEnabled, video: media.videoEnabled },
     enabled: mediaSettled && rtcConfig !== null,
     rtcConfig: rtcConfig ?? DEFAULT_RTC_CONFIG,
+    currentUser: user,
   });
   const slow = useSlowRequest(call.status === 'connecting' || call.status === 'idle', 6000);
   const announcement = useAnnouncement(call.peers);

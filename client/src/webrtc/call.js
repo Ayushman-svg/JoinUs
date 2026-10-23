@@ -13,6 +13,7 @@
 // already removed the old session, so the old peer connections are replaced by new ones.
 import { Peer, DEFAULT_RTC_CONFIG } from './peer.js';
 import { createSignaling, SignalingStatus } from './signaling.js';
+import { getMeetingMessages } from '../api/meetings.js';
 
 export const CallStatus = Object.freeze({
   CONNECTING: 'connecting', // opening the connection to the meeting server
@@ -36,19 +37,23 @@ export class CallSession {
     code,
     url,
     getToken,
+    currentUser = null,
     localStream = null,
     // Returns { audio, video }: whether our microphone and camera are on right now
     getLocalMedia = () => ({ audio: true, video: true }),
     rtcConfig = DEFAULT_RTC_CONFIG,
     createSignalingClient = createSignaling,
+    getMeetingMessagesApi = getMeetingMessages,
   }) {
     this.code = code;
     this.url = url;
     this.getToken = getToken;
+    this.currentUser = currentUser;
     this.localStream = localStream;
     this.getLocalMedia = getLocalMedia;
     this.rtcConfig = rtcConfig;
     this.createSignalingClient = createSignalingClient;
+    this.getMeetingMessagesApi = getMeetingMessagesApi;
 
     this.listeners = new Set();
     this.signaling = null;
@@ -63,6 +68,14 @@ export class CallSession {
     this.joinAttempt = 0;
     this.finished = false;
 
+    this.messages = [];
+    this.unreadCount = 0;
+    this.isChatOpen = false;
+    this.historyLoading = false;
+    this.historyLoaded = false;
+    this.historyError = null;
+    this.rateLimitHint = null;
+
     this.state = {
       status: CallStatus.CONNECTING,
       error: null,
@@ -71,6 +84,11 @@ export class CallSession {
       waitingList: [],
       hostInRoom: true,
       isHost: false,
+      messages: [],
+      unreadCount: 0,
+      historyLoading: false,
+      historyError: null,
+      rateLimitHint: null,
     };
   }
 
@@ -92,8 +110,16 @@ export class CallSession {
     this.unsubscribe = [
       signaling.on('status', (event) => this.#onSignalingStatus(event)),
       // Someone joined after us: they make the first offer
-      signaling.on('room:peer-joined', (info) => this.#addPeer(info, { initiator: false })),
-      signaling.on('room:peer-left', ({ peerId }) => this.#removePeer(peerId)),
+      signaling.on('room:peer-joined', (info) => {
+        this.#addSystemMessage(`${info.user?.name ?? 'Someone'} joined`);
+        this.#addPeer(info, { initiator: false });
+      }),
+      signaling.on('room:peer-left', ({ peerId }) => {
+        const existing = this.peers.get(peerId);
+        const name = existing?.user?.name ?? 'Someone';
+        this.#addSystemMessage(`${name} left`);
+        this.#removePeer(peerId);
+      }),
       signaling.on('room:peer-updated', (update) => this.#updatePeerMedia(update)),
       signaling.on('room:kicked', ({ reason }) => this.#finish(CallStatus.KICKED, { reason })),
       signaling.on('room:waiting-updated', ({ waiting }) => this.#onWaitingUpdated(waiting)),
@@ -103,6 +129,7 @@ export class CallSession {
         this.#finish(CallStatus.REMOVED, { reason: reason || 'REMOVED_BY_HOST' })
       ),
       signaling.on('room:ended', () => this.#finish(CallStatus.ENDED)),
+      signaling.on('chat:message', (message) => this.#onChatMessage(message)),
       signaling.on('signal', (message) => this.#onSignal(message)),
     ];
 
@@ -193,6 +220,7 @@ export class CallSession {
       this.selfId = response.peerId;
       this.isHost = Boolean(response.isHost);
       this.#update({ status: CallStatus.ACTIVE, selfId: this.selfId, isHost: this.isHost });
+      this.loadHistory();
 
       // Everyone already in the room is offered a connection by us, the newcomer. Peers that
       // joined while the answer was on its way (earlyPeers) will send their own offers.
@@ -222,6 +250,7 @@ export class CallSession {
     this.selfId = peerId;
     this.#update({ status: CallStatus.ACTIVE, selfId: this.selfId });
     this.updateLocalMedia();
+    this.loadHistory();
 
     const waiting = this.earlyPeers;
     this.earlyPeers = [];
@@ -318,16 +347,208 @@ export class CallSession {
     this.#update({ status, error: null, selfId: null, ...extra });
   }
 
+  async sendMessage(rawText) {
+    if (!rawText || !rawText.trim()) return;
+    const text = rawText.trim();
+    if (text.length > 1000) return;
+
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const optimistic = {
+      id: tempId,
+      tempId,
+      from: {
+        id: this.currentUser?.id,
+        name: this.currentUser?.name || 'You',
+      },
+      text,
+      createdAt: new Date().toISOString(),
+      status: 'sending',
+    };
+
+    this.messages = [...this.messages, optimistic];
+    this.rateLimitHint = null;
+    this.#update({ messages: this.messages, rateLimitHint: null });
+
+    try {
+      const res = await this.signaling.request('chat:send', { text });
+      const confirmed = res?.message || res;
+      this.messages = this.messages.map((m) =>
+        m.id === tempId || m.tempId === tempId ? { ...confirmed, status: 'delivered' } : m
+      );
+      this.rateLimitHint = null;
+      this.#update({ messages: this.messages, rateLimitHint: null });
+    } catch (err) {
+      const isRateLimit = err?.code === 'RATE_LIMITED';
+      this.messages = this.messages.map((m) =>
+        m.id === tempId || m.tempId === tempId
+          ? {
+              ...m,
+              status: 'failed',
+              error: isRateLimit ? "You're sending messages too fast" : 'Message not sent',
+            }
+          : m
+      );
+      if (isRateLimit) {
+        this.rateLimitHint = "You're sending messages too fast";
+      }
+      this.#update({ messages: this.messages, rateLimitHint: this.rateLimitHint });
+    }
+  }
+
+  async retryMessage(id) {
+    const target = this.messages.find((m) => m.id === id || m.tempId === id);
+    if (!target || target.status !== 'failed') return;
+
+    this.messages = this.messages.map((m) =>
+      m.id === id || m.tempId === id ? { ...m, status: 'sending', error: null } : m
+    );
+    this.rateLimitHint = null;
+    this.#update({ messages: this.messages, rateLimitHint: null });
+
+    try {
+      const res = await this.signaling.request('chat:send', { text: target.text });
+      const confirmed = res?.message || res;
+      this.messages = this.messages.map((m) =>
+        m.id === id || m.tempId === id ? { ...confirmed, status: 'delivered' } : m
+      );
+      this.rateLimitHint = null;
+      this.#update({ messages: this.messages, rateLimitHint: null });
+    } catch (err) {
+      const isRateLimit = err?.code === 'RATE_LIMITED';
+      this.messages = this.messages.map((m) =>
+        m.id === id || m.tempId === id
+          ? {
+              ...m,
+              status: 'failed',
+              error: isRateLimit ? "You're sending messages too fast" : 'Message not sent',
+            }
+          : m
+      );
+      if (isRateLimit) {
+        this.rateLimitHint = "You're sending messages too fast";
+      }
+      this.#update({ messages: this.messages, rateLimitHint: this.rateLimitHint });
+    }
+  }
+
+  clearUnread() {
+    this.unreadCount = 0;
+    this.#update({ unreadCount: 0 });
+  }
+
+  setChatOpen(isOpen) {
+    this.isChatOpen = Boolean(isOpen);
+    if (this.isChatOpen) {
+      this.clearUnread();
+    }
+  }
+
+  async loadHistory() {
+    if (this.finished) return;
+    this.historyLoading = true;
+    this.historyError = null;
+    this.#update({ historyLoading: true, historyError: null });
+
+    try {
+      const history = await this.getMeetingMessagesApi(this.code);
+      if (this.finished) return;
+
+      const formattedHistory = (history || []).map((m) => ({
+        ...m,
+        status: 'delivered',
+      }));
+
+      const historyIds = new Set(formattedHistory.map((m) => m.id));
+      const unpersisted = this.messages.filter((m) => {
+        if (m.isSystem) return true;
+        if (m.status === 'sending' || m.status === 'failed') return true;
+        return !historyIds.has(m.id);
+      });
+
+      this.messages = [...formattedHistory, ...unpersisted];
+      this.historyLoading = false;
+      this.historyLoaded = true;
+      this.historyError = null;
+      this.#update({
+        messages: this.messages,
+        historyLoading: false,
+        historyError: null,
+      });
+    } catch (err) {
+      if (this.finished) return;
+      this.historyLoading = false;
+      this.historyError = "Couldn't load earlier messages";
+      this.#update({
+        historyLoading: false,
+        historyError: this.historyError,
+      });
+    }
+  }
+
+  #addSystemMessage(text) {
+    const sysMsg = {
+      id: `sys-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      isSystem: true,
+      text,
+      createdAt: new Date().toISOString(),
+    };
+    this.messages = [...this.messages, sysMsg];
+    this.#update({ messages: this.messages });
+  }
+
+  #onChatMessage(message) {
+    if (this.finished) return;
+    if (!message || !message.id) return;
+
+    // De-duplicate by id
+    const existingIndex = this.messages.findIndex((m) => m.id === message.id);
+    if (existingIndex !== -1) return;
+
+    // Match own optimistic message
+    const isSelf =
+      this.currentUser?.id && String(message.from?.id) === String(this.currentUser.id);
+    let matchedOptimistic = false;
+
+    if (isSelf) {
+      const optIndex = this.messages.findIndex(
+        (m) => (m.status === 'sending' || m.status === 'failed') && m.text === message.text
+      );
+      if (optIndex !== -1) {
+        this.messages[optIndex] = { ...message, status: 'delivered' };
+        matchedOptimistic = true;
+      }
+    }
+
+    if (!matchedOptimistic) {
+      this.messages = [...this.messages, { ...message, status: 'delivered' }];
+      if (!isSelf && !this.isChatOpen) {
+        this.unreadCount += 1;
+      }
+    }
+
+    this.#update({ messages: this.messages, unreadCount: this.unreadCount });
+  }
+
   #update(patch = {}) {
     if ('waitingList' in patch) this.waitingList = patch.waitingList;
     if ('hostInRoom' in patch) this.hostInRoom = patch.hostInRoom;
     if ('isHost' in patch) this.isHost = patch.isHost;
+    if ('messages' in patch) this.messages = patch.messages;
+    if ('unreadCount' in patch) this.unreadCount = patch.unreadCount;
+    if ('historyLoading' in patch) this.historyLoading = patch.historyLoading;
+    if ('historyError' in patch) this.historyError = patch.historyError;
+    if ('rateLimitHint' in patch) this.rateLimitHint = patch.rateLimitHint;
     this.state = {
       ...this.state,
       ...patch,
       waitingList: this.waitingList,
       hostInRoom: this.hostInRoom,
       isHost: this.isHost,
+      messages: this.messages,
+      unreadCount: this.unreadCount,
+      historyLoading: this.historyLoading,
+      historyError: this.historyError,
+      rateLimitHint: this.rateLimitHint,
       peers: [...this.peers.entries()].map(([peerId, entry]) => ({
         peerId,
         user: entry.user,
