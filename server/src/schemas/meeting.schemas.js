@@ -44,4 +44,14 @@ const codeParamsSchema = z.object({
   code: z.string().trim().toLowerCase().min(1).max(30),
 });
 
-module.exports = { createMeetingSchema, updateMeetingSchema, listQuerySchema, codeParamsSchema };
+const messagesQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+});
+
+module.exports = {
+  createMeetingSchema,
+  updateMeetingSchema,
+  listQuerySchema,
+  codeParamsSchema,
+  messagesQuerySchema,
+};
