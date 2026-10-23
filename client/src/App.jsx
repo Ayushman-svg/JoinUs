@@ -7,6 +7,8 @@ import ProtectedRoute from './components/ProtectedRoute.jsx';
 import AppShell from './components/shell/AppShell.jsx';
 import CallPage from './pages/CallPage.jsx';
 import Dashboard from './pages/Dashboard.jsx';
+import HistoryPage from './pages/HistoryPage.jsx';
+import HistoryDetailPage from './pages/HistoryDetailPage.jsx';
 import Login from './pages/Login.jsx';
 import MeetingPage from './pages/MeetingPage.jsx';
 import Register from './pages/Register.jsx';
@@ -24,6 +26,8 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/history/:code" element={<HistoryDetailPage />} />
         </Route>
         <Route element={<MeetingLayout />}>
           <Route path="/m/:code" element={<MeetingPage />} />

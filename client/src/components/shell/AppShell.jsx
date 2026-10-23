@@ -1,5 +1,6 @@
 import {
   ChevronDown,
+  History,
   Home,
   LogOut,
   Menu,
@@ -77,6 +78,19 @@ export default function AppShell() {
     </NavLink>
   );
 
+  const historyLink = (
+    <NavLink
+      to="/history"
+      className={({ isActive }) =>
+        `shell-nav__item ${isActive ? 'is-active' : ''} ${collapsed ? 'is-collapsed' : ''}`.trim()
+      }
+      aria-label="History"
+    >
+      <History size={20} aria-hidden="true" />
+      {!collapsed && <span className="shell-nav__label">History</span>}
+    </NavLink>
+  );
+
   return (
     <div className={`app-shell ${collapsed ? 'is-sidebar-collapsed' : ''}`}>
       {/* Desktop Sidebar */}
@@ -113,6 +127,15 @@ export default function AppShell() {
                 </Tooltip>
               ) : (
                 homeLink
+              )}
+            </li>
+            <li className="shell-nav__entry">
+              {collapsed ? (
+                <Tooltip label="History" side="right">
+                  {historyLink}
+                </Tooltip>
+              ) : (
+                historyLink
               )}
             </li>
           </ul>
@@ -165,6 +188,18 @@ export default function AppShell() {
               >
                 <Home size={20} aria-hidden="true" />
                 <span className="shell-nav__label">Home</span>
+              </NavLink>
+            </li>
+            <li className="shell-nav__entry">
+              <NavLink
+                to="/history"
+                className={({ isActive }) =>
+                  `shell-nav__item ${isActive ? 'is-active' : ''}`.trim()
+                }
+                onClick={() => setMobileOpen(false)}
+              >
+                <History size={20} aria-hidden="true" />
+                <span className="shell-nav__label">History</span>
               </NavLink>
             </li>
           </ul>
