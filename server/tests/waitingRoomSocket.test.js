@@ -183,6 +183,11 @@ describe('Waiting room and host controls socket integration', () => {
     const peerJoinedData = await hostPeerJoinedPromise;
     expect(peerJoinedData.peerId).toBe(guestSocket.id);
     expect(peerJoinedData.user.name).toBe('Guest Bob');
+
+    const updatedMeeting = await Meeting.findOne({ code: meeting.code });
+    expect(updatedMeeting.startedAt).toBeTruthy();
+    expect(updatedMeeting.attendees.map((id) => id.toString())).toContain(host.user.id);
+    expect(updatedMeeting.attendees.map((id) => id.toString())).toContain(guest.user.id);
   });
 
   it('denies a guest when the host calls host:deny', async () => {
@@ -288,5 +293,9 @@ describe('Waiting room and host controls socket integration', () => {
       ok: false,
       error: { code: 'MEETING_ENDED' },
     });
+
+    const endedMeeting = await Meeting.findOne({ code: meeting.code });
+    expect(endedMeeting.status).toBe('ended');
+    expect(endedMeeting.lastActiveAt).toBeTruthy();
   });
 });

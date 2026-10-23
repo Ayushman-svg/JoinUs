@@ -43,10 +43,31 @@ const meetingSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    attendees: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    startedAt: {
+      type: Date,
+      default: null,
+    },
+    lastActiveAt: {
+      type: Date,
+      default: null,
+    },
   },
-  { timestamps: true }
+  { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
 
+meetingSchema.virtual('durationMs').get(function () {
+  if (!this.startedAt || !this.lastActiveAt) return 0;
+  return Math.max(0, this.lastActiveAt.getTime() - this.startedAt.getTime());
+});
+
 meetingSchema.index({ host: 1, startsAt: -1 });
+meetingSchema.index({ host: 1, startedAt: -1 });
+meetingSchema.index({ attendees: 1, startedAt: -1 });
 
 module.exports = mongoose.models.Meeting || mongoose.model('Meeting', meetingSchema);

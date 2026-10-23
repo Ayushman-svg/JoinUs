@@ -149,4 +149,83 @@ describe('meeting access rules', () => {
     expect(edit.status).toBe(409);
     expect(edit.body.error.code).toBe('MEETING_ENDED');
   });
+
+  it('tracks attendees, startedAt, lastActiveAt, and calculates durationMs on Meeting', async () => {
+    const host = await createUser({ name: 'Host User' });
+    const attendee = await createUser({ name: 'Attendee User' });
+    const Meeting = require('../src/models/Meeting');
+
+    const created = await request(app)
+      .post('/api/meetings')
+      .set(bearer(host.token))
+      .send({ title: 'Tracked meeting' });
+    const { code } = created.body.meeting;
+
+    const started = new Date(Date.now() - 60000);
+    const lastActive = new Date();
+
+    await Meeting.updateOne(
+      { code },
+      {
+        $addToSet: { attendees: attendee.user.id },
+        $set: { startedAt: started, lastActiveAt: lastActive },
+      }
+    );
+
+    const doc = await Meeting.findOne({ code });
+    expect(doc.attendees).toHaveLength(1);
+    expect(doc.attendees[0].toString()).toBe(attendee.user.id);
+    expect(doc.startedAt.getTime()).toBe(started.getTime());
+    expect(doc.lastActiveAt.getTime()).toBe(lastActive.getTime());
+    expect(doc.durationMs).toBeGreaterThanOrEqual(59000);
+  });
 });
+
+describe('Message model', () => {
+  it('creates and validates persisted messages with snapshots and trimmed text', async () => {
+    const host = await createUser({ name: 'Host Sender' });
+    const Meeting = require('../src/models/Meeting');
+    const Message = require('../src/models/Message');
+
+    const meeting = await Meeting.create({
+      code: 'msg-test-one',
+      title: 'Message test',
+      host: host.user.id,
+      startsAt: new Date(),
+    });
+
+    const msg = await Message.create({
+      meeting: meeting._id,
+      user: host.user.id,
+      name: host.user.name,
+      text: '   Hello world!   ',
+    });
+
+    expect(msg.name).toBe('Host Sender');
+    expect(msg.text).toBe('Hello world!'); // trimmed
+    expect(msg.createdAt).toBeInstanceOf(Date);
+    expect(msg.meeting.toString()).toBe(meeting._id.toString());
+    expect(msg.user.toString()).toBe(host.user.id);
+
+    // Rejects empty text
+    await expect(
+      Message.create({
+        meeting: meeting._id,
+        user: host.user.id,
+        name: host.user.name,
+        text: '   ',
+      })
+    ).rejects.toThrow();
+
+    // Rejects text exceeding 1000 characters
+    await expect(
+      Message.create({
+        meeting: meeting._id,
+        user: host.user.id,
+        name: host.user.name,
+        text: 'a'.repeat(1001),
+      })
+    ).rejects.toThrow();
+  });
+});
+

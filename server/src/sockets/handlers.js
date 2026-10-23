@@ -57,6 +57,38 @@ function notifyHostWaitingUpdated(io, registry, code) {
   }
 }
 
+async function recordAdmittedJoin(code, userId) {
+  try {
+    const now = new Date();
+    const res = await Meeting.updateOne(
+      { code, startedAt: null },
+      {
+        $set: { startedAt: now, lastActiveAt: now },
+        $addToSet: { attendees: userId },
+      }
+    );
+    if (res.matchedCount === 0) {
+      await Meeting.updateOne(
+        { code },
+        {
+          $set: { lastActiveAt: now },
+          $addToSet: { attendees: userId },
+        }
+      );
+    }
+  } catch (err) {
+    console.error(`Failed to record admitted join for meeting ${code}:`, err);
+  }
+}
+
+async function recordRoomInactive(code) {
+  try {
+    await Meeting.updateOne({ code }, { $set: { lastActiveAt: new Date() } });
+  } catch (err) {
+    console.error(`Failed to record room inactivity for meeting ${code}:`, err);
+  }
+}
+
 // Removes the socket from its room or waiting list (if in one) and notifies peers/host
 function leaveRoom(io, registry, socket) {
   const left = registry.leave(socket.id);
@@ -65,6 +97,9 @@ function leaveRoom(io, registry, socket) {
   if (left.type === 'room') {
     socket.leave(left.code);
     io.to(left.code).emit('room:peer-left', { peerId: socket.id });
+    if (left.remaining && left.remaining.length === 0) {
+      recordRoomInactive(left.code);
+    }
   } else if (left.type === 'waiting') {
     notifyHostWaitingUpdated(io, registry, left.code);
   }
@@ -139,6 +174,7 @@ function registerHandlers(io, socket, registry) {
 
     // Admitted to active room
     await socket.join(code);
+    await recordAdmittedJoin(code, user.id);
     if (!alreadyInRoom) {
       socket.to(code).emit('room:peer-joined', toPublicPeer(joinResult.peer));
     }
@@ -162,6 +198,8 @@ function registerHandlers(io, socket, registry) {
     const { peerId } = parse(peerTargetSchema, payload);
 
     const { peer, peers } = registry.admit(code, peerId);
+    await recordAdmittedJoin(code, peer.userId);
+
     const guestSocket = io.sockets.sockets.get(peerId);
     if (guestSocket) {
       await guestSocket.join(code);
@@ -200,6 +238,7 @@ function registerHandlers(io, socket, registry) {
 
     const { admitted } = registry.admitAll(code);
     for (const item of admitted) {
+      await recordAdmittedJoin(code, item.peer.userId);
       const guestSocket = io.sockets.sockets.get(item.peer.peerId);
       if (guestSocket) {
         await guestSocket.join(code);
@@ -226,7 +265,7 @@ function registerHandlers(io, socket, registry) {
       throw new AppError(400, 'CANNOT_REMOVE_SELF', 'Cannot remove yourself');
     }
 
-    registry.remove(code, peerId);
+    const removed = registry.remove(code, peerId);
 
     const targetSocket = io.sockets.sockets.get(peerId);
     if (targetSocket) {
@@ -235,6 +274,9 @@ function registerHandlers(io, socket, registry) {
     }
 
     io.to(code).emit('room:peer-left', { peerId });
+    if (removed.remaining && removed.remaining.length === 0) {
+      recordRoomInactive(code);
+    }
     return {};
   });
 
@@ -243,7 +285,10 @@ function registerHandlers(io, socket, registry) {
     const code = assertHost(registry, socket);
     parse(emptySchema, payload);
 
-    await Meeting.updateOne({ code }, { status: MEETING_STATUS.ENDED });
+    await Meeting.updateOne(
+      { code },
+      { $set: { status: MEETING_STATUS.ENDED, lastActiveAt: new Date() } }
+    ).catch((err) => console.error(`Failed to update meeting status on end for ${code}:`, err));
 
     const { peers, waiting } = registry.end(code);
 
