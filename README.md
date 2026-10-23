@@ -119,6 +119,7 @@ Client to server:
 | `host:remove` | `{ peerId }` | `{}` | `VALIDATION_ERROR`, `NOT_IN_ROOM`, `FORBIDDEN`, `PEER_NOT_FOUND`, `CANNOT_REMOVE_SELF` |
 | `host:end` | `{}` | `{}` | `NOT_IN_ROOM`, `FORBIDDEN` |
 | `media:update` | `{ audio, video }` | `{}` | `VALIDATION_ERROR`, `NOT_IN_ROOM` |
+| `chat:send` | `{ text }` | `{ message: { id, from, text, createdAt } }` | `VALIDATION_ERROR`, `NOT_IN_ROOM`, `RATE_LIMITED`, `CHAT_FAILED` |
 | `room:leave` | none | `{}` | none (safe to call twice) |
 | `signal` | `{ to, description?, candidate? }` | `{}` | `VALIDATION_ERROR`, `NOT_IN_ROOM`, `PEER_NOT_FOUND` |
 
@@ -135,6 +136,7 @@ Server to client:
 | `room:removed` | `{ reason: 'REMOVED_BY_HOST' }` | You were removed from the meeting by the host |
 | `room:ended` | `{}` | The host ended the meeting for everyone |
 | `room:kicked` | `{ reason }` | You were removed from the room. `reason` is `JOINED_ELSEWHERE` |
+| `chat:message` | `{ id, from: { id, name }, text, createdAt }` | A new chat message was sent in the room |
 | `signal` | `{ from, description?, candidate? }` | A relayed WebRTC message from a peer in your room |
 
 **Rules**
@@ -142,12 +144,13 @@ Server to client:
 - A meeting is joinable only if it exists and is active. Unknown codes return `MEETING_NOT_FOUND`, cancelled meetings return `MEETING_CANCELLED`, and ended meetings return `MEETING_ENDED`.
 - The meeting host (`Meeting.host`) always joins directly and bypasses the waiting room.
 - If `meeting.waitingRoom` is true (default), non-host guests are placed into a waiting list until the host admits them.
-- Waiting sockets do NOT join the broadcast room, receive no peer events, and cannot send or relay WebRTC signals.
+- Waiting sockets do NOT join the broadcast room, receive no peer events, cannot send or receive chat, and cannot send or relay WebRTC signals.
 - A user admitted by the host stays admitted for the life of that room, so a page refresh or reconnect does not send them back to waiting.
 - Same user joining again (refresh or second tab): the newer session wins. If in waiting, the older waiting socket receives `room:kicked`; if in the room, peers see `room:peer-left` then `room:peer-joined`.
 - Waiting list is capped at 20 per room (`WAITING_FULL`). Active room capacity is capped at `MAX_PARTICIPANTS` (`ROOM_FULL`).
 - Only the verified host can invoke `host:*` controls; unauthorized clients receive `FORBIDDEN`.
 - When the host ends a meeting (`host:end`), `Meeting.status` is set to `ended`, `room:ended` is sent to all peers and waiting guests, and the room is cleared.
+- `chat:send` accepts 1 to 1000 characters (trimmed), rate-limited to 5 messages per 5 seconds per socket (`RATE_LIMITED`). Messages are persisted in MongoDB and broadcast to all room peers (`chat:message`).
 - `signal` carries exactly one of `description` or `candidate`, relayed only between two different peers in the same active room.
 - Disconnecting removes the peer from its room or waiting list and notifies peers / the host.
 - Messages are limited to 100 KB.
@@ -167,6 +170,9 @@ All errors share one shape: `{ "error": { "code": "...", "message": "...", "deta
 | GET | `/api/meetings/:code` | none | Minimal public info for an invite page |
 | PATCH | `/api/meetings/:code` | Host | Edit title or scheduled time |
 | DELETE | `/api/meetings/:code` | Host | Cancel the meeting |
+| GET | `/api/history` | Bearer | List past started meetings (host or admitted attendee) |
+| GET | `/api/history/:code` | Bearer | Meeting history details and attendees list (host or attendee) |
+| GET | `/api/meetings/:code/messages?limit=` | Bearer | Paginated chat messages (host or attendee) |
 | GET | `/api/ice-servers` | Bearer | ICE (STUN and optional TURN) server configuration |
 
 ## Local Setup

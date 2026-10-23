@@ -1,13 +1,18 @@
 const AppError = require('../utils/AppError');
 const { MEETING_STATUS } = require('../config/constants');
 const Meeting = require('../models/Meeting');
+const Message = require('../models/Message');
+const RateLimiter = require('./rateLimit');
 const {
   joinSchema,
   mediaSchema,
   signalSchema,
   peerTargetSchema,
   emptySchema,
+  chatSendSchema,
 } = require('./schemas');
+
+const defaultRateLimiter = new RateLimiter();
 
 const toPublicPeer = (peer) => ({
   peerId: peer.peerId,
@@ -90,7 +95,8 @@ async function recordRoomInactive(code) {
 }
 
 // Removes the socket from its room or waiting list (if in one) and notifies peers/host
-function leaveRoom(io, registry, socket) {
+function leaveRoom(io, registry, socket, rateLimiter) {
+  if (rateLimiter) rateLimiter.reset(socket.id);
   const left = registry.leave(socket.id);
   if (!left) return;
 
@@ -116,7 +122,7 @@ function assertHost(registry, socket) {
   return code;
 }
 
-function registerHandlers(io, socket, registry) {
+function registerHandlers(io, socket, registry, rateLimiter = defaultRateLimiter) {
   on(socket, 'room:join', async (payload) => {
     const { code, audio, video } = parse(joinSchema, payload);
 
@@ -316,8 +322,55 @@ function registerHandlers(io, socket, registry) {
     return {};
   });
 
+  // chat:send { text }
+  on(socket, 'chat:send', async (payload) => {
+    const { text } = parse(chatSendSchema, payload);
+
+    const code = registry.getRoomCode(socket.id);
+    if (!code) {
+      throw new AppError(403, 'NOT_IN_ROOM', 'Join a meeting first');
+    }
+
+    if (!rateLimiter.check(socket.id)) {
+      throw new AppError(429, 'RATE_LIMITED', "You're sending messages too fast");
+    }
+
+    const meeting = await Meeting.findOne({ code }).select('_id').lean();
+    if (!meeting) {
+      throw new AppError(404, 'MEETING_NOT_FOUND', 'Meeting not found');
+    }
+
+    const { user } = socket.data;
+    let saved;
+    try {
+      saved = await Message.create({
+        meeting: meeting._id,
+        user: user.id,
+        name: user.name,
+        text,
+      });
+    } catch (err) {
+      console.error(`Failed to persist chat message in room ${code}:`, err);
+      throw new AppError(500, 'CHAT_FAILED', 'Failed to save message');
+    }
+
+    const message = {
+      id: saved._id.toString(),
+      from: {
+        id: user.id,
+        name: user.name,
+      },
+      text: saved.text,
+      createdAt: saved.createdAt.toISOString(),
+    };
+
+    io.to(code).emit('chat:message', message);
+
+    return { message };
+  });
+
   on(socket, 'room:leave', () => {
-    leaveRoom(io, registry, socket);
+    leaveRoom(io, registry, socket, rateLimiter);
     return {};
   });
 
@@ -341,7 +394,7 @@ function registerHandlers(io, socket, registry) {
     return {};
   });
 
-  socket.on('disconnect', () => leaveRoom(io, registry, socket));
+  socket.on('disconnect', () => leaveRoom(io, registry, socket, rateLimiter));
 }
 
 module.exports = { registerHandlers, leaveRoom };

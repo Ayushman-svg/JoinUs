@@ -52,5 +52,21 @@ const peerTargetSchema = z.object({
 // host:admit-all {}, host:end {}
 const emptySchema = z.record(z.string(), z.unknown()).optional().default({});
 
-module.exports = { joinSchema, mediaSchema, signalSchema, peerTargetSchema, emptySchema };
+// chat:send { text }: 1 to 1000 characters trimmed
+const chatSendSchema = z.object({
+  text: z
+    .string({ required_error: 'text is required' })
+    .trim()
+    .min(1, 'Message cannot be empty')
+    .max(1000, 'Message must be at most 1000 characters'),
+});
+
+module.exports = {
+  joinSchema,
+  mediaSchema,
+  signalSchema,
+  peerTargetSchema,
+  emptySchema,
+  chatSendSchema,
+};
 

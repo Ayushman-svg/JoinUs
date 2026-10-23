@@ -6,6 +6,7 @@ const AppError = require('../utils/AppError');
 const { verifyToken } = require('../utils/token');
 const User = require('../models/User');
 const RoomRegistry = require('./roomRegistry');
+const RateLimiter = require('./rateLimit');
 const { registerHandlers } = require('./handlers');
 
 // socket.io delivers err.message and err.data to the client's "connect_error" handler
@@ -48,6 +49,7 @@ function initSockets(httpServer) {
   });
 
   const registry = new RoomRegistry({ maxParticipants: MAX_PARTICIPANTS });
+  const rateLimiter = new RateLimiter();
 
   io.use(authenticate);
 
@@ -57,10 +59,10 @@ function initSockets(httpServer) {
       socket.on('disconnect', () => console.log(`socket disconnected: ${socket.id}`));
     }
 
-    registerHandlers(io, socket, registry);
+    registerHandlers(io, socket, registry, rateLimiter);
   });
 
-  return { io, registry };
+  return { io, registry, rateLimiter };
 }
 
 module.exports = { initSockets, authenticate };
