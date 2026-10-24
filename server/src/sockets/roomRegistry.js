@@ -1,6 +1,6 @@
 const AppError = require('../utils/AppError');
 
-const DEFAULT_MAX_PARTICIPANTS = 2;
+const DEFAULT_MAX_PARTICIPANTS = 4;
 const MAX_WAITING = 20;
 
 // In-memory room state. Pure data structure: no socket.io imports, so it is unit-testable.
@@ -20,6 +20,7 @@ class RoomRegistry {
 
     this.admittedUsers = new Map(); // meeting code -> Set(userId)
     this.hosts = new Map(); // meeting code -> hostUserId
+    this.screenSharers = new Map(); // meeting code -> { peerId, streamId }
   }
 
   setHost(code, hostId) {
@@ -96,6 +97,7 @@ class RoomRegistry {
         peer: res.peer,
         peers: res.peers,
         replaced: res.replaced,
+        screenSharer: this.getScreenSharer(code),
       };
     }
 
@@ -180,6 +182,7 @@ class RoomRegistry {
       peers: res.peers,
       waitingUser,
       replaced: res.replaced,
+      screenSharer: this.getScreenSharer(code),
     };
   }
 
@@ -226,7 +229,7 @@ class RoomRegistry {
 
   // Host removes an active participant from the meeting.
   // Revokes remembered admission so they must wait again if they try to return.
-  // Returns { code, peer, remaining }. Throws PEER_NOT_FOUND.
+  // Returns { code, peer, remaining, screenShareEnded }. Throws PEER_NOT_FOUND.
   remove(code, peerId) {
     const room = this.rooms.get(code);
     const peer = room?.get(peerId);
@@ -234,13 +237,27 @@ class RoomRegistry {
       throw new AppError(404, 'PEER_NOT_FOUND', 'Participant is not in this meeting');
     }
 
+    const currentSharer = this.screenSharers.get(code);
+    const screenShareEnded = Boolean(currentSharer && currentSharer.peerId === peerId);
+    if (screenShareEnded) {
+      this.screenSharers.delete(code);
+    }
+
     room.delete(peerId);
     this.peerRooms.delete(peerId);
-    if (room.size === 0) this.rooms.delete(code);
+    if (room.size === 0) {
+      this.rooms.delete(code);
+      this.screenSharers.delete(code);
+    }
 
     this.admittedUsers.get(code)?.delete(peer.userId);
 
-    return { code, peer, remaining: [...(this.rooms.get(code)?.values() ?? [])] };
+    return {
+      code,
+      peer,
+      remaining: [...(this.rooms.get(code)?.values() ?? [])],
+      screenShareEnded,
+    };
   }
 
   // Records a peer's microphone and camera state. Returns { code, peer } or null if not in a room.
@@ -254,21 +271,32 @@ class RoomRegistry {
   }
 
   // Removes a peer or waiting guest when leaving or disconnecting.
-  // Returns { type: 'room' | 'waiting', code, peer?, waitingUser?, remaining?, remainingWaiting? } or null.
+  // Returns { type: 'room' | 'waiting', code, peer?, waitingUser?, remaining?, remainingWaiting?, screenShareEnded? } or null.
   leave(peerId) {
     const roomCode = this.peerRooms.get(peerId);
     if (roomCode !== undefined) {
       const room = this.rooms.get(roomCode);
       const peer = room.get(peerId);
+
+      const currentSharer = this.screenSharers.get(roomCode);
+      const screenShareEnded = Boolean(currentSharer && currentSharer.peerId === peerId);
+      if (screenShareEnded) {
+        this.screenSharers.delete(roomCode);
+      }
+
       room.delete(peerId);
       this.peerRooms.delete(peerId);
-      if (room.size === 0) this.rooms.delete(roomCode);
+      if (room.size === 0) {
+        this.rooms.delete(roomCode);
+        this.screenSharers.delete(roomCode);
+      }
 
       return {
         type: 'room',
         code: roomCode,
         peer,
         remaining: [...(this.rooms.get(roomCode)?.values() ?? [])],
+        screenShareEnded,
       };
     }
 
@@ -293,6 +321,8 @@ class RoomRegistry {
 
   // Host ends the meeting: removes all peers and waiting guests, and clears the room state.
   end(code) {
+    this.screenSharers.delete(code);
+
     const room = this.rooms.get(code);
     const peers = room ? [...room.values()] : [];
     for (const p of peers) {
@@ -311,6 +341,43 @@ class RoomRegistry {
     this.hosts.delete(code);
 
     return { code, peers, waiting: waitingUsers };
+  }
+
+  // Screen share methods
+  startScreenShare(code, peerId, streamId) {
+    const room = this.rooms.get(code);
+    if (!room || !room.has(peerId)) {
+      throw new AppError(403, 'NOT_IN_ROOM', 'Participant is not in this meeting');
+    }
+
+    const current = this.screenSharers.get(code);
+    if (current && current.peerId !== peerId) {
+      throw new AppError(409, 'SCREEN_SHARE_BUSY', 'Someone else is already sharing their screen');
+    }
+
+    const shareState = Object.freeze({ peerId, streamId });
+    this.screenSharers.set(code, shareState);
+    return shareState;
+  }
+
+  stopScreenShare(code, peerId) {
+    const current = this.screenSharers.get(code);
+    if (!current) return null;
+    if (current.peerId !== peerId) {
+      throw new AppError(403, 'FORBIDDEN', 'Only the sharer can stop their screen share');
+    }
+    this.screenSharers.delete(code);
+    return current;
+  }
+
+  clearScreenShare(code) {
+    const current = this.screenSharers.get(code) ?? null;
+    if (current) this.screenSharers.delete(code);
+    return current;
+  }
+
+  getScreenSharer(code) {
+    return this.screenSharers.get(code) ?? null;
   }
 
   getRoomCode(peerId) {

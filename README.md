@@ -111,13 +111,16 @@ Client to server:
 
 | Event | Payload | Ack data | Error codes |
 | --- | --- | --- | --- |
-| `room:join` | `{ code, audio?, video? }` | `{ status: 'admitted', peerId, peers: [...] }` OR `{ status: 'waiting' }` | `VALIDATION_ERROR`, `MEETING_NOT_FOUND`, `MEETING_CANCELLED`, `MEETING_ENDED`, `ROOM_FULL`, `WAITING_FULL`, `ALREADY_IN_ROOM` |
+| `room:join` | `{ code, audio?, video? }` | `{ status: 'admitted', peerId, peers: [...], screenSharer? }` OR `{ status: 'waiting' }` | `VALIDATION_ERROR`, `MEETING_NOT_FOUND`, `MEETING_CANCELLED`, `MEETING_ENDED`, `ROOM_FULL`, `WAITING_FULL`, `ALREADY_IN_ROOM` |
 | `host:admit` | `{ peerId }` | `{}` | `VALIDATION_ERROR`, `NOT_IN_ROOM`, `FORBIDDEN`, `PEER_NOT_FOUND`, `ROOM_FULL` |
 | `host:deny` | `{ peerId }` | `{}` | `VALIDATION_ERROR`, `NOT_IN_ROOM`, `FORBIDDEN`, `PEER_NOT_FOUND` |
 | `host:admit-all` | `{}` | `{}` | `NOT_IN_ROOM`, `FORBIDDEN` |
 | `host:remove` | `{ peerId }` | `{}` | `VALIDATION_ERROR`, `NOT_IN_ROOM`, `FORBIDDEN`, `PEER_NOT_FOUND`, `CANNOT_REMOVE_SELF` |
 | `host:end` | `{}` | `{}` | `NOT_IN_ROOM`, `FORBIDDEN` |
 | `media:update` | `{ audio, video }` | `{}` | `VALIDATION_ERROR`, `NOT_IN_ROOM` |
+| `share:start` | `{ streamId }` | `{}` | `VALIDATION_ERROR`, `NOT_IN_ROOM`, `SCREEN_SHARE_BUSY` |
+| `share:stop` | `{}` | `{}` | `NOT_IN_ROOM`, `FORBIDDEN` |
+| `host:stop-share` | `{}` | `{}` | `NOT_IN_ROOM`, `FORBIDDEN` |
 | `chat:send` | `{ text }` | `{ message: { id, from, text, createdAt } }` | `VALIDATION_ERROR`, `NOT_IN_ROOM`, `RATE_LIMITED`, `CHAT_FAILED` |
 | `room:leave` | none | `{}` | none (safe to call twice) |
 | `signal` | `{ to, description?, candidate? }` | `{}` | `VALIDATION_ERROR`, `NOT_IN_ROOM`, `PEER_NOT_FOUND` |
@@ -129,8 +132,9 @@ Server to client:
 | `room:peer-joined` | `{ peerId, user: { id, name }, audio, video }` | Someone joined your room |
 | `room:peer-updated` | `{ peerId, audio, video }` | Someone switched their microphone or camera on or off |
 | `room:peer-left` | `{ peerId }` | Someone left, disconnected or was replaced by a newer session |
+| `room:screen-updated` | `{ peerId, streamId }` | Screen share started or stopped (`null` if stopped) |
 | `room:waiting-updated` | `{ waiting: [{ peerId, user: { id, name } }] }` | Waiting list changed (sent to host only) |
-| `room:admitted` | `{ peerId, peers }` | The host admitted you into the room |
+| `room:admitted` | `{ peerId, peers, screenSharer? }` | The host admitted you into the room |
 | `room:denied` | `{}` | The host declined your admission |
 | `room:removed` | `{ reason: 'REMOVED_BY_HOST' }` | You were removed from the meeting by the host |
 | `room:ended` | `{}` | The host ended the meeting for everyone |
@@ -146,7 +150,8 @@ Server to client:
 - Waiting sockets do NOT join the broadcast room, receive no peer events, cannot send or receive chat, and cannot send or relay WebRTC signals.
 - A user admitted by the host stays admitted for the life of that room, so a page refresh or reconnect does not send them back to waiting.
 - Same user joining again (refresh or second tab): the newer session wins. If in waiting, the older waiting socket receives `room:kicked`; if in the room, peers see `room:peer-left` then `room:peer-joined`.
-- Waiting list is capped at 20 per room (`WAITING_FULL`). Active room capacity is capped at `MAX_PARTICIPANTS` (`ROOM_FULL`).
+- Waiting list is capped at 20 per room (`WAITING_FULL`). Active room capacity is capped at `MAX_PARTICIPANTS` (1 to 6, default 4, `ROOM_FULL`).
+- Screen share: exactly one active sharer per room, enforced on the server (`SCREEN_SHARE_BUSY`). The share ends if the sharer stops, leaves, disconnects, is removed by the host, or the meeting ends. The host can stop anyone's share (`host:stop-share`). Late joiners receive the current sharer on entry.
 - Only the verified host can invoke `host:*` controls; unauthorized clients receive `FORBIDDEN`.
 - When the host ends a meeting (`host:end`), `Meeting.status` is set to `ended`, `room:ended` is sent to all peers and waiting guests, and the room is cleared.
 - `chat:send` accepts 1 to 1000 characters (trimmed), rate-limited to 5 messages per 5 seconds per socket (`RATE_LIMITED`). Messages are persisted in MongoDB and broadcast to all room peers (`chat:message`).
@@ -235,6 +240,7 @@ The test suites run against an in-memory MongoDB (`mongodb-memory-server`) with 
 | `TURN_URLS` | Optional comma-separated TURN server URLs (e.g. `turn:turn.example.com:3478?transport=udp`) |
 | `TURN_USERNAME` | Optional TURN username |
 | `TURN_CREDENTIAL` | Optional TURN password / credential |
+| `MAX_PARTICIPANTS` | Maximum room capacity (1 to 6, default 4) |
 
 **`client/.env`**
 

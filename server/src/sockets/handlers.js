@@ -10,6 +10,7 @@ const {
   peerTargetSchema,
   emptySchema,
   chatSendSchema,
+  shareStartSchema,
 } = require('./schemas');
 
 const defaultRateLimiter = new RateLimiter();
@@ -103,6 +104,9 @@ function leaveRoom(io, registry, socket, rateLimiter) {
   if (left.type === 'room') {
     socket.leave(left.code);
     io.to(left.code).emit('room:peer-left', { peerId: socket.id });
+    if (left.screenShareEnded) {
+      io.to(left.code).emit('room:screen-updated', { peerId: null, streamId: null });
+    }
     if (left.remaining && left.remaining.length === 0) {
       recordRoomInactive(left.code);
     }
@@ -195,6 +199,7 @@ function registerHandlers(io, socket, registry, rateLimiter = defaultRateLimiter
       peerId: socket.id,
       peers: joinResult.peers.map(toPublicPeer),
       isHost,
+      screenSharer: registry.getScreenSharer(code),
     };
   });
 
@@ -212,6 +217,7 @@ function registerHandlers(io, socket, registry, rateLimiter = defaultRateLimiter
       guestSocket.emit('room:admitted', {
         peerId,
         peers: peers.map(toPublicPeer),
+        screenSharer: registry.getScreenSharer(code),
       });
       guestSocket.to(code).emit('room:peer-joined', toPublicPeer(peer));
     } else {
@@ -251,6 +257,7 @@ function registerHandlers(io, socket, registry, rateLimiter = defaultRateLimiter
         guestSocket.emit('room:admitted', {
           peerId: item.peer.peerId,
           peers: item.peers.map(toPublicPeer),
+          screenSharer: registry.getScreenSharer(code),
         });
         guestSocket.to(code).emit('room:peer-joined', toPublicPeer(item.peer));
       } else {
@@ -280,6 +287,9 @@ function registerHandlers(io, socket, registry, rateLimiter = defaultRateLimiter
     }
 
     io.to(code).emit('room:peer-left', { peerId });
+    if (removed.screenShareEnded) {
+      io.to(code).emit('room:screen-updated', { peerId: null, streamId: null });
+    }
     if (removed.remaining && removed.remaining.length === 0) {
       recordRoomInactive(code);
     }
@@ -319,6 +329,44 @@ function registerHandlers(io, socket, registry, rateLimiter = defaultRateLimiter
     if (!updated) throw new AppError(403, 'NOT_IN_ROOM', 'Join a meeting first');
 
     socket.to(updated.code).emit('room:peer-updated', { peerId: socket.id, audio, video });
+    return {};
+  });
+
+  // Screen sharing handlers
+  on(socket, 'share:start', (payload) => {
+    const { streamId } = parse(shareStartSchema, payload);
+    const code = registry.getRoomCode(socket.id);
+    if (!code) {
+      throw new AppError(403, 'NOT_IN_ROOM', 'Join a meeting first');
+    }
+
+    registry.startScreenShare(code, socket.id, streamId);
+    io.to(code).emit('room:screen-updated', { peerId: socket.id, streamId });
+    return {};
+  });
+
+  on(socket, 'share:stop', (payload) => {
+    parse(emptySchema, payload);
+    const code = registry.getRoomCode(socket.id);
+    if (!code) {
+      throw new AppError(403, 'NOT_IN_ROOM', 'Join a meeting first');
+    }
+
+    const stopped = registry.stopScreenShare(code, socket.id);
+    if (stopped) {
+      io.to(code).emit('room:screen-updated', { peerId: null, streamId: null });
+    }
+    return {};
+  });
+
+  on(socket, 'host:stop-share', (payload) => {
+    const code = assertHost(registry, socket);
+    parse(emptySchema, payload);
+
+    const cleared = registry.clearScreenShare(code);
+    if (cleared) {
+      io.to(code).emit('room:screen-updated', { peerId: null, streamId: null });
+    }
     return {};
   });
 

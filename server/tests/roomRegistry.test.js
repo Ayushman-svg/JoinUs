@@ -337,4 +337,122 @@ describe('RoomRegistry', () => {
       expect(registry.areInSameRoom('h1', 'w1')).toBe(false);
     });
   });
+
+  describe('configurable room capacity', () => {
+    it('defaults to 4 participants when unspecified', () => {
+      const reg = new RoomRegistry();
+      expect(reg.maxParticipants).toBe(4);
+    });
+
+    it('allows joining up to the configured capacity and blocks subsequent joins', () => {
+      const reg = new RoomRegistry({ maxParticipants: 3 });
+      reg.join('room-cap', { peerId: 's1', userId: 'u1', name: 'P1', waitingRoom: false });
+      reg.join('room-cap', { peerId: 's2', userId: 'u2', name: 'P2', waitingRoom: false });
+      reg.join('room-cap', { peerId: 's3', userId: 'u3', name: 'P3', waitingRoom: false });
+
+      expect(() => {
+        reg.join('room-cap', { peerId: 's4', userId: 'u4', name: 'P4', waitingRoom: false });
+      }).toThrow(expect.objectContaining({ code: 'ROOM_FULL' }));
+    });
+  });
+
+  describe('screen sharing state', () => {
+    it('starts screen share and records it for the room', () => {
+      registry.join('room-1', { peerId: 'p1', userId: 'u1', name: 'Alice', waitingRoom: false });
+      const state = registry.startScreenShare('room-1', 'p1', 'stream-screen-1');
+
+      expect(state).toEqual({ peerId: 'p1', streamId: 'stream-screen-1' });
+      expect(registry.getScreenSharer('room-1')).toEqual({ peerId: 'p1', streamId: 'stream-screen-1' });
+    });
+
+    it('rejects screen share if peer is not in the room', () => {
+      expect(() => {
+        registry.startScreenShare('room-1', 'unknown-peer', 'stream-screen-1');
+      }).toThrow(expect.objectContaining({ code: 'NOT_IN_ROOM' }));
+    });
+
+    it('rejects a second share with SCREEN_SHARE_BUSY while someone is sharing', () => {
+      registry.join('room-1', { peerId: 'p1', userId: 'u1', name: 'Alice', waitingRoom: false });
+      registry.join('room-1', { peerId: 'p2', userId: 'u2', name: 'Bob', waitingRoom: false });
+
+      registry.startScreenShare('room-1', 'p1', 'stream-1');
+      expect(() => {
+        registry.startScreenShare('room-1', 'p2', 'stream-2');
+      }).toThrow(expect.objectContaining({ code: 'SCREEN_SHARE_BUSY' }));
+    });
+
+    it('allows the same sharer to re-announce or update their streamId', () => {
+      registry.join('room-1', { peerId: 'p1', userId: 'u1', name: 'Alice', waitingRoom: false });
+      registry.startScreenShare('room-1', 'p1', 'stream-1');
+      const updated = registry.startScreenShare('room-1', 'p1', 'stream-1-updated');
+      expect(updated.streamId).toBe('stream-1-updated');
+    });
+
+    it('stops screen share by sharer and rejects stop by others with FORBIDDEN', () => {
+      registry.join('room-1', { peerId: 'p1', userId: 'u1', name: 'Alice', waitingRoom: false });
+      registry.join('room-1', { peerId: 'p2', userId: 'u2', name: 'Bob', waitingRoom: false });
+
+      registry.startScreenShare('room-1', 'p1', 'stream-1');
+
+      expect(() => {
+        registry.stopScreenShare('room-1', 'p2');
+      }).toThrow(expect.objectContaining({ code: 'FORBIDDEN' }));
+
+      const stopped = registry.stopScreenShare('room-1', 'p1');
+      expect(stopped).toEqual({ peerId: 'p1', streamId: 'stream-1' });
+      expect(registry.getScreenSharer('room-1')).toBeNull();
+    });
+
+    it('clears screen share via clearScreenShare', () => {
+      registry.join('room-1', { peerId: 'p1', userId: 'u1', name: 'Alice', waitingRoom: false });
+      registry.startScreenShare('room-1', 'p1', 'stream-1');
+
+      const cleared = registry.clearScreenShare('room-1');
+      expect(cleared).toEqual({ peerId: 'p1', streamId: 'stream-1' });
+      expect(registry.getScreenSharer('room-1')).toBeNull();
+    });
+
+    it('cleans up screen share and sets screenShareEnded: true when sharer leaves', () => {
+      registry.join('room-1', { peerId: 'p1', userId: 'u1', name: 'Alice', waitingRoom: false });
+      registry.startScreenShare('room-1', 'p1', 'stream-1');
+
+      const leaveRes = registry.leave('p1');
+      expect(leaveRes.screenShareEnded).toBe(true);
+      expect(registry.getScreenSharer('room-1')).toBeNull();
+    });
+
+    it('cleans up screen share and sets screenShareEnded: true when host removes sharer', () => {
+      registry.join('room-1', { peerId: 'host-1', userId: 'host', name: 'Host', isHost: true });
+      registry.join('room-1', { peerId: 'p1', userId: 'u1', name: 'Alice', waitingRoom: false });
+      registry.startScreenShare('room-1', 'p1', 'stream-1');
+
+      const removeRes = registry.remove('room-1', 'p1');
+      expect(removeRes.screenShareEnded).toBe(true);
+      expect(registry.getScreenSharer('room-1')).toBeNull();
+    });
+
+    it('cleans up screen share when host ends meeting', () => {
+      registry.join('room-1', { peerId: 'host-1', userId: 'host', name: 'Host', isHost: true });
+      registry.join('room-1', { peerId: 'p1', userId: 'u1', name: 'Alice', waitingRoom: false });
+      registry.startScreenShare('room-1', 'p1', 'stream-1');
+
+      registry.end('room-1');
+      expect(registry.getScreenSharer('room-1')).toBeNull();
+    });
+
+    it('includes current screenSharer in join and admit responses for late joiners', () => {
+      const reg = new RoomRegistry({ maxParticipants: 4 });
+      reg.join('room-1', { peerId: 'p1', userId: 'u1', name: 'Alice', waitingRoom: false });
+      reg.startScreenShare('room-1', 'p1', 'screen-stream-1');
+
+      const p2Join = reg.join('room-1', { peerId: 'p2', userId: 'u2', name: 'Bob', waitingRoom: false });
+      expect(p2Join.screenSharer).toEqual({ peerId: 'p1', streamId: 'screen-stream-1' });
+
+      // Via waiting room & admit
+      reg.join('room-1', { peerId: 'p3', userId: 'u3', name: 'Charlie', waitingRoom: true });
+      const admitRes = reg.admit('room-1', 'p3');
+      expect(admitRes.screenSharer).toEqual({ peerId: 'p1', streamId: 'screen-stream-1' });
+    });
+  });
 });
+

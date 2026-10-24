@@ -48,7 +48,7 @@ function initSockets(httpServer) {
     maxHttpBufferSize: 1e5,
   });
 
-  const registry = new RoomRegistry({ maxParticipants: MAX_PARTICIPANTS });
+  const registry = new RoomRegistry({ maxParticipants: env.maxParticipants ?? MAX_PARTICIPANTS });
   const rateLimiter = new RateLimiter();
 
   io.use(authenticate);

@@ -47,6 +47,7 @@ const schema = z.object({
   TURN_CREDENTIAL: z.string().optional(),
   METERED_APP: z.string().optional(),
   METERED_API_KEY: z.string().optional(),
+  MAX_PARTICIPANTS: z.coerce.number().int().min(1).max(6).default(4),
 });
 
 const result = schema.safeParse(process.env);
@@ -71,6 +72,7 @@ const {
   TURN_CREDENTIAL,
   METERED_APP,
   METERED_API_KEY,
+  MAX_PARTICIPANTS,
 } = result.data;
 
 module.exports = {
@@ -93,4 +95,5 @@ module.exports = {
   turnCredential: TURN_CREDENTIAL || '',
   meteredApp: METERED_APP || '',
   meteredApiKey: METERED_API_KEY || '',
+  maxParticipants: MAX_PARTICIPANTS,
 };

@@ -61,6 +61,11 @@ const chatSendSchema = z.object({
     .max(1000, 'Message must be at most 1000 characters'),
 });
 
+// share:start { streamId }
+const shareStartSchema = z.object({
+  streamId: z.string().min(1).max(255),
+});
+
 module.exports = {
   joinSchema,
   mediaSchema,
@@ -68,5 +73,7 @@ module.exports = {
   peerTargetSchema,
   emptySchema,
   chatSendSchema,
+  shareStartSchema,
 };
+
 
