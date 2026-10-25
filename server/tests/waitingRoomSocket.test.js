@@ -341,5 +341,98 @@ describe('Waiting room and host controls socket integration', () => {
       });
     });
   });
+
+  describe('Regression tests', () => {
+    it('host and guest with SAME display name: host receives update through push and host:list-waiting', async () => {
+      const sameName = 'Alex Smith';
+      const host = await createUser({ name: sameName });
+      const guest = await createUser({ name: sameName });
+      const meeting = await createMeeting(host.user.id);
+
+      const hostSocket = await connectSocket(port, host.token);
+      socketsToClose.push(hostSocket);
+
+      const hostJoinAck = await emitAck(hostSocket, 'room:join', { code: meeting.code });
+      expect(hostJoinAck).toMatchObject({ ok: true, status: 'admitted', isHost: true });
+
+      const waitingPushPromise = new Promise((resolve) => {
+        hostSocket.once('room:waiting-updated', resolve);
+      });
+
+      const guestSocket = await connectSocket(port, guest.token);
+      socketsToClose.push(guestSocket);
+      const guestJoinAck = await emitAck(guestSocket, 'room:join', { code: meeting.code });
+      expect(guestJoinAck).toMatchObject({ ok: true, status: 'waiting' });
+
+      const pushUpdate = await waitingPushPromise;
+      expect(pushUpdate.waiting).toHaveLength(1);
+      expect(pushUpdate.waiting[0]).toMatchObject({
+        peerId: guestSocket.id,
+        user: { id: guest.user.id, name: sameName },
+      });
+
+      const listAck = await emitAck(hostSocket, 'host:list-waiting', { code: meeting.code });
+      expect(listAck).toMatchObject({
+        ok: true,
+        waiting: [
+          expect.objectContaining({
+            peerId: guestSocket.id,
+            user: { id: guest.user.id, name: sameName },
+          }),
+        ],
+      });
+    });
+
+    it('host socket is not registered in the room but still receives push waiting-updated', async () => {
+      const host = await createUser({ name: 'Host Outside Room' });
+      const guest = await createUser({ name: 'Waiting Guest' });
+      const meeting = await createMeeting(host.user.id);
+
+      const hostSocket = await connectSocket(port, host.token);
+      socketsToClose.push(hostSocket);
+
+      const waitingPushPromise = new Promise((resolve) => {
+        hostSocket.once('room:waiting-updated', resolve);
+      });
+
+      const guestSocket = await connectSocket(port, guest.token);
+      socketsToClose.push(guestSocket);
+      await emitAck(guestSocket, 'room:join', { code: meeting.code });
+
+      const pushUpdate = await waitingPushPromise;
+      expect(pushUpdate.waiting).toHaveLength(1);
+      expect(pushUpdate.waiting[0].peerId).toBe(guestSocket.id);
+      expect(pushUpdate.waiting[0].user.id).toBe(guest.user.id);
+    });
+
+    it('waiting guest whose socket drops and reconnects appears in host list exactly once', async () => {
+      const host = await createUser({ name: 'Host Charlie' });
+      const guest = await createUser({ name: 'Guest Dropping' });
+      const meeting = await createMeeting(host.user.id);
+
+      const hostSocket = await connectSocket(port, host.token);
+      socketsToClose.push(hostSocket);
+      await emitAck(hostSocket, 'room:join', { code: meeting.code });
+
+      const guestSocket1 = await connectSocket(port, guest.token);
+      socketsToClose.push(guestSocket1);
+      await emitAck(guestSocket1, 'room:join', { code: meeting.code });
+
+      let list = await emitAck(hostSocket, 'host:list-waiting', { code: meeting.code });
+      expect(list.waiting).toHaveLength(1);
+
+      guestSocket1.disconnect();
+      await new Promise((r) => setTimeout(r, 50));
+
+      const guestSocket2 = await connectSocket(port, guest.token);
+      socketsToClose.push(guestSocket2);
+      await emitAck(guestSocket2, 'room:join', { code: meeting.code });
+
+      list = await emitAck(hostSocket, 'host:list-waiting', { code: meeting.code });
+      expect(list.waiting).toHaveLength(1);
+      expect(list.waiting[0].peerId).toBe(guestSocket2.id);
+      expect(list.waiting[0].user.id).toBe(guest.user.id);
+    });
+  });
 });
 
