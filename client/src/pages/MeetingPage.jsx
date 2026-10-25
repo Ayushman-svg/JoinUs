@@ -46,8 +46,9 @@ function PrejoinSkeleton() {
   );
 }
 
-function joinHint({ cancelled, mediaStatus, audioEnabled, videoEnabled, hasAudio, hasVideo }) {
+function joinHint({ cancelled, ended, mediaStatus, audioEnabled, videoEnabled, hasAudio, hasVideo }) {
   if (cancelled) return "This meeting was cancelled, so it can't be joined.";
+  if (ended) return "This meeting has ended, so it can't be joined.";
   if (mediaStatus === 'idle' || mediaStatus === 'requesting') {
     return 'Waiting for camera and microphone permission…';
   }
@@ -95,7 +96,7 @@ export default function MeetingPage() {
   }, [canJoin, mediaStatus, startMedia]);
 
   const mediaSettled = mediaStatus === 'ready' || mediaStatus === 'error';
-  const hint = joinHint({ cancelled, mediaStatus, ...media });
+  const hint = joinHint({ cancelled, ended, mediaStatus, ...media });
 
   let preview;
   if (mediaStatus === 'error') {
@@ -216,22 +217,35 @@ export default function MeetingPage() {
                 </Alert>
               )}
 
-              <Button
-                size="lg"
-                fullWidth
-                leftIcon={Video}
-                disabled={!canJoin || !mediaSettled}
-                aria-describedby="join-hint"
-                onClick={() => navigate(`/m/${code}/call`)}
-              >
-                Join meeting
-              </Button>
-              {/* When cancelled the alert above already says it; the hint stays for screen readers */}
-              <p id="join-hint" className={cancelled ? 'sr-only' : 'prejoin__hint'} aria-live="polite">
-                {hint}
-              </p>
+              {notJoinable ? (
+                <Button
+                  as={Link}
+                  to="/"
+                  size="lg"
+                  fullWidth
+                  variant="primary"
+                >
+                  Back to dashboard
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    size="lg"
+                    fullWidth
+                    leftIcon={Video}
+                    disabled={!canJoin || !mediaSettled}
+                    aria-describedby="join-hint"
+                    onClick={() => navigate(`/m/${code}/call`)}
+                  >
+                    Join meeting
+                  </Button>
+                  <p id="join-hint" className="prejoin__hint" aria-live="polite">
+                    {hint}
+                  </p>
+                </>
+              )}
 
-              {!cancelled && (
+              {!notJoinable && (
                 <div className="prejoin__share">
                   <h2 className="prejoin__share-title">Invite link</h2>
                   <div className="prejoin__share-row">
