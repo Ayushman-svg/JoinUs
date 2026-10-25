@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { CallSession, CallStatus } from '../src/webrtc/call.js';
+import { AudioActivityTracker } from '../src/webrtc/audioActivity.js';
 
 // Mock RTCPeerConnection for testing pure call logic without WebRTC browser globals
 class MockRTCPeerConnection {
@@ -310,4 +311,22 @@ test('Screen sharing: startScreenShare, cancellation, and remote stream resoluti
 
   call.leave();
 });
+
+test('Active speaker: AudioActivityTracker tracks and untracks streams gracefully', () => {
+  let currentSpeaker = null;
+  const tracker = new AudioActivityTracker({
+    onSpeakerChange: (speakerId) => {
+      currentSpeaker = speakerId;
+    },
+  });
+
+  assert.equal(currentSpeaker, null);
+  // Without AudioContext in node environment, trackStream is safe no-op
+  const mockStream = { getAudioTracks: () => [{ readyState: 'live', enabled: true }] };
+  tracker.trackStream('peer-1', mockStream);
+  tracker.untrackStream('peer-1');
+  tracker.destroy();
+  assert.equal(currentSpeaker, null);
+});
+
 

@@ -11,6 +11,7 @@ const INITIAL = {
   peers: [],
   screenShare: null,
   screenStream: null,
+  activeSpeaker: null,
   waitingList: [],
   hostInRoom: true,
   isHost: false,

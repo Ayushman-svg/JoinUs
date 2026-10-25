@@ -15,12 +15,33 @@ const WAITING_TEXT = {
 // but the video element stays mounted, so their sound keeps playing.
 //   audioOn / videoOn: their microphone and camera state (relayed by the server for others)
 //   connectionState: only for remote people, to show that the link is still being set up
-export default function ParticipantTile({ name, stream, local = false, audioOn, videoOn, connectionState }) {
+export default function ParticipantTile({
+  name,
+  stream,
+  local = false,
+  audioOn,
+  videoOn,
+  connectionState,
+  isSpeaking = false,
+}) {
   const waiting = !local ? WAITING_TEXT[connectionState] : null;
-  const description = [name, !audioOn && 'microphone off', !videoOn && 'camera off'].filter(Boolean).join(', ');
+  const description = [
+    name,
+    !audioOn && 'microphone off',
+    !videoOn && 'camera off',
+    isSpeaking && audioOn && 'speaking',
+  ]
+    .filter(Boolean)
+    .join(', ');
+
+  const showSpeaking = Boolean(isSpeaking && audioOn);
 
   return (
-    <div className="tile" role="group" aria-label={description}>
+    <div
+      className={`tile ${showSpeaking ? 'tile--speaking' : ''}`}
+      role="group"
+      aria-label={description}
+    >
       <VideoView stream={stream} muted={local} mirrored={local} />
 
       {!videoOn && (
@@ -38,6 +59,13 @@ export default function ParticipantTile({ name, stream, local = false, audioOn, 
 
       <div className="tile__label">
         {!audioOn && <MicOff size={14} aria-label="Microphone is off" />}
+        {showSpeaking && (
+          <span className="tile__audio-bars" aria-label="Speaking" role="img">
+            <span className="tile__bar" />
+            <span className="tile__bar" />
+            <span className="tile__bar" />
+          </span>
+        )}
         <span>{name}</span>
       </div>
     </div>

@@ -14,6 +14,7 @@
 import { Peer, DEFAULT_RTC_CONFIG } from './peer.js';
 import { createSignaling, SignalingStatus } from './signaling.js';
 import { getMeetingMessages } from '../api/meetings.js';
+import { AudioActivityTracker } from './audioActivity.js';
 
 export const CallStatus = Object.freeze({
   CONNECTING: 'connecting', // opening the connection to the meeting server
@@ -69,6 +70,14 @@ export class CallSession {
     this.joinAttempt = 0;
     this.finished = false;
 
+    this.activeSpeaker = null;
+    this.audioTracker = new AudioActivityTracker({
+      onSpeakerChange: (speakerId) => {
+        this.activeSpeaker = speakerId;
+        this.#update({ activeSpeaker: speakerId });
+      },
+    });
+
     this.messages = [];
     this.unreadCount = 0;
     this.isChatOpen = false;
@@ -84,6 +93,7 @@ export class CallSession {
       peers: [],
       screenShare: null,
       screenStream: null,
+      activeSpeaker: null,
       waitingList: [],
       hostInRoom: true,
       isHost: false,
@@ -107,6 +117,10 @@ export class CallSession {
 
   start() {
     if (this.signaling || this.finished) return;
+
+    if (this.localStream) {
+      this.audioTracker?.trackStream('local', this.localStream);
+    }
 
     const signaling = this.createSignalingClient({ url: this.url, getToken: this.getToken });
     this.signaling = signaling;
@@ -391,6 +405,7 @@ export class CallSession {
       sendSignal: (message) => this.signaling.request('signal', { to: peerId, ...message }),
       onRemoteStream: (stream) => {
         entry.stream = stream;
+        this.audioTracker?.trackStream(peerId, stream);
         this.#update();
       },
       onTrack: ({ track, stream }) => {
@@ -433,6 +448,7 @@ export class CallSession {
   #removePeer(peerId) {
     this.pending.delete(peerId);
     this.earlyPeers = this.earlyPeers.filter((p) => p.peerId !== peerId);
+    this.audioTracker?.untrackStream(peerId);
     const entry = this.peers.get(peerId);
     if (!entry) return;
     entry.peer.close();
@@ -464,6 +480,7 @@ export class CallSession {
   }
 
   #closePeers() {
+    for (const peerId of this.peers.keys()) this.audioTracker?.untrackStream(peerId);
     for (const { peer } of this.peers.values()) peer.close();
     this.peers.clear();
     this.pending.clear();
@@ -476,6 +493,7 @@ export class CallSession {
     if (this.finished) return;
     this.finished = true;
     this.#closePeers();
+    this.audioTracker?.destroy();
     this.unsubscribe.forEach((off) => off());
     this.unsubscribe = [];
     this.signaling?.close();
@@ -687,6 +705,7 @@ export class CallSession {
     if ('historyError' in patch) this.historyError = patch.historyError;
     if ('rateLimitHint' in patch) this.rateLimitHint = patch.rateLimitHint;
     if ('screenShare' in patch) this.screenShare = patch.screenShare;
+    if ('activeSpeaker' in patch) this.activeSpeaker = patch.activeSpeaker;
     const activeScreen = this.#resolveScreenStream();
     this.state = {
       ...this.state,
@@ -701,6 +720,7 @@ export class CallSession {
       rateLimitHint: this.rateLimitHint,
       screenShare: this.screenShare,
       screenStream: activeScreen,
+      activeSpeaker: this.activeSpeaker,
       peers: [...this.peers.entries()].map(([peerId, entry]) => ({
         peerId,
         user: entry.user,

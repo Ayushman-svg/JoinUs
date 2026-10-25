@@ -328,6 +328,7 @@ export default function CallPage() {
                       stream={media.stream}
                       audioOn={media.audioEnabled}
                       videoOn={media.videoEnabled}
+                      isSpeaking={call.activeSpeaker === 'local'}
                     />
                     {call.peers.map((peer) => (
                       <ParticipantTile
@@ -337,6 +338,7 @@ export default function CallPage() {
                         audioOn={peer.audio}
                         videoOn={peer.video}
                         connectionState={peer.connectionState}
+                        isSpeaking={call.activeSpeaker === peer.peerId}
                       />
                     ))}
                   </div>
@@ -349,6 +351,7 @@ export default function CallPage() {
                     stream={media.stream}
                     audioOn={media.audioEnabled}
                     videoOn={media.videoEnabled}
+                    isSpeaking={call.activeSpeaker === 'local'}
                   />
                   {call.peers.map((peer) => (
                     <ParticipantTile
@@ -358,6 +361,7 @@ export default function CallPage() {
                       audioOn={peer.audio}
                       videoOn={peer.video}
                       connectionState={peer.connectionState}
+                      isSpeaking={call.activeSpeaker === peer.peerId}
                     />
                   ))}
                 </div>
