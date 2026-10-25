@@ -68,7 +68,11 @@ export default function Dashboard() {
   // Load meetings
   useEffect(() => {
     const controller = new AbortController();
-    setMeetingsState((prev) => ({ ...prev, status: 'loading', error: '' }));
+    setMeetingsState((prev) => ({
+      ...prev,
+      status: prev.meetings.length > 0 ? 'ready' : 'loading',
+      error: '',
+    }));
 
     listMeetings('all', { signal: controller.signal })
       .then((meetings) => {
@@ -76,15 +80,40 @@ export default function Dashboard() {
       })
       .catch((err) => {
         if (err.name === 'AbortError') return;
-        setMeetingsState({
-          status: 'error',
-          meetings: [],
-          error: err.message || 'Failed to load meetings',
-        });
+        setMeetingsState((prev) => ({
+          status: prev.meetings.length > 0 ? 'ready' : 'error',
+          meetings: prev.meetings.length > 0 ? prev.meetings : [],
+          error: prev.meetings.length > 0 ? '' : (err.message || 'Failed to load meetings'),
+        }));
       });
 
     return () => controller.abort();
   }, [reloadKey]);
+
+  // Re-fetch when page regains focus and every 30s while dashboard is open
+  useEffect(() => {
+    const onFocus = () => setReloadKey((k) => k + 1);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setReloadKey((k) => k + 1);
+      }
+    };
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        setReloadKey((k) => k + 1);
+      }
+    }, 30000);
+
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, []);
 
   function getRecentBadgeKind(meeting) {
     if (meeting.status === 'cancelled') return 'cancelled';
