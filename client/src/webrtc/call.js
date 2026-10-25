@@ -452,6 +452,7 @@ export class CallSession {
 
   #onAdmitted({ peerId, peers, screenSharer }) {
     if (this.finished) return;
+    if (this.state.status === CallStatus.ACTIVE && this.selfId) return;
     this.isWaiting = false;
     this.#releaseWakeLock();
     this.selfId = peerId;

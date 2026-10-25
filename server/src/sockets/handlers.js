@@ -284,17 +284,30 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     const { peer, peers } = registry.admit(code, peerId);
     await recordAdmittedJoin(code, peer.userId);
 
+    const admitPayload = {
+      peerId,
+      peers: peers.map(toPublicPeer),
+      screenSharer: registry.getScreenSharer(code),
+    };
+
     const guestSocket = io.sockets.sockets.get(peerId);
     if (guestSocket) {
       await guestSocket.join(code);
-      guestSocket.emit('room:admitted', {
-        peerId,
-        peers: peers.map(toPublicPeer),
-        screenSharer: registry.getScreenSharer(code),
-      });
+      guestSocket.emit('room:admitted', admitPayload);
       guestSocket.to(code).emit('room:peer-joined', toPublicPeer(peer));
     } else {
+      io.to(peerId).emit('room:admitted', admitPayload);
       io.to(code).emit('room:peer-joined', toPublicPeer(peer));
+    }
+
+    io.to(`user:${peer.userId}`).emit('room:admitted', admitPayload);
+    try {
+      const userSockets = await io.in(`user:${peer.userId}`).fetchSockets();
+      for (const s of userSockets) {
+        s.join(code);
+      }
+    } catch {
+      /* ignore */
     }
 
     notifyHostWaitingUpdated(io, registry, code);
@@ -306,10 +319,10 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     const code = assertHost(registry, socket, limiters);
     const { peerId } = parse(peerTargetSchema, payload);
 
-    registry.deny(code, peerId);
-    const guestSocket = io.sockets.sockets.get(peerId);
-    if (guestSocket) {
-      guestSocket.emit('room:denied', {});
+    const { waitingUser } = registry.deny(code, peerId);
+    io.to(peerId).emit('room:denied', {});
+    if (waitingUser?.userId) {
+      io.to(`user:${waitingUser.userId}`).emit('room:denied', {});
     }
 
     await notifyHostWaitingUpdated(io, registry, code);
@@ -324,17 +337,30 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     const { admitted } = registry.admitAll(code);
     for (const item of admitted) {
       await recordAdmittedJoin(code, item.peer.userId);
+      const admitPayload = {
+        peerId: item.peer.peerId,
+        peers: item.peers.map(toPublicPeer),
+        screenSharer: registry.getScreenSharer(code),
+      };
+
       const guestSocket = io.sockets.sockets.get(item.peer.peerId);
       if (guestSocket) {
         await guestSocket.join(code);
-        guestSocket.emit('room:admitted', {
-          peerId: item.peer.peerId,
-          peers: item.peers.map(toPublicPeer),
-          screenSharer: registry.getScreenSharer(code),
-        });
+        guestSocket.emit('room:admitted', admitPayload);
         guestSocket.to(code).emit('room:peer-joined', toPublicPeer(item.peer));
       } else {
+        io.to(item.peer.peerId).emit('room:admitted', admitPayload);
         io.to(code).emit('room:peer-joined', toPublicPeer(item.peer));
+      }
+
+      io.to(`user:${item.peer.userId}`).emit('room:admitted', admitPayload);
+      try {
+        const userSockets = await io.in(`user:${item.peer.userId}`).fetchSockets();
+        for (const s of userSockets) {
+          s.join(code);
+        }
+      } catch {
+        /* ignore */
       }
     }
 
@@ -352,10 +378,23 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     }
 
     const removed = registry.remove(code, peerId);
+    const removePayload = { reason: 'REMOVED_BY_HOST' };
+
+    io.to(peerId).emit('room:removed', removePayload);
+    if (removed.peer?.userId) {
+      io.to(`user:${removed.peer.userId}`).emit('room:removed', removePayload);
+      try {
+        const userSockets = await io.in(`user:${removed.peer.userId}`).fetchSockets();
+        for (const s of userSockets) {
+          s.leave(code);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
 
     const targetSocket = io.sockets.sockets.get(peerId);
     if (targetSocket) {
-      targetSocket.emit('room:removed', { reason: 'REMOVED_BY_HOST' });
       await targetSocket.leave(code);
     }
 
@@ -385,11 +424,20 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     }
 
     io.to(code).emit('room:ended', {});
+    io.to(`user:${socket.data.user.id}`).emit('room:ended', {});
+
     for (const w of waiting) {
       io.to(w.peerId).emit('room:ended', {});
+      if (w.userId) {
+        io.to(`user:${w.userId}`).emit('room:ended', {});
+      }
     }
 
     for (const p of peers) {
+      io.to(p.peerId).emit('room:ended', {});
+      if (p.userId) {
+        io.to(`user:${p.userId}`).emit('room:ended', {});
+      }
       const s = io.sockets.sockets.get(p.peerId);
       s?.leave(code);
     }
