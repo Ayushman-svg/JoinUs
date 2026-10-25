@@ -411,6 +411,7 @@ export default function CallPage() {
                 waitingCount={isHost ? call.waitingList.length : 0}
                 messages={call.messages}
                 currentUser={user}
+                peers={call.peers}
                 historyLoading={call.historyLoading}
                 historyError={call.historyError}
                 rateLimitHint={call.rateLimitHint}

@@ -91,7 +91,7 @@ export default function useCall({
   const removePeer = useCallback((peerId) => sessionRef.current?.removePeer(peerId), []);
   const endMeeting = useCallback(() => sessionRef.current?.endMeeting(), []);
 
-  const sendMessage = useCallback((text) => sessionRef.current?.sendMessage(text), []);
+  const sendMessage = useCallback((text, to) => sessionRef.current?.sendMessage(text, to), []);
   const retryMessage = useCallback((id) => sessionRef.current?.retryMessage(id), []);
   const clearUnread = useCallback(() => sessionRef.current?.clearUnread(), []);
   const setChatOpen = useCallback((isOpen) => sessionRef.current?.setChatOpen(isOpen), []);

@@ -720,16 +720,17 @@ export class CallSession {
     for (const info of waiting) this.#addPeer(info, { initiator: false });
   }
 
-  #addPeer({ peerId, user, audio = true, video = true }, { initiator }) {
+  #addPeer({ peerId, user, isHost = false, audio = true, video = true }, { initiator }) {
     if (this.finished || this.peers.has(peerId)) return;
     if (!this.selfId) {
-      this.earlyPeers.push({ peerId, user, audio, video });
+      this.earlyPeers.push({ peerId, user, isHost, audio, video });
       return;
     }
 
     const entry = {
       peer: null,
       user,
+      isHost: Boolean(isHost || user?.isHost),
       stream: null,
       remoteStreams: new Map(),
       connectionState: 'new',
@@ -850,7 +851,7 @@ export class CallSession {
     this.#update({ status, error: null, selfId: null, screenShare: null, ...extra });
   }
 
-  async sendMessage(rawText) {
+  async sendMessage(rawText, to = null) {
     if (!rawText || !rawText.trim()) return;
     const text = rawText.trim();
     if (text.length > 1000) return;
@@ -867,13 +868,23 @@ export class CallSession {
       createdAt: new Date().toISOString(),
       status: 'sending',
     };
+    if (to && to.id) {
+      optimistic.to = {
+        id: to.id,
+        name: to.name,
+      };
+    }
 
     this.messages = [...this.messages, optimistic];
     this.rateLimitHint = null;
     this.#update({ messages: this.messages, rateLimitHint: null });
 
     try {
-      const res = await this.signaling.request('chat:send', { text });
+      const payload = { text };
+      if (to && to.id) {
+        payload.to = to.id;
+      }
+      const res = await this.signaling.request('chat:send', payload);
       const confirmed = res?.message || res;
       this.#confirmSentMessage(tempId, confirmed);
     } catch (err) {
@@ -927,7 +938,11 @@ export class CallSession {
     this.#update({ messages: this.messages, rateLimitHint: null });
 
     try {
-      const res = await this.signaling.request('chat:send', { text: target.text });
+      const payload = { text: target.text };
+      if (target.to?.id) {
+        payload.to = target.to.id;
+      }
+      const res = await this.signaling.request('chat:send', payload);
       const confirmed = res?.message || res;
       this.#confirmSentMessage(id, confirmed);
     } catch (err) {
@@ -1091,6 +1106,7 @@ export class CallSession {
         connectionState: entry.connectionState,
         audio: entry.audio,
         video: entry.video,
+        isHost: Boolean(entry.isHost || entry.user?.isHost),
       })),
     };
     this.listeners.forEach((listener) => listener(this.state));

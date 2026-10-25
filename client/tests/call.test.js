@@ -785,5 +785,67 @@ test('Chat: syncs with GET messages?after=<lastId> and merges by id maintaining 
   call.leave();
 });
 
+test('Chat: private message sends to recipient id and unread count tracks incoming private messages', async () => {
+  const mockSignaling = new MockSignaling();
+  let sentPayload = null;
+  mockSignaling.request = async (event, payload) => {
+    if (event === 'room:join') {
+      return { status: 'admitted', peerId: 'p-self', isHost: false, peers: [] };
+    }
+    if (event === 'chat:send') {
+      sentPayload = payload;
+      return {
+        ok: true,
+        message: {
+          id: 'server-private-1',
+          text: payload.text,
+          from: { id: 'u-self', name: 'Self' },
+          to: { id: payload.to, name: 'Bob' },
+          createdAt: new Date().toISOString(),
+        },
+      };
+    }
+    return {};
+  };
+
+  const call = new CallSession({
+    code: 'private-chat-room',
+    url: 'http://localhost:5000',
+    currentUser: { id: 'u-self', name: 'Self' },
+    getToken: () => 'token',
+    createSignalingClient: () => mockSignaling,
+    getMeetingMessagesApi: async () => [],
+  });
+
+  call.start();
+  await new Promise((r) => setTimeout(r, 10));
+
+  // Send a private message to Bob
+  await call.sendMessage('Secret hello', { id: 'u-bob', name: 'Bob' });
+  assert.equal(sentPayload.text, 'Secret hello');
+  assert.equal(sentPayload.to, 'u-bob');
+
+  const msgs = call.getState().messages;
+  assert.equal(msgs.length, 1);
+  assert.equal(msgs[0].id, 'server-private-1');
+  assert.equal(msgs[0].to?.id, 'u-bob');
+  assert.equal(msgs[0].to?.name, 'Bob');
+
+  // Receive a private message from Bob while chat is closed
+  assert.equal(call.getState().unreadCount, 0);
+  mockSignaling.emit('chat:message', {
+    id: 'server-private-2',
+    text: 'Secret reply',
+    from: { id: 'u-bob', name: 'Bob' },
+    to: { id: 'u-self', name: 'Self' },
+    createdAt: new Date().toISOString(),
+  });
+
+  assert.equal(call.getState().messages.length, 2);
+  assert.equal(call.getState().unreadCount, 1, 'Unread count increments for incoming private message');
+
+  call.leave();
+});
+
 
 

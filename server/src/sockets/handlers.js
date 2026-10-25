@@ -16,9 +16,10 @@ const {
 
 const defaultRateLimiter = new RateLimiter();
 
-const toPublicPeer = (peer) => ({
+const toPublicPeer = (peer, isHost = false) => ({
   peerId: peer.peerId,
   user: { id: peer.userId, name: peer.name },
+  isHost: Boolean(isHost || peer.isHost),
   audio: peer.audio,
   video: peer.video,
 });
@@ -270,7 +271,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     await socket.join(code);
     await recordAdmittedJoin(code, user.id);
     if (!alreadyInRoom) {
-      socket.to(code).emit('room:peer-joined', toPublicPeer(joinResult.peer));
+      socket.to(code).emit('room:peer-joined', toPublicPeer(joinResult.peer, isHost));
       notifiedCount = peersInRoom;
     }
 
@@ -287,7 +288,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     return {
       status: 'admitted',
       peerId: socket.id,
-      peers: joinResult.peers.map(toPublicPeer),
+      peers: joinResult.peers.map((p) => toPublicPeer(p, registry.isHost(code, p.userId))),
       isHost,
       screenSharer: registry.getScreenSharer(code),
     };
@@ -317,7 +318,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     if (isHostUser) {
       return {
         status: 'host',
-        peers: registry.getPeers(code).filter((p) => String(p.userId) !== userId).map(toPublicPeer),
+        peers: registry.getPeers(code).filter((p) => String(p.userId) !== userId).map((p) => toPublicPeer(p, registry.isHost(code, p.userId))),
         screenSharer: registry.getScreenSharer(code),
       };
     }
@@ -350,7 +351,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       return {
         status: 'admitted',
         peerId: myPeer ? myPeer.peerId : socket.id,
-        peers: roomPeers.filter((p) => String(p.userId) !== userId).map(toPublicPeer),
+        peers: roomPeers.filter((p) => String(p.userId) !== userId).map((p) => toPublicPeer(p, registry.isHost(code, p.userId))),
         screenSharer: registry.getScreenSharer(code),
       };
     }
@@ -390,7 +391,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
 
     const admitPayload = {
       peerId,
-      peers: peers.map(toPublicPeer),
+      peers: peers.map((p) => toPublicPeer(p, registry.isHost(code, p.userId))),
       screenSharer: registry.getScreenSharer(code),
     };
 
@@ -398,10 +399,10 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     if (guestSocket) {
       await guestSocket.join(code);
       guestSocket.emit('room:admitted', admitPayload);
-      guestSocket.to(code).emit('room:peer-joined', toPublicPeer(peer));
+      guestSocket.to(code).emit('room:peer-joined', toPublicPeer(peer, registry.isHost(code, peer.userId)));
     } else {
       io.to(peerId).emit('room:admitted', admitPayload);
-      io.to(code).emit('room:peer-joined', toPublicPeer(peer));
+      io.to(code).emit('room:peer-joined', toPublicPeer(peer, registry.isHost(code, peer.userId)));
     }
 
     io.to(`user:${peer.userId}`).emit('room:admitted', admitPayload);
@@ -449,7 +450,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       await recordAdmittedJoin(code, item.peer.userId);
       const admitPayload = {
         peerId: item.peer.peerId,
-        peers: item.peers.map(toPublicPeer),
+        peers: item.peers.map((p) => toPublicPeer(p, registry.isHost(code, p.userId))),
         screenSharer: registry.getScreenSharer(code),
       };
 
@@ -457,10 +458,10 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       if (guestSocket) {
         await guestSocket.join(code);
         guestSocket.emit('room:admitted', admitPayload);
-        guestSocket.to(code).emit('room:peer-joined', toPublicPeer(item.peer));
+        guestSocket.to(code).emit('room:peer-joined', toPublicPeer(item.peer, registry.isHost(code, item.peer.userId)));
       } else {
         io.to(item.peer.peerId).emit('room:admitted', admitPayload);
-        io.to(code).emit('room:peer-joined', toPublicPeer(item.peer));
+        io.to(code).emit('room:peer-joined', toPublicPeer(item.peer, registry.isHost(code, item.peer.userId)));
       }
 
       io.to(`user:${item.peer.userId}`).emit('room:admitted', admitPayload);

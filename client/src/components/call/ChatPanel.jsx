@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Send, X } from 'lucide-react';
+import { Send, X, Lock, AlertCircle } from 'lucide-react';
 
 import Button from '../ui/Button.jsx';
 import Tooltip from '../ui/Tooltip.jsx';
@@ -21,6 +21,7 @@ export default function ChatPanel({
   waitingCount = 0,
   messages = [],
   currentUser,
+  peers = [],
   historyLoading = false,
   historyError = null,
   rateLimitHint = null,
@@ -30,9 +31,45 @@ export default function ChatPanel({
 }) {
   const [inputText, setInputText] = useState('');
   const [showNewPill, setShowNewPill] = useState(false);
+  const [selectedRecipientId, setSelectedRecipientId] = useState('');
+  const [selectedRecipientName, setSelectedRecipientName] = useState('');
   const listRef = useRef(null);
   const textareaRef = useRef(null);
   const isNearBottomRef = useRef(true);
+
+  // Derive admitted other participants for the To: dropdown
+  const admittedRecipients = [];
+  const seenIds = new Set();
+  for (const p of peers) {
+    const uId = p.user?.id;
+    if (!uId) continue;
+    if (currentUser?.id && String(uId) === String(currentUser.id)) continue;
+    if (seenIds.has(String(uId))) continue;
+    seenIds.add(String(uId));
+    admittedRecipients.push({
+      id: String(uId),
+      name: p.user.name || 'Guest',
+      isHost: Boolean(p.isHost || p.user.isHost),
+    });
+  }
+
+  const isPrivate = Boolean(selectedRecipientId);
+  const matchedRecipient = admittedRecipients.find((r) => r.id === selectedRecipientId);
+  const hasLeft = isPrivate && !matchedRecipient;
+  const activeRecipientName = matchedRecipient ? matchedRecipient.name : selectedRecipientName;
+
+  const handleRecipientChange = (e) => {
+    const newId = e.target.value;
+    setSelectedRecipientId(newId);
+    if (newId) {
+      const found = admittedRecipients.find((r) => r.id === newId);
+      if (found) {
+        setSelectedRecipientName(found.name);
+      }
+    } else {
+      setSelectedRecipientName('');
+    }
+  };
 
   const handleScroll = () => {
     if (!listRef.current) return;
@@ -79,16 +116,20 @@ export default function ChatPanel({
 
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
+    if (hasLeft) return;
     const trimmed = inputText.trim();
     if (!trimmed) return;
-    onSendMessage(trimmed);
+    const recipientPayload = isPrivate
+      ? { id: selectedRecipientId, name: activeRecipientName }
+      : null;
+    onSendMessage(trimmed, recipientPayload);
     setInputText('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
   };
 
-  // Group messages: consecutive from same user within 2 minutes
+  // Group messages: consecutive from same user within 2 minutes, separating on privacy change
   const grouped = [];
   for (let i = 0; i < messages.length; i++) {
     const m = messages[i];
@@ -107,7 +148,9 @@ export default function ChatPanel({
       !prev.isSystem &&
       prev.from?.id &&
       m.from?.id &&
-      String(prev.from.id) === String(m.from.id)
+      String(prev.from.id) === String(m.from.id) &&
+      Boolean(prev.to) === Boolean(m.to) &&
+      (prev.to?.id || null) === (m.to?.id || null)
     ) {
       const prevTime = new Date(prev.createdAt).getTime();
       const currTime = new Date(m.createdAt).getTime();
@@ -215,9 +258,10 @@ export default function ChatPanel({
               );
             }
 
-            const { message, isSelf, isFirstInGroup, time, senderName } = item;
+            const { message, isSelf, isFirstInGroup, time } = item;
             const isSending = message.status === 'sending';
             const isFailed = message.status === 'failed';
+            const isMsgPrivate = Boolean(message.to);
 
             return (
               <div
@@ -242,9 +286,23 @@ export default function ChatPanel({
 
                 <div
                   className={`chat-bubble ${isSelf ? 'chat-bubble--self' : 'chat-bubble--other'} ${
-                    isSending ? 'chat-bubble--sending' : ''
-                  } ${isFailed ? 'chat-bubble--failed' : ''}`}
+                    isMsgPrivate ? 'chat-bubble--private' : ''
+                  } ${isMsgPrivate && isSelf ? 'chat-bubble--private-self' : ''} ${
+                    isMsgPrivate && !isSelf ? 'chat-bubble--private-other' : ''
+                  } ${isSending ? 'chat-bubble--sending' : ''} ${
+                    isFailed ? 'chat-bubble--failed' : ''
+                  }`}
                 >
+                  {isMsgPrivate && (
+                    <div className="chat-bubble__private-tag">
+                      <Lock size={11} aria-hidden="true" />
+                      <span>
+                        {isSelf
+                          ? `Private to ${message.to?.name || 'User'}`
+                          : `Private from ${message.from?.name || 'Guest'}`}
+                      </span>
+                    </div>
+                  )}
                   <p className="chat-bubble__text">{message.text}</p>
                 </div>
 
@@ -278,38 +336,100 @@ export default function ChatPanel({
       </div>
 
       <form className="chat-panel__input-area" onSubmit={handleSubmit}>
-        <div className="chat-panel__input-wrapper">
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={inputText}
-            onChange={handleInput}
-            onKeyDown={handleKeyDown}
-            placeholder="Send a message…"
-            aria-label="Send a message"
-            className="chat-panel__textarea"
-            maxLength={1000}
-          />
-          {inputText.length > 900 && (
-            <span className="chat-panel__char-counter" aria-live="polite">
-              {inputText.length}/1000
-            </span>
-          )}
+        <div className="chat-panel__recipient-bar">
+          <label htmlFor="chat-recipient-select" className="chat-panel__recipient-label">
+            To:
+          </label>
+          <select
+            id="chat-recipient-select"
+            className="chat-panel__recipient-select"
+            value={selectedRecipientId}
+            onChange={handleRecipientChange}
+            aria-label="Select chat recipient"
+          >
+            <option value="">Everyone</option>
+            {admittedRecipients.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+                {r.isHost ? ' (Host)' : ''}
+              </option>
+            ))}
+            {hasLeft && (
+              <option value={selectedRecipientId} disabled>
+                {activeRecipientName} (left)
+              </option>
+            )}
+          </select>
         </div>
 
-        <Tooltip label="Send message" side="top">
-          <Button
-            type="submit"
-            variant="primary"
-            size="md"
-            iconOnly
-            disabled={!inputText.trim()}
-            aria-label="Send message"
-            className="chat-panel__send-btn"
+        {isPrivate && (
+          <div
+            className={`chat-panel__privacy-banner ${
+              hasLeft ? 'chat-panel__privacy-banner--left' : ''
+            }`}
+            role="status"
           >
-            <Send size={18} aria-hidden="true" />
-          </Button>
-        </Tooltip>
+            {hasLeft ? (
+              <>
+                <AlertCircle size={13} aria-hidden="true" className="chat-panel__privacy-icon" />
+                <span>{activeRecipientName} left the meeting</span>
+              </>
+            ) : (
+              <>
+                <Lock size={13} aria-hidden="true" className="chat-panel__privacy-icon" />
+                <span>Only you and {activeRecipientName} can see this</span>
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="chat-panel__input-row">
+          <div className="chat-panel__input-wrapper">
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={inputText}
+              onChange={handleInput}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                hasLeft
+                  ? `${activeRecipientName} left the meeting`
+                  : isPrivate
+                  ? `Private message to ${activeRecipientName}`
+                  : 'Send a message…'
+              }
+              aria-label={
+                hasLeft
+                  ? `${activeRecipientName} left the meeting`
+                  : isPrivate
+                  ? `Private message to ${activeRecipientName}`
+                  : 'Send a message'
+              }
+              className="chat-panel__textarea"
+              maxLength={1000}
+              disabled={hasLeft}
+            />
+            {inputText.length > 900 && (
+              <span className="chat-panel__char-counter" aria-live="polite">
+                {inputText.length}/1000
+              </span>
+            )}
+          </div>
+
+          <Tooltip label="Send message" side="top">
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              iconOnly
+              disabled={!inputText.trim() || hasLeft}
+              aria-label="Send message"
+              className="chat-panel__send-btn"
+            >
+              <Send size={18} aria-hidden="true" />
+            </Button>
+          </Tooltip>
+        </div>
 
         {rateLimitHint && (
           <div className="chat-panel__rate-limit-hint" role="alert">

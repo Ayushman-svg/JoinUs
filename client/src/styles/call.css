@@ -1082,6 +1082,46 @@
   border: 1px solid rgba(239, 68, 68, 0.45);
 }
 
+.chat-bubble--private {
+  border: 1px dashed rgba(255, 255, 255, 0.28);
+  position: relative;
+}
+
+.chat-bubble--private-self {
+  background: #2563EB;
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.chat-bubble--private-other {
+  background: #232C37;
+  border-color: #4B5563;
+}
+
+.chat-bubble__private-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.25);
+  margin-bottom: 4px;
+  line-height: 1.2;
+}
+
+.chat-bubble--private-self .chat-bubble__private-tag {
+  color: #DBEAFE;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.chat-bubble--private-other .chat-bubble__private-tag {
+  color: #93C5FD;
+  border: 1px solid rgba(147, 197, 253, 0.25);
+}
+
 .chat-bubble__text {
   margin: 0;
   white-space: pre-wrap;
@@ -1173,13 +1213,72 @@
 /* Chat Input Area */
 .chat-panel__input-area {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid #2D3742;
   background: #151A21;
   position: relative;
-  flex-wrap: wrap;
+}
+
+.chat-panel__recipient-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.chat-panel__recipient-label {
+  font-weight: 600;
+  color: #ADBAC7;
+  font-size: 12px;
+}
+
+.chat-panel__recipient-select {
+  background: #1C232B;
+  color: #F0F4F8;
+  border: 1px solid #34404D;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+  max-width: 220px;
+  transition: border-color 0.15s;
+}
+
+.chat-panel__recipient-select:focus {
+  border-color: var(--color-primary);
+}
+
+.chat-panel__privacy-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #93C5FD;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 6px;
+}
+
+.chat-panel__privacy-banner--left {
+  color: #FCA5A5;
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.chat-panel__privacy-icon {
+  flex-shrink: 0;
+}
+
+.chat-panel__input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  width: 100%;
 }
 
 .chat-panel__input-wrapper {
