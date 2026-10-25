@@ -1,4 +1,4 @@
-import { MessageSquare, PhoneOff, Users } from 'lucide-react';
+import { MessageSquare, MonitorUp, PhoneOff, Users } from 'lucide-react';
 
 import MediaToggleButton from '../MediaToggleButton.jsx';
 import Button from '../ui/Button.jsx';
@@ -14,6 +14,10 @@ export default function CallControls({
   isPanelOpen = false,
   isChatOpen = false,
   unreadCount = 0,
+  isSharing = false,
+  someoneElseSharing = false,
+  onStartScreenShare,
+  onStopScreenShare,
   onToggleParticipants,
   onToggleChat,
 }) {
@@ -22,6 +26,10 @@ export default function CallControls({
   const participantsLabel = isWaitingBadge
     ? `Participants (${waitingCount} waiting)`
     : `Participants (${participantCount})`;
+
+  const hasDisplayMedia =
+    typeof navigator !== 'undefined' &&
+    Boolean(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
 
   return (
     <div className="controls" role="toolbar" aria-label="Meeting controls">
@@ -37,6 +45,38 @@ export default function CallControls({
         available={media.hasVideo}
         onToggle={media.toggleVideo}
       />
+
+      {hasDisplayMedia && (
+        <Tooltip
+          label={
+            isSharing
+              ? 'Stop sharing'
+              : someoneElseSharing
+              ? 'Someone else is presenting'
+              : 'Share screen'
+          }
+          side="top"
+        >
+          <Button
+            iconOnly
+            size="lg"
+            variant={isSharing ? 'primary' : 'secondary'}
+            className={`controls__share-btn ${isSharing ? 'is-active' : ''}`}
+            aria-label={
+              isSharing
+                ? 'Stop sharing'
+                : someoneElseSharing
+                ? 'Someone else is presenting'
+                : 'Share screen'
+            }
+            aria-pressed={isSharing}
+            disabled={someoneElseSharing}
+            onClick={isSharing ? onStopScreenShare : onStartScreenShare}
+          >
+            <MonitorUp size={22} aria-hidden="true" />
+          </Button>
+        </Tooltip>
+      )}
 
       <Tooltip label={isPanelOpen ? 'Close participants' : participantsLabel} side="top">
         <Button

@@ -1,4 +1,4 @@
-import { Check, MicOff, MoreVertical, UserMinus, VideoOff, X } from 'lucide-react';
+import { Check, MicOff, MonitorOff, MoreVertical, UserMinus, VideoOff, X } from 'lucide-react';
 
 import Avatar from '../ui/Avatar.jsx';
 import Badge from '../ui/Badge.jsx';
@@ -13,6 +13,8 @@ export default function ParticipantsPanel({
   self,
   peers = [],
   waitingList = [],
+  screenSharer = null,
+  onStopHostScreenShare,
   onAdmit,
   onDeny,
   onAdmitAll,
@@ -151,18 +153,28 @@ export default function ParticipantsPanel({
             {/* Remote peers */}
             {peers.map((peer) => {
               const name = peer.user?.name ?? 'Guest';
+              const isPresenting = screenSharer?.peerId === peer.peerId;
               return (
                 <li key={peer.peerId} className="participants-row">
                   <Avatar name={name} size="sm" />
                   <div className="participants-row__info">
                     <span className="participants-row__name">{name}</span>
-                    {peer.isHost && (
-                      <div className="participants-row__badges">
-                        <Badge variant="primary">Host</Badge>
-                      </div>
-                    )}
+                    <div className="participants-row__badges">
+                      {peer.isHost && <Badge variant="primary">Host</Badge>}
+                      {isPresenting && <Badge variant="primary">Presenting</Badge>}
+                    </div>
                   </div>
                   <div className="participants-row__media">
+                    {isHost && isPresenting && (
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={onStopHostScreenShare}
+                      >
+                        Stop sharing
+                      </Button>
+                    )}
+
                     {!peer.audio && (
                       <Tooltip label="Microphone off" side="left">
                         <span className="participants-row__icon-off" aria-label="Microphone off">
@@ -194,6 +206,14 @@ export default function ParticipantsPanel({
                           </Button>
                         )}
                       >
+                        {isPresenting && (
+                          <DropdownItem
+                            icon={MonitorOff}
+                            onSelect={onStopHostScreenShare}
+                          >
+                            Stop sharing
+                          </DropdownItem>
+                        )}
                         <DropdownItem
                           danger
                           icon={UserMinus}

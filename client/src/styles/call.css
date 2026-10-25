@@ -274,6 +274,163 @@
   color: #EF4444;
 }
 
+/* ---------- Screen Share Layout & Elements ---------- */
+.call__presenting-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: #38BDF8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: var(--radius-full);
+  animation: ui-fade-in var(--duration) var(--ease);
+}
+
+.call__sharing-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 8px 16px;
+  background: rgba(37, 99, 235, 0.15);
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  border-radius: var(--radius-lg);
+  color: #93C5FD;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  animation: ui-fade-in var(--duration) var(--ease);
+  max-width: 600px;
+  margin: 0 auto var(--space-2);
+  width: 100%;
+}
+
+.call__stage-presentation {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  gap: 12px;
+  animation: ui-fade-in 200ms var(--ease) both;
+}
+
+/* Desktop: Screen share is main stage, filmstrip is right column */
+@media (min-width: 768px) {
+  .call__stage-presentation {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .call__presentation-main {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0B0F15;
+    border: 1px solid #2D3742;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .call__filmstrip {
+    width: 220px;
+    flex: 0 0 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+    min-height: 0;
+    padding-right: 2px;
+  }
+
+  .call__filmstrip .tile {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    flex: 0 0 auto;
+  }
+}
+
+/* Mobile: Screen share is top stage, filmstrip is scrollable row at bottom */
+@media (max-width: 767px) {
+  .call__stage-presentation {
+    flex-direction: column;
+  }
+
+  .call__presentation-main {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0B0F15;
+    border: 1px solid #2D3742;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .call__filmstrip {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex: 0 0 96px;
+    width: 100%;
+    padding-bottom: 2px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .call__filmstrip .tile {
+    aspect-ratio: 16 / 9;
+    height: 100%;
+    flex: 0 0 140px;
+    scroll-snap-align: start;
+  }
+}
+
+.call__presentation-main .presentation-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #0B0F15;
+}
+
+.call__screen-toast {
+  position: fixed;
+  bottom: calc(max(var(--space-4), env(safe-area-inset-bottom)) + 76px);
+  left: max(var(--space-4), env(safe-area-inset-left));
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 16px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: #F9FAFB;
+  background: #151A21;
+  border: 1px solid #2D3742;
+  border-radius: var(--radius-full);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: ui-rise 0.25s var(--ease) both;
+}
+
+@media (max-width: 767px) {
+  .call__screen-toast {
+    bottom: calc(max(var(--space-4), env(safe-area-inset-bottom)) + 80px);
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+  }
+}
+
 /* ---------- Floating controls ---------- */
 .controls {
   position: fixed;

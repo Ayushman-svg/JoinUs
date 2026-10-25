@@ -1,4 +1,4 @@
-import { Link2, Users } from 'lucide-react';
+import { Link2, MonitorUp, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -10,6 +10,7 @@ import CallStatusCard from '../components/call/CallStatusCard.jsx';
 import ChatPanel from '../components/call/ChatPanel.jsx';
 import ParticipantsPanel from '../components/call/ParticipantsPanel.jsx';
 import ParticipantTile from '../components/call/ParticipantTile.jsx';
+import VideoView from '../components/VideoView.jsx';
 import CopyLinkButton from '../components/CopyLinkButton.jsx';
 import Alert from '../components/ui/Alert.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
@@ -130,6 +131,57 @@ export default function CallPage() {
     setChatOpen?.(activePanel === 'chat');
   }, [activePanel, setChatOpen]);
 
+  const [screenToast, setScreenToast] = useState(null);
+  const prevScreenShareRef = useRef(null);
+
+  useEffect(() => {
+    const prev = prevScreenShareRef.current;
+    const curr = call.screenShare;
+    prevScreenShareRef.current = curr;
+
+    if (!prev && curr) {
+      const name =
+        curr.peerId === call.selfId
+          ? 'You'
+          : call.peers.find((p) => p.peerId === curr.peerId)?.user?.name ?? 'Someone';
+      setScreenToast(`${name} started sharing`);
+      const t = setTimeout(() => setScreenToast(null), 4000);
+      return () => clearTimeout(t);
+    } else if (prev && !curr) {
+      const name =
+        prev.peerId === call.selfId
+          ? 'You'
+          : call.peers.find((p) => p.peerId === prev.peerId)?.user?.name ?? 'Presenter';
+      setScreenToast(`${name} stopped sharing`);
+      const t = setTimeout(() => setScreenToast(null), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [call.screenShare, call.selfId, call.peers]);
+
+  const isSelfSharing = Boolean(call.screenShare && call.selfId && call.screenShare.peerId === call.selfId);
+  const isOtherSharing = Boolean(call.screenShare && (!call.selfId || call.screenShare.peerId !== call.selfId));
+  const isPresenting = Boolean(call.screenShare);
+
+  const presenterPeer = isOtherSharing
+    ? call.peers.find((p) => p.peerId === call.screenShare.peerId)
+    : null;
+  const presenterName = isSelfSharing
+    ? 'You'
+    : presenterPeer?.user?.name ?? 'Someone';
+
+  const handleStartScreenShare = async () => {
+    try {
+      await call.startScreenShare();
+    } catch (err) {
+      if (err?.code === 'SCREEN_SHARE_BUSY') {
+        setScreenToast('Someone else is already sharing');
+      } else {
+        setScreenToast(err?.message || 'Could not start screen share');
+      }
+      setTimeout(() => setScreenToast(null), 4000);
+    }
+  };
+
   function leave() {
     media.stop(); // releases the camera and microphone; leaving the page ends the call
     navigate('/');
@@ -192,6 +244,12 @@ export default function CallPage() {
           <h1 className="call__title">{meeting?.title ?? 'Meeting'}</h1>
           <p className="call__code">{code}</p>
         </div>
+        {isOtherSharing && (
+          <div className="call__presenting-banner" role="status">
+            <MonitorUp size={14} aria-hidden="true" />
+            <span>{presenterName} is presenting</span>
+          </div>
+        )}
         {people && (
           <p className="call__count">
             <Users size={16} aria-hidden="true" />
@@ -228,6 +286,16 @@ export default function CallPage() {
 
           {inCall && (
             <>
+              {isSelfSharing && (
+                <aside className="call__sharing-banner" role="status">
+                  <MonitorUp size={16} aria-hidden="true" />
+                  <span>You&apos;re sharing your screen</span>
+                  <Button variant="danger" size="sm" onClick={call.stopScreenShare}>
+                    Stop sharing
+                  </Button>
+                </aside>
+              )}
+
               <div className="call__notices">
                 {notice}
                 {media.error && (
@@ -244,25 +312,56 @@ export default function CallPage() {
                 )}
               </div>
 
-              <div className="call__grid" data-count={call.peers.length + 1}>
-                <ParticipantTile
-                  local
-                  name={`${localName} (You)`}
-                  stream={media.stream}
-                  audioOn={media.audioEnabled}
-                  videoOn={media.videoEnabled}
-                />
-                {call.peers.map((peer) => (
+              {isPresenting ? (
+                <div className="call__stage-presentation">
+                  <div className="call__presentation-main">
+                    <VideoView
+                      stream={call.screenStream}
+                      muted={true}
+                      className="presentation-video"
+                    />
+                  </div>
+                  <div className="call__filmstrip">
+                    <ParticipantTile
+                      local
+                      name={`${localName} (You)`}
+                      stream={media.stream}
+                      audioOn={media.audioEnabled}
+                      videoOn={media.videoEnabled}
+                    />
+                    {call.peers.map((peer) => (
+                      <ParticipantTile
+                        key={peer.peerId}
+                        name={peer.user?.name ?? 'Guest'}
+                        stream={peer.stream}
+                        audioOn={peer.audio}
+                        videoOn={peer.video}
+                        connectionState={peer.connectionState}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="call__grid" data-count={call.peers.length + 1}>
                   <ParticipantTile
-                    key={peer.peerId}
-                    name={peer.user?.name ?? 'Guest'}
-                    stream={peer.stream}
-                    audioOn={peer.audio}
-                    videoOn={peer.video}
-                    connectionState={peer.connectionState}
+                    local
+                    name={`${localName} (You)`}
+                    stream={media.stream}
+                    audioOn={media.audioEnabled}
+                    videoOn={media.videoEnabled}
                   />
-                ))}
-              </div>
+                  {call.peers.map((peer) => (
+                    <ParticipantTile
+                      key={peer.peerId}
+                      name={peer.user?.name ?? 'Guest'}
+                      stream={peer.stream}
+                      audioOn={peer.audio}
+                      videoOn={peer.video}
+                      connectionState={peer.connectionState}
+                    />
+                  ))}
+                </div>
+              )}
             </>
           )}
         </main>
@@ -283,6 +382,8 @@ export default function CallPage() {
                 }}
                 peers={call.peers}
                 waitingList={call.waitingList}
+                screenSharer={call.screenShare}
+                onStopHostScreenShare={call.stopHostScreenShare}
                 onAdmit={(peerId) => call.admitPeer(peerId)}
                 onDeny={(peerId) => call.denyPeer(peerId)}
                 onAdmitAll={() => call.admitAllPeers()}
@@ -319,6 +420,10 @@ export default function CallPage() {
           isPanelOpen={activePanel === 'participants'}
           isChatOpen={activePanel === 'chat'}
           unreadCount={call.unreadCount}
+          isSharing={isSelfSharing}
+          someoneElseSharing={isOtherSharing}
+          onStartScreenShare={handleStartScreenShare}
+          onStopScreenShare={call.stopScreenShare}
           onToggleParticipants={() =>
             setActivePanel((curr) => (curr === 'participants' ? null : 'participants'))
           }
@@ -458,6 +563,13 @@ export default function CallPage() {
           )
         }
       />
+
+      {screenToast && (
+        <aside className="call__screen-toast" role="status" aria-live="polite">
+          <MonitorUp size={16} aria-hidden="true" />
+          <span>{screenToast}</span>
+        </aside>
+      )}
 
       <p className="sr-only" role="status" aria-live="polite">
         {announcement}
