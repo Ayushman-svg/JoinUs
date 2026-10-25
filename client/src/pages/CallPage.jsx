@@ -84,12 +84,6 @@ export default function CallPage() {
   }, []);
 
   const { status: mediaStatus, start: startMedia } = media;
-  useEffect(() => {
-    if (mediaStatus === 'idle' && !['ended', 'denied', 'removed'].includes(call.status)) {
-      startMedia();
-    }
-  }, [mediaStatus, startMedia, call.status]);
-
   const mediaSettled = mediaStatus === 'ready' || mediaStatus === 'error';
   const call = useCall({
     code,
@@ -99,6 +93,13 @@ export default function CallPage() {
     rtcConfig: rtcConfig ?? DEFAULT_RTC_CONFIG,
     currentUser: user,
   });
+
+  useEffect(() => {
+    if (mediaStatus === 'idle' && !['ended', 'denied', 'removed'].includes(call.status)) {
+      startMedia();
+    }
+  }, [mediaStatus, startMedia, call.status]);
+
   const slow = useSlowRequest(call.status === 'connecting' || call.status === 'idle', 4000);
   const announcement = useAnnouncement(call.peers);
 
