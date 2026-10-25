@@ -83,11 +83,12 @@ export default function CallPage() {
     return () => controller.abort();
   }, []);
 
-  // Opening this page directly (without the join screen) starts the devices here
   const { status: mediaStatus, start: startMedia } = media;
   useEffect(() => {
-    if (mediaStatus === 'idle') startMedia();
-  }, [mediaStatus, startMedia]);
+    if (mediaStatus === 'idle' && !['ended', 'denied', 'removed'].includes(call.status)) {
+      startMedia();
+    }
+  }, [mediaStatus, startMedia, call.status]);
 
   const mediaSettled = mediaStatus === 'ready' || mediaStatus === 'error';
   const call = useCall({
@@ -105,9 +106,9 @@ export default function CallPage() {
 
   useEffect(() => {
     if (['ended', 'denied', 'removed'].includes(call.status)) {
-      media.stop();
+      media.stream?.getTracks().forEach((track) => track.stop());
     }
-  }, [call.status, media]);
+  }, [call.status, media.stream]);
 
   useEffect(() => {
     if (!isHost || !call.waitingList?.length) return;

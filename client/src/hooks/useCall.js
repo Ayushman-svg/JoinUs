@@ -48,7 +48,7 @@ export default function useCall({
 
   useEffect(() => {
     if (!enabled || !code) {
-      setState(INITIAL);
+      setState((prev) => (['ended', 'denied', 'removed'].includes(prev.status) ? prev : INITIAL));
       return undefined;
     }
 
