@@ -69,6 +69,7 @@ export class CallSession {
     this.screenShare = null;
     this.joinAttempt = 0;
     this.finished = false;
+    this.waitingPollInterval = null;
 
     this.activeSpeaker = null;
     this.audioTracker = new AudioActivityTracker({
@@ -180,6 +181,37 @@ export class CallSession {
     return this.signaling.request('host:end', {});
   }
 
+  async refreshWaitingList() {
+    if (this.finished || !this.isHost || !this.signaling?.connected) return;
+    try {
+      const res = await this.signaling.request('host:list-waiting', { code: this.code });
+      if (this.finished) return;
+      if (Array.isArray(res?.waiting)) {
+        this.waitingList = res.waiting;
+        this.#update({ waitingList: this.waitingList });
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  #startWaitingPolling() {
+    if (this.waitingPollInterval) return;
+    this.waitingPollInterval = setInterval(() => {
+      if (this.finished || !this.isHost || !this.signaling?.connected) return;
+      if (this.peers.size === 0 || this.waitingList.length > 0) {
+        this.refreshWaitingList();
+      }
+    }, 5000);
+  }
+
+  #stopWaitingPolling() {
+    if (this.waitingPollInterval) {
+      clearInterval(this.waitingPollInterval);
+      this.waitingPollInterval = null;
+    }
+  }
+
   async startScreenShare() {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getDisplayMedia) {
       throw new Error('Screen sharing is not supported by your browser');
@@ -279,6 +311,7 @@ export class CallSession {
   // Leaves the room and closes everything. Safe to call more than once.
   leave() {
     if (this.finished) return;
+    this.#stopWaitingPolling();
     this.stopScreenShare();
     if (this.signaling?.connected) this.signaling.send('room:leave');
     this.#finish(CallStatus.LEFT);
@@ -291,6 +324,9 @@ export class CallSession {
       this.#update({ status: CallStatus.CONNECTING });
     } else if (status === SignalingStatus.CONNECTED) {
       this.#join();
+      if (this.isHost) {
+        this.refreshWaitingList();
+      }
     } else if (status === SignalingStatus.RECONNECTING) {
       this.joinAttempt += 1; // forget a join that was still waiting for its answer
       this.#closePeers();
@@ -335,6 +371,10 @@ export class CallSession {
         screenShare: this.screenShare,
       });
       this.loadHistory();
+      if (this.isHost) {
+        this.refreshWaitingList();
+        this.#startWaitingPolling();
+      }
 
       // Everyone already in the room is offered a connection by us, the newcomer. Peers that
       // joined while the answer was on its way (earlyPeers) will send their own offers.
@@ -492,6 +532,7 @@ export class CallSession {
   #finish(status, extra = {}) {
     if (this.finished) return;
     this.finished = true;
+    this.#stopWaitingPolling();
     this.#closePeers();
     this.audioTracker?.destroy();
     this.unsubscribe.forEach((off) => off());

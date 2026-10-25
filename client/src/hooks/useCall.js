@@ -84,6 +84,7 @@ export default function useCall({
 
   const retry = useCallback(() => setAttempt((count) => count + 1), []);
 
+  const refreshWaitingList = useCallback(() => sessionRef.current?.refreshWaitingList(), []);
   const admitPeer = useCallback((peerId) => sessionRef.current?.admitPeer(peerId), []);
   const denyPeer = useCallback((peerId) => sessionRef.current?.denyPeer(peerId), []);
   const admitAllPeers = useCallback(() => sessionRef.current?.admitAllPeers(), []);
@@ -103,6 +104,7 @@ export default function useCall({
   return {
     ...state,
     retry,
+    refreshWaitingList,
     admitPeer,
     denyPeer,
     admitAllPeers,

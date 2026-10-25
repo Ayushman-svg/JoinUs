@@ -465,5 +465,48 @@ test('Edge cases: joining full meeting transitions to ERROR with ROOM_FULL', asy
   call.leave();
 });
 
+test('Host client: calls host:list-waiting on start and updates waitingList', async () => {
+  const mockSignaling = new MockSignaling();
+  mockSignaling.request = async (event, payload) => {
+    mockSignaling.sentRequests.push({ event, payload });
+    if (event === 'room:join') {
+      return {
+        status: 'admitted',
+        peerId: 'host-peer-id',
+        isHost: true,
+        peers: [],
+        screenSharer: null,
+      };
+    }
+    if (event === 'host:list-waiting') {
+      return {
+        ok: true,
+        waiting: [{ peerId: 'guest-1', user: { id: 'u2', name: 'Bob' } }],
+      };
+    }
+    return {};
+  };
+
+  const call = new CallSession({
+    code: 'host-waiting-room',
+    url: 'http://localhost:5000',
+    getToken: () => 'token',
+    createSignalingClient: () => mockSignaling,
+    getMeetingMessagesApi: async () => [],
+  });
+
+  call.start();
+  await new Promise((r) => setTimeout(r, 20));
+
+  assert.equal(call.getState().isHost, true);
+  const listWaitingReq = mockSignaling.sentRequests.find((r) => r.event === 'host:list-waiting');
+  assert.ok(listWaitingReq, 'Sent host:list-waiting request');
+  assert.equal(listWaitingReq.payload.code, 'host-waiting-room');
+  assert.equal(call.getState().waitingList.length, 1);
+  assert.equal(call.getState().waitingList[0].peerId, 'guest-1');
+
+  call.leave();
+});
+
 
 

@@ -126,10 +126,13 @@ export default function CallPage() {
     }
   }, [call.waitingList, toastGuest]);
 
-  const { setChatOpen } = call;
+  const { setChatOpen, refreshWaitingList } = call;
   useEffect(() => {
     setChatOpen?.(activePanel === 'chat');
-  }, [activePanel, setChatOpen]);
+    if (activePanel === 'participants' && isHost) {
+      refreshWaitingList?.();
+    }
+  }, [activePanel, setChatOpen, refreshWaitingList, isHost]);
 
   const [screenToast, setScreenToast] = useState(null);
   const prevScreenShareRef = useRef(null);
