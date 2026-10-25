@@ -70,6 +70,8 @@ export class CallSession {
     this.joinAttempt = 0;
     this.finished = false;
     this.waitingPollInterval = null;
+    this.guestWaitingPollInterval = null;
+    this.guestVisibilityListener = null;
     this.isWaiting = false;
     this.isReconnecting = false;
     this.wakeLock = null;
@@ -219,6 +221,70 @@ export class CallSession {
     }
   }
 
+  async #pollGuestStatus() {
+    if (this.finished || !this.isWaiting || !this.signaling?.connected) return;
+    try {
+      const res = await this.signaling.request('room:status', { code: this.code });
+      if (this.finished || !this.isWaiting) return;
+
+      if (res?.status === 'admitted') {
+        this.#stopGuestWaitingPolling();
+        this.#onAdmitted({
+          peerId: res.peerId || this.selfId || this.signaling?.id,
+          peers: res.peers || [],
+          screenSharer: res.screenSharer,
+        });
+      } else if (res?.status === 'ended') {
+        this.#stopGuestWaitingPolling();
+        this.#finish(CallStatus.ENDED);
+      } else if (res?.status === 'denied') {
+        this.#stopGuestWaitingPolling();
+        this.isWaiting = false;
+        this.#releaseWakeLock();
+        this.#finish(CallStatus.DENIED);
+      } else if (res?.status === 'removed') {
+        this.#stopGuestWaitingPolling();
+        this.#finish(CallStatus.REMOVED, { reason: 'REMOVED_BY_HOST' });
+      }
+    } catch (err) {
+      if (err?.code === 'MEETING_ENDED') {
+        this.#stopGuestWaitingPolling();
+        this.#finish(CallStatus.ENDED);
+      }
+    }
+  }
+
+  #startGuestWaitingPolling() {
+    this.#stopGuestWaitingPolling();
+
+    this.guestWaitingPollInterval = setInterval(() => {
+      this.#pollGuestStatus();
+    }, 3000);
+
+    this.guestVisibilityListener = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        this.#pollGuestStatus();
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this.guestVisibilityListener);
+    }
+  }
+
+  #stopGuestWaitingPolling() {
+    if (this.guestWaitingPollInterval) {
+      clearInterval(this.guestWaitingPollInterval);
+      this.guestWaitingPollInterval = null;
+    }
+    if (this.guestVisibilityListener) {
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', this.guestVisibilityListener);
+      }
+      this.guestVisibilityListener = null;
+    }
+  }
+
   async #acquireWakeLock() {
     if (this.wakeLock || typeof navigator === 'undefined' || !navigator.wakeLock?.request) return;
     try {
@@ -347,6 +413,7 @@ export class CallSession {
     this.isWaiting = false;
     this.#releaseWakeLock();
     this.#stopWaitingPolling();
+    this.#stopGuestWaitingPolling();
     this.stopScreenShare();
     if (this.signaling?.connected) this.signaling.send('room:leave');
     this.#finish(CallStatus.LEFT);
@@ -361,6 +428,9 @@ export class CallSession {
       this.#join();
       if (this.isHost) {
         this.refreshWaitingList();
+      }
+      if (this.isWaiting) {
+        this.#pollGuestStatus();
       }
     } else if (status === SignalingStatus.RECONNECTING) {
       this.joinAttempt += 1; // forget a join that was still waiting for its answer
@@ -400,10 +470,12 @@ export class CallSession {
           hostInRoom: this.hostInRoom,
           isReconnecting: false,
         });
+        this.#startGuestWaitingPolling();
         return;
       }
 
       this.isWaiting = false;
+      this.#stopGuestWaitingPolling();
       this.#releaseWakeLock();
       this.selfId = response.peerId;
       this.isHost = Boolean(response.isHost);
@@ -454,6 +526,7 @@ export class CallSession {
     if (this.finished) return;
     if (this.state.status === CallStatus.ACTIVE && this.selfId) return;
     this.isWaiting = false;
+    this.#stopGuestWaitingPolling();
     this.#releaseWakeLock();
     this.selfId = peerId;
     this.screenShare = screenSharer ?? null;
@@ -583,6 +656,7 @@ export class CallSession {
     this.isWaiting = false;
     this.#releaseWakeLock();
     this.#stopWaitingPolling();
+    this.#stopGuestWaitingPolling();
     this.#closePeers();
     this.audioTracker?.destroy();
     this.unsubscribe.forEach((off) => off());
