@@ -172,12 +172,24 @@ describe('History and messages REST API', () => {
     expect(hostRes.body.messages).toHaveLength(2);
     expect(hostRes.body.messages[0]).toMatchObject({
       id: msg1._id.toString(),
-      from: { id: host.user.id, name: 'Host Alice' },
+      from: { id: host.user.id, name: 'Host Alice', isHost: true },
       text: 'First message from host',
     });
     expect(hostRes.body.messages[1]).toMatchObject({
       id: msg2._id.toString(),
-      from: { id: attendee.user.id, name: 'Attendee Bob' },
+      from: { id: attendee.user.id, name: 'Attendee Bob', isHost: false },
+      text: 'Second message from attendee',
+    });
+
+    // Query messages after msg1
+    const afterRes = await request(app)
+      .get(`/api/meetings/${m.code}/messages?after=${msg1._id.toString()}`)
+      .set(bearer(host.token));
+    expect(afterRes.status).toBe(200);
+    expect(afterRes.body.messages).toHaveLength(1);
+    expect(afterRes.body.messages[0]).toMatchObject({
+      id: msg2._id.toString(),
+      from: { id: attendee.user.id, isHost: false },
       text: 'Second message from attendee',
     });
 

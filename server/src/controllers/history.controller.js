@@ -1,3 +1,5 @@
+const mongoose = require('mongoose');
+
 const AppError = require('../utils/AppError');
 const Meeting = require('../models/Meeting');
 const Message = require('../models/Message');
@@ -80,7 +82,7 @@ async function getHistoryDetail(req, res) {
 
 async function getMeetingMessages(req, res) {
   const { code } = req.valid.params;
-  const { limit = 100 } = req.valid.query;
+  const { limit = 100, after } = req.valid.query;
   const userId = req.user._id;
 
   const meeting = await Meeting.findOne({ code }).select('_id host attendees').lean();
@@ -93,10 +95,17 @@ async function getMeetingMessages(req, res) {
     throw new AppError(403, 'FORBIDDEN', "You don't have access to this meeting's messages");
   }
 
-  const messages = await Message.find({ meeting: meeting._id })
+  const query = { meeting: meeting._id };
+  if (after && mongoose.Types.ObjectId.isValid(after)) {
+    query._id = { $gt: new mongoose.Types.ObjectId(after) };
+  }
+
+  const messages = await Message.find(query)
     .sort({ createdAt: 1 })
     .limit(limit)
     .lean();
+
+  const hostIdStr = meeting.host.toString();
 
   res.json({
     messages: messages.map((msg) => ({
@@ -104,6 +113,7 @@ async function getMeetingMessages(req, res) {
       from: {
         id: msg.user.toString(),
         name: msg.name,
+        isHost: msg.user.toString() === hostIdStr,
       },
       text: msg.text,
       createdAt: msg.createdAt,

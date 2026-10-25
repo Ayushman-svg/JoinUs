@@ -111,16 +111,25 @@ describe('Chat socket authorization, validation and rate limit', () => {
     expect(ack.ok).toBe(true);
     expect(ack.message).toMatchObject({
       id: expect.any(String),
-      from: { id: host.user.id.toString(), name: 'Alice' },
+      from: { id: host.user.id.toString(), name: 'Alice', isHost: true },
       text: 'Hello world!',
       createdAt: expect.any(String),
     });
 
     const receivedByGuest = await messagePromise;
     expect(receivedByGuest).toEqual(ack.message);
+    expect(receivedByGuest.from.isHost).toBe(true);
 
     const receivedByHost = await hostMessagePromise;
     expect(receivedByHost).toEqual(ack.message);
+
+    // Guest sends a message - from.isHost should be false
+    const guestMsgPromise = waitForEvent(hostSocket, 'chat:message');
+    const guestAck = await emitAck(guestSocket, 'chat:send', { text: 'Reply from guest' });
+    expect(guestAck.ok).toBe(true);
+    expect(guestAck.message.from.isHost).toBe(false);
+    const guestMsgReceived = await guestMsgPromise;
+    expect(guestMsgReceived.from.isHost).toBe(false);
 
     // Stored in MongoDB
     const stored = await Message.findById(ack.message.id);

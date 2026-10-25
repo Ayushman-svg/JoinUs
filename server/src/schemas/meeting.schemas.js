@@ -46,6 +46,7 @@ const codeParamsSchema = z.object({
 
 const messagesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(100),
+  after: z.string().trim().optional(),
 });
 
 module.exports = {

@@ -617,7 +617,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       throw new AppError(429, 'RATE_LIMITED', "You're sending messages too fast");
     }
 
-    const meeting = await Meeting.findOne({ code }).select('_id').lean();
+    const meeting = await Meeting.findOne({ code }).select('_id host').lean();
     if (!meeting) {
       throw new AppError(404, 'MEETING_NOT_FOUND', 'Meeting not found');
     }
@@ -636,11 +636,13 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       throw new AppError(500, 'CHAT_FAILED', 'Failed to save message');
     }
 
+    const hostId = meeting.host ? meeting.host.toString() : '';
     const message = {
       id: saved._id.toString(),
       from: {
         id: user.id,
         name: user.name,
+        isHost: user.id.toString() === hostId,
       },
       text: saved.text,
       createdAt: saved.createdAt.toISOString(),
