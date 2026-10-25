@@ -5,6 +5,7 @@ const morgan = require('morgan');
 
 const env = require('./config/env');
 const AppError = require('./utils/AppError');
+const { apiLimiter } = require('./middleware/rateLimit');
 const healthRoutes = require('./routes/health.routes');
 const authRoutes = require('./routes/auth.routes');
 const meetingRoutes = require('./routes/meeting.routes');
@@ -13,6 +14,9 @@ const iceRoutes = require('./routes/ice.routes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
+
+// Trust reverse proxy (e.g. Render) to correctly identify client IP
+app.set('trust proxy', 1);
 
 // Request logging (silent during tests)
 if (!env.isTest) {
@@ -35,6 +39,9 @@ app.use(
 );
 
 app.use(express.json({ limit: '100kb' }));
+
+// Global REST rate limiter
+app.use('/api', apiLimiter);
 
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);

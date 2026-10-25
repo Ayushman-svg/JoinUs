@@ -96,8 +96,16 @@ async function recordRoomInactive(code) {
 }
 
 // Removes the socket from its room or waiting list (if in one) and notifies peers/host
-function leaveRoom(io, registry, socket, rateLimiter) {
-  if (rateLimiter) rateLimiter.reset(socket.id);
+function leaveRoom(io, registry, socket, limiters) {
+  if (limiters) {
+    if (limiters instanceof RateLimiter) {
+      limiters.reset(socket.id);
+    } else {
+      for (const limiter of Object.values(limiters)) {
+        limiter?.reset?.(socket.id);
+      }
+    }
+  }
   const left = registry.leave(socket.id);
   if (!left) return;
 
@@ -115,7 +123,7 @@ function leaveRoom(io, registry, socket, rateLimiter) {
   }
 }
 
-function assertHost(registry, socket) {
+function assertHost(registry, socket, limiters) {
   const code = registry.getRoomCode(socket.id);
   if (!code) {
     throw new AppError(403, 'NOT_IN_ROOM', 'Join a meeting first');
@@ -123,11 +131,32 @@ function assertHost(registry, socket) {
   if (!registry.isHost(code, socket.data.user.id)) {
     throw new AppError(403, 'FORBIDDEN', 'Only the host can do this');
   }
+  if (limiters?.host && !limiters.host.check(socket.id)) {
+    throw new AppError(429, 'RATE_LIMITED', 'Too many host requests, please slow down');
+  }
   return code;
 }
 
-function registerHandlers(io, socket, registry, rateLimiter = defaultRateLimiter) {
+function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLimiter) {
+  const limiters =
+    rateLimiterInput instanceof RateLimiter
+      ? {
+          chat: rateLimiterInput,
+          join: new RateLimiter({ max: 10, windowMs: 10000 }),
+          signal: new RateLimiter({ max: 300, windowMs: 10000 }),
+          host: new RateLimiter({ max: 30, windowMs: 10000 }),
+        }
+      : rateLimiterInput || {
+          chat: defaultRateLimiter,
+          join: new RateLimiter({ max: 10, windowMs: 10000 }),
+          signal: new RateLimiter({ max: 300, windowMs: 10000 }),
+          host: new RateLimiter({ max: 30, windowMs: 10000 }),
+        };
+
   on(socket, 'room:join', async (payload) => {
+    if (limiters.join && !limiters.join.check(socket.id)) {
+      throw new AppError(429, 'RATE_LIMITED', 'Too many join attempts, please slow down');
+    }
     const { code, audio, video } = parse(joinSchema, payload);
 
     const meeting = await Meeting.findOne({ code }).select('status host waitingRoom').lean();
@@ -205,7 +234,7 @@ function registerHandlers(io, socket, registry, rateLimiter = defaultRateLimiter
 
   // Host admits a waiting guest
   on(socket, 'host:admit', async (payload) => {
-    const code = assertHost(registry, socket);
+    const code = assertHost(registry, socket, limiters);
     const { peerId } = parse(peerTargetSchema, payload);
 
     const { peer, peers } = registry.admit(code, peerId);
@@ -230,7 +259,7 @@ function registerHandlers(io, socket, registry, rateLimiter = defaultRateLimiter
 
   // Host denies a waiting guest
   on(socket, 'host:deny', (payload) => {
-    const code = assertHost(registry, socket);
+    const code = assertHost(registry, socket, limiters);
     const { peerId } = parse(peerTargetSchema, payload);
 
     registry.deny(code, peerId);
@@ -245,7 +274,7 @@ function registerHandlers(io, socket, registry, rateLimiter = defaultRateLimiter
 
   // Host admits all waiting participants up to room capacity
   on(socket, 'host:admit-all', async (payload) => {
-    const code = assertHost(registry, socket);
+    const code = assertHost(registry, socket, limiters);
     parse(emptySchema, payload);
 
     const { admitted } = registry.admitAll(code);
@@ -271,7 +300,7 @@ function registerHandlers(io, socket, registry, rateLimiter = defaultRateLimiter
 
   // Host removes an active participant
   on(socket, 'host:remove', async (payload) => {
-    const code = assertHost(registry, socket);
+    const code = assertHost(registry, socket, limiters);
     const { peerId } = parse(peerTargetSchema, payload);
 
     if (peerId === socket.id) {
@@ -298,7 +327,7 @@ function registerHandlers(io, socket, registry, rateLimiter = defaultRateLimiter
 
   // Host ends the meeting for everyone
   on(socket, 'host:end', async (payload) => {
-    const code = assertHost(registry, socket);
+    const code = assertHost(registry, socket, limiters);
     parse(emptySchema, payload);
 
     await Meeting.updateOne(
@@ -360,7 +389,7 @@ function registerHandlers(io, socket, registry, rateLimiter = defaultRateLimiter
   });
 
   on(socket, 'host:stop-share', (payload) => {
-    const code = assertHost(registry, socket);
+    const code = assertHost(registry, socket, limiters);
     parse(emptySchema, payload);
 
     const cleared = registry.clearScreenShare(code);
@@ -379,7 +408,7 @@ function registerHandlers(io, socket, registry, rateLimiter = defaultRateLimiter
       throw new AppError(403, 'NOT_IN_ROOM', 'Join a meeting first');
     }
 
-    if (!rateLimiter.check(socket.id)) {
+    if (!limiters.chat.check(socket.id)) {
       throw new AppError(429, 'RATE_LIMITED', "You're sending messages too fast");
     }
 
@@ -418,11 +447,14 @@ function registerHandlers(io, socket, registry, rateLimiter = defaultRateLimiter
   });
 
   on(socket, 'room:leave', () => {
-    leaveRoom(io, registry, socket, rateLimiter);
+    leaveRoom(io, registry, socket, limiters);
     return {};
   });
 
   on(socket, 'signal', (payload) => {
+    if (limiters.signal && !limiters.signal.check(socket.id)) {
+      throw new AppError(429, 'RATE_LIMITED', 'Too many signaling messages, please slow down');
+    }
     const { to, description, candidate } = parse(signalSchema, payload);
 
     if (registry.getRoomCode(socket.id) === null) {
@@ -442,7 +474,7 @@ function registerHandlers(io, socket, registry, rateLimiter = defaultRateLimiter
     return {};
   });
 
-  socket.on('disconnect', () => leaveRoom(io, registry, socket, rateLimiter));
+  socket.on('disconnect', () => leaveRoom(io, registry, socket, limiters));
 }
 
 module.exports = { registerHandlers, leaveRoom };

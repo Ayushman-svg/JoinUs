@@ -48,6 +48,12 @@ const schema = z.object({
   METERED_APP: z.string().optional(),
   METERED_API_KEY: z.string().optional(),
   MAX_PARTICIPANTS: z.coerce.number().int().min(1).max(6).default(4),
+  RATE_LIMIT_LOGIN_MAX: z.coerce.number().int().min(1).default(10),
+  RATE_LIMIT_LOGIN_WINDOW_MS: z.coerce.number().int().min(100).default(15 * 60 * 1000),
+  RATE_LIMIT_REGISTER_MAX: z.coerce.number().int().min(1).default(5),
+  RATE_LIMIT_REGISTER_WINDOW_MS: z.coerce.number().int().min(100).default(60 * 60 * 1000),
+  RATE_LIMIT_API_MAX: z.coerce.number().int().min(1).default(300),
+  RATE_LIMIT_API_WINDOW_MS: z.coerce.number().int().min(100).default(15 * 60 * 1000),
 });
 
 const result = schema.safeParse(process.env);
@@ -73,6 +79,12 @@ const {
   METERED_APP,
   METERED_API_KEY,
   MAX_PARTICIPANTS,
+  RATE_LIMIT_LOGIN_MAX,
+  RATE_LIMIT_LOGIN_WINDOW_MS,
+  RATE_LIMIT_REGISTER_MAX,
+  RATE_LIMIT_REGISTER_WINDOW_MS,
+  RATE_LIMIT_API_MAX,
+  RATE_LIMIT_API_WINDOW_MS,
 } = result.data;
 
 module.exports = {
@@ -96,4 +108,10 @@ module.exports = {
   meteredApp: METERED_APP || '',
   meteredApiKey: METERED_API_KEY || '',
   maxParticipants: MAX_PARTICIPANTS,
+  rateLimitLoginMax: RATE_LIMIT_LOGIN_MAX,
+  rateLimitLoginWindowMs: RATE_LIMIT_LOGIN_WINDOW_MS,
+  rateLimitRegisterMax: RATE_LIMIT_REGISTER_MAX,
+  rateLimitRegisterWindowMs: RATE_LIMIT_REGISTER_WINDOW_MS,
+  rateLimitApiMax: RATE_LIMIT_API_MAX,
+  rateLimitApiWindowMs: RATE_LIMIT_API_WINDOW_MS,
 };

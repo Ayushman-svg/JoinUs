@@ -49,7 +49,12 @@ function initSockets(httpServer) {
   });
 
   const registry = new RoomRegistry({ maxParticipants: env.maxParticipants ?? MAX_PARTICIPANTS });
-  const rateLimiter = new RateLimiter();
+  const rateLimiters = {
+    chat: new RateLimiter({ max: 5, windowMs: 5000 }),
+    join: new RateLimiter({ max: 10, windowMs: 10000 }),
+    signal: new RateLimiter({ max: 300, windowMs: 10000 }),
+    host: new RateLimiter({ max: 30, windowMs: 10000 }),
+  };
 
   io.use(authenticate);
 
@@ -59,10 +64,10 @@ function initSockets(httpServer) {
       socket.on('disconnect', () => console.log(`socket disconnected: ${socket.id}`));
     }
 
-    registerHandlers(io, socket, registry, rateLimiter);
+    registerHandlers(io, socket, registry, rateLimiters);
   });
 
-  return { io, registry, rateLimiter };
+  return { io, registry, rateLimiter: rateLimiters.chat, rateLimiters };
 }
 
 module.exports = { initSockets, authenticate };
