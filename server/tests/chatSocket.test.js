@@ -242,4 +242,58 @@ describe('Chat socket authorization, validation and rate limit', () => {
     expect(meeting1Msgs).toHaveLength(1);
     expect(meeting2Msgs).toHaveLength(0);
   });
+
+  it('a message reaches an admitted peer whose socket is NOT in the socket.io room, with no duplicates', async () => {
+    const host = await createUser({ name: 'Chat Host' });
+    const guest = await createUser({ name: 'Chat Guest' });
+    const meeting = await createMeeting(host.user.id);
+
+    const hostSocket = await connectSocket(port, host.token);
+    const guestSocket = await connectSocket(port, guest.token);
+    socketsToClose.push(hostSocket, guestSocket);
+
+    await emitAck(hostSocket, 'room:join', { code: meeting.code });
+    await emitAck(guestSocket, 'room:join', { code: meeting.code });
+
+    // Explicitly remove guest socket from socket.io room
+    const serverGuestSocket = ioInstance.sockets.sockets.get(guestSocket.id);
+    serverGuestSocket?.leave(meeting.code);
+
+    let guestReceivedCount = 0;
+    guestSocket.on('chat:message', () => {
+      guestReceivedCount += 1;
+    });
+
+    const sendAck = await emitAck(hostSocket, 'chat:send', { text: 'Hello via user channel' });
+    expect(sendAck.ok).toBe(true);
+
+    await new Promise((r) => setTimeout(r, 200));
+    // Reached via user:<guestId> and exactly once (no duplicates)
+    expect(guestReceivedCount).toBe(1);
+  });
+
+  it('a waiting guest receives nothing when chat message is sent', async () => {
+    const host = await createUser({ name: 'Host With Waiting' });
+    const waitingGuest = await createUser({ name: 'Waiting Guest' });
+    const meeting = await createMeeting(host.user.id, { waitingRoom: true });
+
+    const hostSocket = await connectSocket(port, host.token);
+    const guestSocket = await connectSocket(port, waitingGuest.token);
+    socketsToClose.push(hostSocket, guestSocket);
+
+    await emitAck(hostSocket, 'room:join', { code: meeting.code });
+    const joinAck = await emitAck(guestSocket, 'room:join', { code: meeting.code });
+    expect(joinAck.status).toBe('waiting');
+
+    let waitingReceived = false;
+    guestSocket.on('chat:message', () => {
+      waitingReceived = true;
+    });
+
+    const sendAck = await emitAck(hostSocket, 'chat:send', { text: 'Secret host message' });
+    expect(sendAck.ok).toBe(true);
+
+    await new Promise((r) => setTimeout(r, 200));
+    expect(waitingReceived).toBe(false);
+  });
 });

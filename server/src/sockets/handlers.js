@@ -106,6 +106,25 @@ async function recordRoomInactive(code) {
   }
 }
 
+// Emits an event to every admitted peer in a meeting by collecting each peer's socket id,
+// user channel, and the room code, and broadcasting via a single io.to() call so no one
+// is missed and no one receives duplicate messages.
+function emitToAdmitted(io, registry, code, event, payload) {
+  const peers = registry.getPeers(code);
+  const targets = new Set();
+  targets.add(code);
+  for (const peer of peers) {
+    if (peer.peerId) targets.add(peer.peerId);
+    if (peer.userId) targets.add(`user:${peer.userId}`);
+  }
+  const targetArray = [...targets];
+  if (targetArray.length > 0) {
+    io.to(targetArray).emit(event, payload);
+  }
+  console.log(`[chat] message emitted: code=${code} targetPeersCount=${peers.length}`);
+  return peers.length;
+}
+
 // Removes the socket from its room or waiting list (if in one) and notifies peers/host
 function leaveRoom(io, registry, socket, limiters) {
   if (limiters) {
@@ -627,7 +646,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       createdAt: saved.createdAt.toISOString(),
     };
 
-    io.to(code).emit('chat:message', message);
+    emitToAdmitted(io, registry, code, 'chat:message', message);
 
     return { message };
   });
@@ -669,4 +688,4 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
   });
 }
 
-module.exports = { registerHandlers, leaveRoom };
+module.exports = { registerHandlers, leaveRoom, emitToAdmitted };
