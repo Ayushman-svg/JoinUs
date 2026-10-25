@@ -34,6 +34,7 @@ async function authenticate(socket, next) {
     }
 
     socket.data.user = { id: user.id, name: user.name };
+    socket.join(`user:${user.id}`);
     next();
   } catch (err) {
     if (!(err instanceof AppError)) console.error(err);
@@ -59,6 +60,7 @@ function initSockets(httpServer) {
   io.use(authenticate);
 
   io.on('connection', (socket) => {
+    socket.join(`user:${socket.data.user.id}`);
     if (env.nodeEnv === 'development') {
       console.log(`socket connected: ${socket.id} (${socket.data.user.name})`);
       socket.on('disconnect', () => console.log(`socket disconnected: ${socket.id}`));

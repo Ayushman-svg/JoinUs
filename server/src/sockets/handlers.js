@@ -51,16 +51,22 @@ function on(socket, event, handler) {
   });
 }
 
-function notifyHostWaitingUpdated(io, registry, code) {
-  const hostId = registry.getHost(code);
-  if (!hostId) return;
-  const peers = registry.getPeers(code);
-  const waitingList = registry.getWaiting(code);
-  for (const peer of peers) {
-    if (peer.userId === hostId) {
-      io.to(peer.peerId).emit('room:waiting-updated', { waiting: waitingList });
+async function notifyHostWaitingUpdated(io, registry, code, hostIdOverride) {
+  let hostId = hostIdOverride || registry.getHost(code);
+  if (!hostId) {
+    try {
+      const meeting = await Meeting.findOne({ code }).select('host').lean();
+      if (meeting?.host) {
+        hostId = meeting.host.toString();
+        registry.setHost(code, hostId);
+      }
+    } catch {
+      /* ignore */
     }
   }
+  if (!hostId) return;
+  const waitingList = registry.getWaiting(code);
+  io.to(`user:${hostId}`).emit('room:waiting-updated', { waiting: waitingList });
 }
 
 async function recordAdmittedJoin(code, userId) {
@@ -207,7 +213,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
 
     if (joinResult.status === 'waiting') {
       // Waiting sockets do NOT join the broadcast room and receive no peer signals
-      notifyHostWaitingUpdated(io, registry, code);
+      await notifyHostWaitingUpdated(io, registry, code, hostId);
       return { status: 'waiting', hostInRoom: Boolean(joinResult.hostInRoom) };
     }
 
@@ -258,7 +264,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
   });
 
   // Host denies a waiting guest
-  on(socket, 'host:deny', (payload) => {
+  on(socket, 'host:deny', async (payload) => {
     const code = assertHost(registry, socket, limiters);
     const { peerId } = parse(peerTargetSchema, payload);
 
@@ -268,7 +274,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       guestSocket.emit('room:denied', {});
     }
 
-    notifyHostWaitingUpdated(io, registry, code);
+    await notifyHostWaitingUpdated(io, registry, code);
     return {};
   });
 
