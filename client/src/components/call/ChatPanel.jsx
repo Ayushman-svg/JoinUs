@@ -228,7 +228,14 @@ export default function ChatPanel({
               >
                 {isFirstInGroup && (
                   <div className="chat-group__meta">
-                    {!isSelf && <span className="chat-group__name">{senderName}</span>}
+                    {!isSelf && (
+                      <span className="chat-group__name">
+                        {message.from?.name || 'Guest'}
+                        {message.from?.isHost && (
+                          <span className="chat-group__host-label"> (Host)</span>
+                        )}
+                      </span>
+                    )}
                     <span className="chat-group__time">{time}</span>
                   </div>
                 )}

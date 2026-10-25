@@ -1047,6 +1047,11 @@
   color: #ADBAC7;
 }
 
+.chat-group__host-label {
+  font-weight: 400;
+  color: #768390;
+}
+
 .chat-group__time {
   color: #768390;
 }

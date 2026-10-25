@@ -352,6 +352,11 @@
   color: var(--color-text);
 }
 
+.history-bubble-group__host-label {
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
 .history-bubble-group__time {
   color: var(--color-text-secondary);
 }

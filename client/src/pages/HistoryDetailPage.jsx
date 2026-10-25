@@ -66,7 +66,9 @@ export default function HistoryDetailPage() {
     if (!messages.length) return;
     const lines = messages.map((m) => {
       const time = formatTime(m.createdAt);
-      const name = m.from?.name || 'Guest';
+      const isHost = m.from?.isHost;
+      const baseName = m.from?.name || 'Guest';
+      const name = isHost ? `${baseName} (Host)` : baseName;
       return `[${time}] ${name}: ${m.text}`;
     });
     const textToCopy = lines.join('\n');
@@ -249,7 +251,12 @@ export default function HistoryDetailPage() {
                         {isFirstInGroup && (
                           <div className="history-bubble-group__meta">
                             {!isSelf && (
-                              <span className="history-bubble-group__name">{senderName}</span>
+                              <span className="history-bubble-group__name">
+                                {message.from?.name || 'Guest'}
+                                {message.from?.isHost && (
+                                  <span className="history-bubble-group__host-label"> (Host)</span>
+                                )}
+                              </span>
                             )}
                             <span className="history-bubble-group__time">{time}</span>
                           </div>
