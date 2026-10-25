@@ -95,7 +95,15 @@ async function getMeetingMessages(req, res) {
     throw new AppError(403, 'FORBIDDEN', "You don't have access to this meeting's messages");
   }
 
-  const query = { meeting: meeting._id };
+  const query = {
+    meeting: meeting._id,
+    $or: [
+      { to: null },
+      { to: { $exists: false } },
+      { to: userId },
+      { user: userId },
+    ],
+  };
   if (after && mongoose.Types.ObjectId.isValid(after)) {
     query._id = { $gt: new mongoose.Types.ObjectId(after) };
   }
@@ -108,16 +116,25 @@ async function getMeetingMessages(req, res) {
   const hostIdStr = meeting.host.toString();
 
   res.json({
-    messages: messages.map((msg) => ({
-      id: msg._id.toString(),
-      from: {
-        id: msg.user.toString(),
-        name: msg.name,
-        isHost: msg.user.toString() === hostIdStr,
-      },
-      text: msg.text,
-      createdAt: msg.createdAt,
-    })),
+    messages: messages.map((msg) => {
+      const formatted = {
+        id: msg._id.toString(),
+        from: {
+          id: msg.user.toString(),
+          name: msg.name,
+          isHost: msg.user.toString() === hostIdStr,
+        },
+        text: msg.text,
+        createdAt: msg.createdAt,
+      };
+      if (msg.to) {
+        formatted.to = {
+          id: msg.to.toString(),
+          name: msg.toName,
+        };
+      }
+      return formatted;
+    }),
   });
 }
 

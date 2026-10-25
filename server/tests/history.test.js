@@ -215,4 +215,89 @@ describe('History and messages REST API', () => {
     expect(invalidLimit.status).toBe(400);
     expect(invalidLimit.body.error.code).toBe('VALIDATION_ERROR');
   });
+
+  it('stores private messages with to and toName; filters private messages on REST endpoint so host and other guests cannot read them, but sender and recipient can', async () => {
+    const host = await createUser({ name: 'Host Alice' });
+    const guest1 = await createUser({ name: 'Guest Bob' });
+    const guest2 = await createUser({ name: 'Guest Charlie' });
+    const guest3 = await createUser({ name: 'Guest Dave' });
+
+    const m = await Meeting.create({
+      code: 'priv-msg-test-01',
+      title: 'Private Message Test',
+      host: host.user.id,
+      startsAt: new Date(),
+      startedAt: new Date(Date.now() - 60000),
+      attendees: [host.user.id, guest1.user.id, guest2.user.id, guest3.user.id],
+    });
+
+    // 1. Public message from host
+    const pubMsg = await Message.create({
+      meeting: m._id,
+      user: host.user.id,
+      name: host.user.name,
+      text: 'Public announcement from host',
+    });
+
+    // 2. Private message from guest1 to guest2
+    const privMsg = await Message.create({
+      meeting: m._id,
+      user: guest1.user.id,
+      name: guest1.user.name,
+      text: 'Secret between Bob and Charlie',
+      to: guest2.user.id,
+      toName: guest2.user.name,
+    });
+
+    // Verify stored in DB with to and toName
+    const stored = await Message.findById(privMsg._id);
+    expect(stored.to.toString()).toBe(guest2.user.id.toString());
+    expect(stored.toName).toBe('Guest Charlie');
+
+    // Host reads messages: should ONLY see the public message, NOT the private message between guest1 and guest2
+    const hostRes = await request(app)
+      .get(`/api/meetings/${m.code}/messages`)
+      .set(bearer(host.token));
+    expect(hostRes.status).toBe(200);
+    expect(hostRes.body.messages).toHaveLength(1);
+    expect(hostRes.body.messages[0].id).toBe(pubMsg._id.toString());
+    expect(hostRes.body.messages[0].text).toBe('Public announcement from host');
+    expect(hostRes.body.messages[0].to).toBeUndefined();
+
+    // Guest3 (third party attendee) reads messages: should ONLY see the public message
+    const guest3Res = await request(app)
+      .get(`/api/meetings/${m.code}/messages`)
+      .set(bearer(guest3.token));
+    expect(guest3Res.status).toBe(200);
+    expect(guest3Res.body.messages).toHaveLength(1);
+    expect(guest3Res.body.messages[0].id).toBe(pubMsg._id.toString());
+
+    // Sender (guest1) reads messages: sees public message PLUS the private message with to:{id,name}
+    const senderRes = await request(app)
+      .get(`/api/meetings/${m.code}/messages`)
+      .set(bearer(guest1.token));
+    expect(senderRes.status).toBe(200);
+    expect(senderRes.body.messages).toHaveLength(2);
+    expect(senderRes.body.messages[0].id).toBe(pubMsg._id.toString());
+    expect(senderRes.body.messages[1]).toMatchObject({
+      id: privMsg._id.toString(),
+      from: { id: guest1.user.id.toString(), name: 'Guest Bob', isHost: false },
+      to: { id: guest2.user.id.toString(), name: 'Guest Charlie' },
+      text: 'Secret between Bob and Charlie',
+    });
+
+    // Recipient (guest2) reads messages: sees public message PLUS the private message with to:{id,name}
+    const recipientRes = await request(app)
+      .get(`/api/meetings/${m.code}/messages`)
+      .set(bearer(guest2.token));
+    expect(recipientRes.status).toBe(200);
+    expect(recipientRes.body.messages).toHaveLength(2);
+    expect(recipientRes.body.messages[0].id).toBe(pubMsg._id.toString());
+    expect(recipientRes.body.messages[1]).toMatchObject({
+      id: privMsg._id.toString(),
+      from: { id: guest1.user.id.toString(), name: 'Guest Bob', isHost: false },
+      to: { id: guest2.user.id.toString(), name: 'Guest Charlie' },
+      text: 'Secret between Bob and Charlie',
+    });
+  });
 });

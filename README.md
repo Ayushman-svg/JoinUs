@@ -143,7 +143,7 @@ sequenceDiagram
 
 - **`User`**: Manages credentials (`email`, `passwordHash`), display name (`name`), and timestamps.
 - **`Meeting`**: Stores meeting lifecycle details (`code`, `title`, `host`, `scheduledAt`, `startedAt`, `lastActiveAt`, `durationMs`, `status`: `'active'` | `'ended'` | `'cancelled'`, `waitingRoom`: boolean, and an `attendees` array of user IDs).
-- **`Message`**: Stores persistent in-meeting chat (`meetingCode`, `sender`: `{ id, name }`, `text`: 1–1000 characters, `createdAt`).
+- **`Message`**: Stores persistent in-meeting chat (`meetingCode`, `sender`: `{ id, name }`, `text`: 1–1000 characters, optional `to` (User ID) and `toName` for private messages, `createdAt`).
 
 ### Authorization Matrix
 
@@ -159,7 +159,7 @@ sequenceDiagram
 | `DELETE /api/meetings/:code`| REST | Meeting Host | Verified `userId === meeting.host` |
 | `GET /api/history` | REST | Authenticated User | Returns meetings where user was host or attendee |
 | `GET /api/history/:code` | REST | Host or Attendee | Verified user is in `meeting.attendees` or is host |
-| `GET /api/meetings/:code/messages` | REST | Host or Attendee | Verified user is in `meeting.attendees` or is host |
+| `GET /api/meetings/:code/messages` | REST | Host or Attendee | Verified user is in `meeting.attendees` or is host; returns public messages plus private messages where user is sender or recipient |
 | `GET /api/ice-servers` | REST | Authenticated User | Bearer JWT verification |
 | `room:join` | Socket | Authenticated User | Socket JWT handshake, RoomRegistry capacity check |
 | `host:admit` / `host:deny` | Socket | Meeting Host | Verified `registry.isHost(code, socket.user.id)` |
@@ -167,7 +167,7 @@ sequenceDiagram
 | `host:remove` | Socket | Meeting Host | Verified `registry.isHost(code, socket.user.id)` |
 | `host:end` | Socket | Meeting Host | Verified `registry.isHost(code, socket.user.id)` |
 | `host:stop-share` | Socket | Meeting Host | Verified `registry.isHost(code, socket.user.id)` |
-| `chat:send` | Socket | Admitted Peer | Must be in active room, rate-limited (5/5s) |
+| `chat:send` | Socket | Admitted Peer | Must be in active room, rate-limited (5/5s). Optional private recipient ('to') must be currently admitted; delivered only to sender and recipient |
 | `share:start` | Socket | Admitted Peer | Single active presenter enforced by registry |
 | `signal` | Socket | Admitted Peer | Relayed only between distinct peers in the same room |
 
@@ -266,6 +266,10 @@ The client will start at `http://localhost:5173` and proxy/communicate with the 
   - REST: `express-rate-limit` protects `/api/auth/login` (10 per 15 min), `/api/auth/register` (5 per hour), and `/api/*` (300 per 15 min) with HTTP 429 and `Retry-After` headers.
   - Sockets: Sliding-window rate limiters protect `room:join` (10 per 10s), `signal` (300 per 10s), `host:*` actions (30 per 10s), and `chat:send` (5 per 5s).
 - **Safe Logging & Error Handling:** Stack traces are never exposed in production. Metered API URLs and credentials are sanitized from log outputs to prevent secret leaks.
+
+### Privacy Notes
+- **Private Chat Messages:** In-meeting private messages between two participants are private to the sender and recipient. They are never broadcast to the room, never delivered to the host (unless the host is one of the two parties), and never viewable by any third party.
+- **REST & History Authorization:** `GET /api/meetings/:code/messages` and History transcript views filter messages strictly on the server: attendees and hosts can only read public messages plus private messages where they are the sender or the recipient.
 
 ---
 

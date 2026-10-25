@@ -25,6 +25,16 @@ const messageSchema = new mongoose.Schema(
       minlength: 1,
       maxlength: 1000,
     },
+    to: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    toName: {
+      type: String,
+      trim: true,
+      default: null,
+    },
   },
   {
     timestamps: { createdAt: true, updatedAt: false },

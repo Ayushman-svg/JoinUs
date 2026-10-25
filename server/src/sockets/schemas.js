@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const mongoose = require('mongoose');
 
 const { codeParamsSchema } = require('../schemas/meeting.schemas');
 
@@ -52,13 +53,20 @@ const peerTargetSchema = z.object({
 // host:admit-all {}, host:end {}
 const emptySchema = z.record(z.string(), z.unknown()).optional().default({});
 
-// chat:send { text }: 1 to 1000 characters trimmed
+// chat:send { text, to? }: 1 to 1000 characters trimmed, optional to (ObjectId)
 const chatSendSchema = z.object({
   text: z
     .string({ required_error: 'text is required' })
     .trim()
     .min(1, 'Message cannot be empty')
     .max(1000, 'Message must be at most 1000 characters'),
+  to: z
+    .string()
+    .trim()
+    .refine((val) => mongoose.Types.ObjectId.isValid(val), {
+      message: 'to must be a valid ObjectId',
+    })
+    .optional(),
 });
 
 // share:start { streamId }
