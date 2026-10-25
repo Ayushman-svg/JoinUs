@@ -4,6 +4,10 @@ import assert from 'node:assert/strict';
 import { formatDuration, nextFullHour, toLocalInputValue } from '../src/lib/datetime.js';
 import { extractMeetingCode } from '../src/lib/meetingLink.js';
 
+if (!globalThis.window) {
+  globalThis.window = { location: { origin: 'http://localhost:5173' } };
+}
+
 test('datetime helpers: formatDuration formats durations correctly', () => {
   assert.equal(formatDuration(0), '0 min');
   assert.equal(formatDuration(-1000), '0 min');

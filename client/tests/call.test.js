@@ -64,6 +64,16 @@ globalThis.MediaStream = class MockMediaStream {
   }
 };
 
+if (!globalThis.navigator) {
+  globalThis.navigator = {};
+}
+if (!globalThis.navigator.mediaDevices) {
+  globalThis.navigator.mediaDevices = {};
+}
+if (!globalThis.window) {
+  globalThis.window = { location: { origin: 'http://localhost:5173' } };
+}
+
 class MockSignaling {
   constructor() {
     this.listeners = new Map();
