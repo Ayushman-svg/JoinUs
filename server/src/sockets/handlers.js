@@ -376,6 +376,12 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       /* ignore */
     }
 
+    const socketFound = Boolean(guestSocket);
+    const userSocketsCount = io.sockets?.adapter?.rooms?.get(`user:${peer.userId}`)?.size || 0;
+    console.log(
+      `[room] host:admit: targetPeerId=${peerId} socketFound=${socketFound} userSocketsCount=${userSocketsCount}`
+    );
+
     notifyHostWaitingUpdated(io, registry, code);
     return {};
   });
@@ -490,22 +496,41 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     }
 
     io.to(code).emit('room:ended', {});
+
+    const hostUserCount = io.sockets?.adapter?.rooms?.get(`user:${socket.data.user.id}`)?.size || 0;
     io.to(`user:${socket.data.user.id}`).emit('room:ended', {});
+    console.log(
+      `[room] host:end: targetPeerId=${socket.id} socketFound=true userSocketsCount=${hostUserCount}`
+    );
 
     for (const w of waiting) {
+      const socketFound = Boolean(io.sockets.sockets.get(w.peerId));
+      const userSocketsCount = w.userId
+        ? io.sockets?.adapter?.rooms?.get(`user:${w.userId}`)?.size || 0
+        : 0;
       io.to(w.peerId).emit('room:ended', {});
       if (w.userId) {
         io.to(`user:${w.userId}`).emit('room:ended', {});
       }
+      console.log(
+        `[room] host:end: targetPeerId=${w.peerId} socketFound=${socketFound} userSocketsCount=${userSocketsCount}`
+      );
     }
 
     for (const p of peers) {
+      const socketFound = Boolean(io.sockets.sockets.get(p.peerId));
+      const userSocketsCount = p.userId
+        ? io.sockets?.adapter?.rooms?.get(`user:${p.userId}`)?.size || 0
+        : 0;
       io.to(p.peerId).emit('room:ended', {});
       if (p.userId) {
         io.to(`user:${p.userId}`).emit('room:ended', {});
       }
       const s = io.sockets.sockets.get(p.peerId);
       s?.leave(code);
+      console.log(
+        `[room] host:end: targetPeerId=${p.peerId} socketFound=${socketFound} userSocketsCount=${userSocketsCount}`
+      );
     }
 
     return {};
