@@ -41,15 +41,16 @@ Available now:
 - Modern design system with dark and light modes, Inter variable typography, and accessible primitives
 - Authenticated app shell with collapsible sidebar, real-time client-side meeting search, and profile dropdown
 - Dashboard with quick actions (New meeting, Join, Schedule), upcoming meeting cards, stats, and recent meetings
-- Pre-join preview screen with camera preview, mic and camera toggles, and device permission guidance
-- Multi-party mesh audio and video up to 6 participants
+- Multi-party mesh audio and video: adaptive grid layout supporting up to 6 participants (centered 1-tile, side-by-side 2-tile, 2x2 for 3-4 participants), smooth 200ms reflow transitions, and dedicated `ROOM_FULL` error state.
+- Screen sharing: server-enforced single active sharer (`SCREEN_SHARE_BUSY`), dedicated MediaStream identification by announced stream ID, stage and filmstrip layout (right column on desktop, bottom scrollable row on mobile), presenter banners, toasts, and host controls (`host:stop-share`).
+- Active speaker indicator: real-time Web Audio API energy analysis per audio track, 2px primary focus ring with glow on active speaker tile, and animated audio-bars icon in the name pill.
 - In-meeting real-time and persisted chat: server-enforced access (admitted peers only), optimistic sending with retry states, 1000-character validation, rate-limited to 5 msgs / 5s, auto-growing input, unread count badge, stick-to-bottom with "New messages" pill, and mobile bottom sheet
 - Meeting activity & history tracking: automatic `startedAt`, `lastActiveAt`, and `durationMs` tracking, attendee set persistence, and authenticated `/api/history` endpoints
 - Meeting History page & transcripts: sidebar History navigation, searchable past meeting cards with duration and attendee counts, detailed view with attendee avatar row, read-only chat transcript, copy transcript button, and friendly 403 access control screen
 
 Planned:
 
-- Screen share, automatic reconnects, device switching and connection-quality indicator
+- Automatic reconnects, device switching, connection-quality indicators, and Selective Forwarding Unit (SFU) architecture for larger calls
 
 ## Tech Stack
 
@@ -220,10 +221,19 @@ The test suites run against an in-memory MongoDB (`mongodb-memory-server`) with 
 - `tests/history.test.js`: `/api/history`, `/api/history/:code`, `/api/meetings/:code/messages` authorization (host and attendees allowed, outsiders 403)
 - `tests/ice.test.js`: ICE / STUN / TURN credentials endpoint
 - `tests/socketAuth.test.js`: Socket.io handshake authentication and rejection
-- `tests/roomRegistry.test.js`: pure room registry, peer tracking, media updates, waiting room and host controls
-- `tests/rateLimit.test.js`: pure sliding-window rate limiter (5 messages per 5s)
-- `tests/waitingRoomSocket.test.js`: waiting list notification, host admit/deny, host end meeting
-- `tests/chatSocket.test.js`: in-meeting real-time chat, persistence, 403 on waiting guest, 1000 char validation, rate limiting, and room isolation
+- tests/rateLimit.test.js: pure sliding-window rate limiter (5 messages per 5s)
+- tests/waitingRoomSocket.test.js: waiting list notification, host admit/deny, host end meeting
+- tests/chatSocket.test.js: in-meeting real-time chat, persistence, 403 on waiting guest, 1000 char validation, rate limiting, and room isolation
+- tests/screenShareSocket.test.js: screen share socket integration (single sharer rejection with SCREEN_SHARE_BUSY, host stop share, cleanup on leave/disconnect, late joiner sync, and 5th person ROOM_FULL cap enforcement)
+
+Client tests (`node --test`):
+
+- `tests/call.test.js`: multi-party mesh call logic, newcomer offer initiation, deterministic polite/impolite polarity derivation, peer cleanup and media state updates for N peers, screen share start/stop lifecycle and graceful cancellation, and active speaker tracking via AudioActivityTracker.
+
+## Limitations
+
+- **P2P Mesh Topology**: JoinUs utilizes a peer-to-peer full mesh topology where each participant sends audio, video, and screen tracks directly to every other participant via separate RTCPeerConnections. This eliminates media server costs and delivers minimum possible latency without middleboxes.
+- **Capacity Guideline**: Mesh is designed and optimal for 3–4 participants (configurable cap up to 6 via `MAX_PARTICIPANTS`). For larger rooms or high-density webinars, client upload bandwidth and CPU consumption scale quadratically ($O(N^2)$); a Selective Forwarding Unit (SFU) architecture (e.g. mediasoup, LiveKit) would be the natural next step.
 
 ## Environment Variables
 
