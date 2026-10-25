@@ -271,6 +271,7 @@ export default function CallPage() {
               <CallStatusCard
                 status={call.status}
                 hostInRoom={call.hostInRoom}
+                isReconnecting={Boolean(call.isReconnecting || call.status === 'reconnecting')}
                 onRetry={call.retry}
                 onLeave={leave}
               />

@@ -5,7 +5,13 @@ import Button from '../ui/Button.jsx';
 // Centered status cards for guest waiting, denied, removed, and ended states.
 // Designed per the Project Context STYLING spec:
 // max-width 440px, surface #151A21, border #2D3742, 16px radius, generous padding.
-export default function CallStatusCard({ status, hostInRoom = true, onRetry, onLeave }) {
+export default function CallStatusCard({
+  status,
+  hostInRoom = true,
+  isReconnecting = false,
+  onRetry,
+  onLeave,
+}) {
   let icon = null;
   let title = '';
   let description = '';
@@ -16,7 +22,10 @@ export default function CallStatusCard({ status, hostInRoom = true, onRetry, onL
     case 'waiting':
       isWaiting = true;
       icon = <Clock size={28} className="call-status-card__icon-pulse" aria-hidden="true" />;
-      if (!hostInRoom) {
+      if (isReconnecting) {
+        title = 'Reconnecting...';
+        description = 'Re-establishing connection to the meeting…';
+      } else if (!hostInRoom) {
         title = 'Waiting for the host';
         description = 'Waiting for the host to start the meeting.';
       } else {

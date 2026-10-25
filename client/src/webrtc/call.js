@@ -70,6 +70,9 @@ export class CallSession {
     this.joinAttempt = 0;
     this.finished = false;
     this.waitingPollInterval = null;
+    this.isWaiting = false;
+    this.isReconnecting = false;
+    this.wakeLock = null;
 
     this.activeSpeaker = null;
     this.audioTracker = new AudioActivityTracker({
@@ -143,7 +146,11 @@ export class CallSession {
       signaling.on('room:kicked', ({ reason }) => this.#finish(CallStatus.KICKED, { reason })),
       signaling.on('room:waiting-updated', ({ waiting }) => this.#onWaitingUpdated(waiting)),
       signaling.on('room:admitted', (data) => this.#onAdmitted(data)),
-      signaling.on('room:denied', () => this.#finish(CallStatus.DENIED)),
+      signaling.on('room:denied', () => {
+        this.isWaiting = false;
+        this.#releaseWakeLock();
+        this.#finish(CallStatus.DENIED);
+      }),
       signaling.on('room:removed', ({ reason } = {}) =>
         this.#finish(CallStatus.REMOVED, { reason: reason || 'REMOVED_BY_HOST' })
       ),
@@ -209,6 +216,32 @@ export class CallSession {
     if (this.waitingPollInterval) {
       clearInterval(this.waitingPollInterval);
       this.waitingPollInterval = null;
+    }
+  }
+
+  async #acquireWakeLock() {
+    if (this.wakeLock || typeof navigator === 'undefined' || !navigator.wakeLock?.request) return;
+    try {
+      const lock = await navigator.wakeLock.request('screen');
+      this.wakeLock = lock;
+      lock?.addEventListener?.('release', () => {
+        if (this.wakeLock === lock) {
+          this.wakeLock = null;
+        }
+      });
+    } catch {
+      // feature-detected, failures ignored
+    }
+  }
+
+  async #releaseWakeLock() {
+    if (!this.wakeLock) return;
+    const lock = this.wakeLock;
+    this.wakeLock = null;
+    try {
+      await lock.release?.();
+    } catch {
+      // failures ignored
     }
   }
 
@@ -311,6 +344,8 @@ export class CallSession {
   // Leaves the room and closes everything. Safe to call more than once.
   leave() {
     if (this.finished) return;
+    this.isWaiting = false;
+    this.#releaseWakeLock();
     this.#stopWaitingPolling();
     this.stopScreenShare();
     if (this.signaling?.connected) this.signaling.send('room:leave');
@@ -331,7 +366,11 @@ export class CallSession {
       this.joinAttempt += 1; // forget a join that was still waiting for its answer
       this.#closePeers();
       this.selfId = null;
-      this.#update({ status: CallStatus.RECONNECTING, selfId: null });
+      if (this.isWaiting) {
+        this.#update({ isReconnecting: true });
+      } else {
+        this.#update({ status: CallStatus.RECONNECTING, selfId: null, isReconnecting: true });
+      }
     } else if (status === SignalingStatus.FAILED) {
       this.#finish(CallStatus.ERROR, { error: toCallError(error) });
     }
@@ -353,14 +392,19 @@ export class CallSession {
       if (response.status === 'waiting') {
         this.selfId = null;
         this.hostInRoom = response.hostInRoom !== false;
+        this.isWaiting = true;
+        this.#acquireWakeLock();
         this.#update({
           status: CallStatus.WAITING,
           selfId: null,
           hostInRoom: this.hostInRoom,
+          isReconnecting: false,
         });
         return;
       }
 
+      this.isWaiting = false;
+      this.#releaseWakeLock();
       this.selfId = response.peerId;
       this.isHost = Boolean(response.isHost);
       this.screenShare = response.screenSharer ?? null;
@@ -369,6 +413,7 @@ export class CallSession {
         selfId: this.selfId,
         isHost: this.isHost,
         screenShare: this.screenShare,
+        isReconnecting: false,
       });
       this.loadHistory();
       if (this.isHost) {
@@ -407,9 +452,11 @@ export class CallSession {
 
   #onAdmitted({ peerId, peers, screenSharer }) {
     if (this.finished) return;
+    this.isWaiting = false;
+    this.#releaseWakeLock();
     this.selfId = peerId;
     this.screenShare = screenSharer ?? null;
-    this.#update({ status: CallStatus.ACTIVE, selfId: this.selfId, screenShare: this.screenShare });
+    this.#update({ status: CallStatus.ACTIVE, selfId: this.selfId, screenShare: this.screenShare, isReconnecting: false });
     this.updateLocalMedia();
     this.loadHistory();
 
@@ -532,6 +579,8 @@ export class CallSession {
   #finish(status, extra = {}) {
     if (this.finished) return;
     this.finished = true;
+    this.isWaiting = false;
+    this.#releaseWakeLock();
     this.#stopWaitingPolling();
     this.#closePeers();
     this.audioTracker?.destroy();
@@ -740,6 +789,7 @@ export class CallSession {
     if ('waitingList' in patch) this.waitingList = patch.waitingList;
     if ('hostInRoom' in patch) this.hostInRoom = patch.hostInRoom;
     if ('isHost' in patch) this.isHost = patch.isHost;
+    if ('isReconnecting' in patch) this.isReconnecting = patch.isReconnecting;
     if ('messages' in patch) this.messages = patch.messages;
     if ('unreadCount' in patch) this.unreadCount = patch.unreadCount;
     if ('historyLoading' in patch) this.historyLoading = patch.historyLoading;
@@ -751,6 +801,7 @@ export class CallSession {
     this.state = {
       ...this.state,
       ...patch,
+      isReconnecting: this.isReconnecting,
       waitingList: this.waitingList,
       hostInRoom: this.hostInRoom,
       isHost: this.isHost,

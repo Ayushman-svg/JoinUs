@@ -508,5 +508,71 @@ test('Host client: calls host:list-waiting on start and updates waitingList', as
   call.leave();
 });
 
+test('Guest client: auto-rejoins on reconnect and acquires/releases wake lock while waiting', async () => {
+  let wakeLockRequested = 0;
+  let wakeLockReleased = 0;
+  globalThis.navigator.wakeLock = {
+    request: async (type) => {
+      wakeLockRequested += 1;
+      return {
+        type,
+        release: async () => {
+          wakeLockReleased += 1;
+        },
+      };
+    },
+  };
+
+  const mockSignaling = new MockSignaling();
+  let joinCalls = 0;
+  mockSignaling.request = async (event, payload) => {
+    mockSignaling.sentRequests.push({ event, payload });
+    if (event === 'room:join') {
+      joinCalls += 1;
+      return {
+        status: 'waiting',
+        hostInRoom: true,
+      };
+    }
+    return {};
+  };
+
+  const call = new CallSession({
+    code: 'guest-waiting-room',
+    url: 'http://localhost:5000',
+    getToken: () => 'token',
+    createSignalingClient: () => mockSignaling,
+    getMeetingMessagesApi: async () => [],
+  });
+
+  call.start();
+  await new Promise((r) => setTimeout(r, 20));
+
+  assert.equal(call.getState().status, CallStatus.WAITING);
+  assert.equal(call.getState().isReconnecting, false);
+  assert.equal(joinCalls, 1);
+  assert.equal(wakeLockRequested, 1, 'Wake lock requested when waiting');
+
+  // Socket drops
+  mockSignaling.emit('status', { status: 'reconnecting' });
+  assert.equal(call.getState().status, CallStatus.WAITING);
+  assert.equal(call.getState().isReconnecting, true);
+
+  // Socket reconnects
+  mockSignaling.emit('status', { status: 'connected' });
+  await new Promise((r) => setTimeout(r, 20));
+
+  assert.equal(joinCalls, 2, 'Re-issued room:join on reconnect');
+  assert.equal(call.getState().status, CallStatus.WAITING);
+  assert.equal(call.getState().isReconnecting, false);
+
+  // Admitted
+  mockSignaling.emit('room:admitted', { peerId: 'guest-peer-id', peers: [] });
+  assert.equal(call.getState().status, CallStatus.ACTIVE);
+  assert.equal(wakeLockReleased, 1, 'Wake lock released on admit');
+
+  call.leave();
+});
+
 
 
