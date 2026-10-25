@@ -125,6 +125,25 @@ function emitToAdmitted(io, registry, code, event, payload) {
   return peers.length;
 }
 
+// Emits an event strictly to the sender and recipient of a private message (their socket IDs and user channels).
+// Never emits to the meeting room or other participants.
+function emitPrivateMessage(io, registry, code, senderUserId, recipientUserId, event, payload) {
+  const peers = registry.getPeers(code);
+  const targets = new Set();
+  targets.add(`user:${senderUserId}`);
+  targets.add(`user:${recipientUserId}`);
+  for (const peer of peers) {
+    if (String(peer.userId) === String(senderUserId) || String(peer.userId) === String(recipientUserId)) {
+      if (peer.peerId) targets.add(peer.peerId);
+    }
+  }
+  const targetArray = [...targets];
+  if (targetArray.length > 0) {
+    io.to(targetArray).emit(event, payload);
+  }
+  console.log(`[chat] private message emitted: code=${code} sender=${senderUserId} recipient=${recipientUserId} targets=${targetArray.length}`);
+}
+
 // Removes the socket from its room or waiting list (if in one) and notifies peers/host
 function leaveRoom(io, registry, socket, limiters) {
   if (limiters) {
@@ -604,9 +623,9 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     return {};
   });
 
-  // chat:send { text }
+  // chat:send { text, to? }
   on(socket, 'chat:send', async (payload) => {
-    const { text } = parse(chatSendSchema, payload);
+    const { text, to } = parse(chatSendSchema, payload);
 
     const code = registry.getRoomCode(socket.id);
     if (!code) {
@@ -617,20 +636,38 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       throw new AppError(429, 'RATE_LIMITED', "You're sending messages too fast");
     }
 
+    const { user } = socket.data;
+
+    let recipientPeer = null;
+    if (to) {
+      if (String(to) === String(user.id)) {
+        throw new AppError(400, 'CANNOT_MESSAGE_SELF', 'Cannot message yourself');
+      }
+      const peers = registry.getPeers(code);
+      recipientPeer = peers.find((p) => String(p.userId) === String(to));
+      if (!recipientPeer) {
+        throw new AppError(404, 'RECIPIENT_NOT_IN_ROOM', 'Recipient is not admitted or has left');
+      }
+    }
+
     const meeting = await Meeting.findOne({ code }).select('_id host').lean();
     if (!meeting) {
       throw new AppError(404, 'MEETING_NOT_FOUND', 'Meeting not found');
     }
 
-    const { user } = socket.data;
     let saved;
     try {
-      saved = await Message.create({
+      const docData = {
         meeting: meeting._id,
         user: user.id,
         name: user.name,
         text,
-      });
+      };
+      if (recipientPeer) {
+        docData.to = recipientPeer.userId;
+        docData.toName = recipientPeer.name;
+      }
+      saved = await Message.create(docData);
     } catch (err) {
       console.error(`Failed to persist chat message in room ${code}:`, err);
       throw new AppError(500, 'CHAT_FAILED', 'Failed to save message');
@@ -647,8 +684,18 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       text: saved.text,
       createdAt: saved.createdAt.toISOString(),
     };
+    if (saved.to) {
+      message.to = {
+        id: saved.to.toString(),
+        name: saved.toName,
+      };
+    }
 
-    emitToAdmitted(io, registry, code, 'chat:message', message);
+    if (recipientPeer) {
+      emitPrivateMessage(io, registry, code, user.id, recipientPeer.userId, 'chat:message', message);
+    } else {
+      emitToAdmitted(io, registry, code, 'chat:message', message);
+    }
 
     return { message };
   });

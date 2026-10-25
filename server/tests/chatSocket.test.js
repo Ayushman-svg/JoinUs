@@ -1,4 +1,5 @@
 const http = require('http');
+const mongoose = require('mongoose');
 const ioClient = require('socket.io-client');
 
 const app = require('../src/app');
@@ -305,4 +306,91 @@ describe('Chat socket authorization, validation and rate limit', () => {
     await new Promise((r) => setTimeout(r, 200));
     expect(waitingReceived).toBe(false);
   });
+
+  it('delivers private messages only to the sender and recipient, not to third parties or waiting guests, and rejects self/missing recipient', async () => {
+    const host = await createUser({ name: 'Host Alice' });
+    const guest1 = await createUser({ name: 'Guest Bob' });
+    const guest2 = await createUser({ name: 'Guest Charlie' });
+    const waitingGuest = await createUser({ name: 'Waiting Dave' });
+
+    const meeting = await createMeeting(host.user.id, { waitingRoom: true });
+
+    const hostSocket = await connectSocket(port, host.token);
+    const guest1Socket = await connectSocket(port, guest1.token);
+    const guest2Socket = await connectSocket(port, guest2.token);
+    const waitingSocket = await connectSocket(port, waitingGuest.token);
+    socketsToClose.push(hostSocket, guest1Socket, guest2Socket, waitingSocket);
+
+    // Host joins (admitted)
+    await emitAck(hostSocket, 'room:join', { code: meeting.code });
+    // Guest1 and Guest2 join waiting room, host admits them
+    await emitAck(guest1Socket, 'room:join', { code: meeting.code });
+    await emitAck(guest2Socket, 'room:join', { code: meeting.code });
+    const waitingJoin = await emitAck(waitingSocket, 'room:join', { code: meeting.code });
+    expect(waitingJoin.status).toBe('waiting');
+
+    await emitAck(hostSocket, 'host:admit', { peerId: guest1Socket.id });
+    await emitAck(hostSocket, 'host:admit', { peerId: guest2Socket.id });
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Test 1: Self message is rejected with CANNOT_MESSAGE_SELF
+    const selfAck = await emitAck(guest1Socket, 'chat:send', {
+      text: 'Talking to myself',
+      to: guest1.user.id.toString(),
+    });
+    expect(selfAck.ok).toBe(false);
+    expect(selfAck.error.code).toBe('CANNOT_MESSAGE_SELF');
+
+    // Test 2: Missing recipient (or waiting guest who is not admitted in room) is rejected with RECIPIENT_NOT_IN_ROOM
+    const missingAck = await emitAck(guest1Socket, 'chat:send', {
+      text: 'To waiting guest',
+      to: waitingGuest.user.id.toString(),
+    });
+    expect(missingAck.ok).toBe(false);
+    expect(missingAck.error.code).toBe('RECIPIENT_NOT_IN_ROOM');
+
+    // Non-existent user id
+    const nonExistentId = new mongoose.Types.ObjectId().toString();
+    const nonExistentAck = await emitAck(guest1Socket, 'chat:send', {
+      text: 'To nobody',
+      to: nonExistentId,
+    });
+    expect(nonExistentAck.ok).toBe(false);
+    expect(nonExistentAck.error.code).toBe('RECIPIENT_NOT_IN_ROOM');
+
+    // Test 3: Private message between guest1 and guest2
+    let hostReceived = false;
+    let waitingReceived = false;
+    let recipientMsg = null;
+    let senderMsg = null;
+
+    hostSocket.on('chat:message', () => { hostReceived = true; });
+    waitingSocket.on('chat:message', () => { waitingReceived = true; });
+    guest2Socket.on('chat:message', (m) => { recipientMsg = m; });
+    guest1Socket.on('chat:message', (m) => { senderMsg = m; });
+
+    const sendAck = await emitAck(guest1Socket, 'chat:send', {
+      text: 'Secret hello from Bob to Charlie',
+      to: guest2.user.id.toString(),
+    });
+    expect(sendAck.ok).toBe(true);
+    expect(sendAck.message).toMatchObject({
+      text: 'Secret hello from Bob to Charlie',
+      from: { id: guest1.user.id.toString(), name: 'Guest Bob', isHost: false },
+      to: { id: guest2.user.id.toString(), name: 'Guest Charlie' },
+    });
+
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Only sender and recipient received over socket
+    expect(recipientMsg).not.toBeNull();
+    expect(recipientMsg).toEqual(sendAck.message);
+    expect(senderMsg).not.toBeNull();
+    expect(senderMsg).toEqual(sendAck.message);
+
+    // Host and waiting guest received NOTHING
+    expect(hostReceived).toBe(false);
+    expect(waitingReceived).toBe(false);
+  });
 });
+
