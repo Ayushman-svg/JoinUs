@@ -24,15 +24,15 @@ function errorHandler(err, req, res, next) {
   const isAppError = error instanceof AppError;
   const status = isAppError ? error.statusCode : 500;
 
-  if (status >= 500) {
+  if (status >= 500 && process.env.NODE_ENV !== 'test') {
     console.error(error);
   }
 
   res.status(status).json({
     error: {
       code: isAppError ? error.code : 'INTERNAL_ERROR',
-      // Never leak internal error details in production
-      message: isAppError || !isProduction ? error.message : 'Something went wrong',
+      // Never leak internal error details or stack traces to clients
+      message: isAppError ? error.message : 'Something went wrong',
       ...(isAppError && error.details ? { details: error.details } : {}),
     },
   });

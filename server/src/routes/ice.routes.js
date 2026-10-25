@@ -24,10 +24,12 @@ router.get('/', requireAuth, async (req, res) => {
           // Never expose the API key to the client
           return res.json({ iceServers: meteredServers });
         }
+      } else {
+        console.warn(`Failed to fetch Metered TURN credentials (status ${response.status}), falling back`);
       }
-    } catch (err) {
-      // Fall back to STUN-only / static config if fetch fails
-      console.warn('Failed to fetch Metered TURN credentials, falling back:', err.message);
+    } catch {
+      // Fall back to STUN-only / static config if fetch fails; never log error or URL as it contains apiKey
+      console.warn('Failed to fetch Metered TURN credentials, falling back');
     }
   }
 
