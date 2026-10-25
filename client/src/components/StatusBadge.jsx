@@ -5,6 +5,8 @@ const KINDS = {
   instant: { label: 'Instant', variant: 'neutral' },
   ended: { label: 'Ended', variant: 'neutral' },
   cancelled: { label: 'Cancelled', variant: 'danger' },
+  not_started: { label: 'Not started', variant: 'neutral' },
+  past: { label: 'Past', variant: 'neutral' },
 };
 
 export default function StatusBadge({ kind }) {

@@ -16,6 +16,7 @@ import CopyLinkButton from '../components/CopyLinkButton.jsx';
 import FormField from '../components/FormField.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import Alert from '../components/ui/Alert.jsx';
+import Badge from '../components/ui/Badge.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
@@ -26,7 +27,7 @@ import { useToast } from '../components/ui/Toast.jsx';
 import Toggle from '../components/ui/Toggle.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import useSlowRequest from '../hooks/useSlowRequest.js';
-import { formatDateTime, nextFullHour, toLocalInputValue } from '../lib/datetime.js';
+import { formatDateTime, formatDuration, nextFullHour, toLocalInputValue } from '../lib/datetime.js';
 import { extractMeetingCode } from '../lib/meetingLink.js';
 
 export default function Dashboard() {
@@ -85,37 +86,32 @@ export default function Dashboard() {
     return () => controller.abort();
   }, [reloadKey]);
 
-  // Compute upcoming, recent, and stats
-  const { upcoming, recent, stats } = useMemo(() => {
-    const all = meetingsState.meetings;
-    const now = Date.now();
-    const fourHours = 4 * 60 * 60 * 1000;
+  function getRecentBadgeKind(meeting) {
+    if (meeting.status === 'cancelled') return 'cancelled';
+    if (meeting.status === 'ended') return 'ended';
+    if (!meeting.startedAt) return 'not_started';
+    return 'past';
+  }
 
+  // Compute inProgress, upcoming, recent, and stats
+  const { inProgress, upcoming, recent, stats } = useMemo(() => {
+    const all = meetingsState.meetings;
+    const inProg = [];
     const up = [];
     const past = [];
 
     for (const m of all) {
-      if (m.status === 'cancelled') {
-        past.push(m);
-      } else if (!m.scheduledAt) {
-        // Instant meeting: upcoming if created within open window
-        const starts = new Date(m.startsAt || m.createdAt).getTime();
-        if (starts + fourHours >= now) {
-          up.push(m);
-        } else {
-          past.push(m);
-        }
+      if (m.phase === 'ongoing') {
+        inProg.push(m);
+      } else if (m.phase === 'upcoming') {
+        up.push(m);
       } else {
-        const scheduled = new Date(m.scheduledAt).getTime();
-        if (scheduled + fourHours >= now) {
-          up.push(m);
-        } else {
-          past.push(m);
-        }
+        past.push(m);
       }
     }
 
     return {
+      inProgress: inProg,
       upcoming: up,
       recent: past,
       stats: {
@@ -127,23 +123,23 @@ export default function Dashboard() {
 
   // Client-side search filtering
   const query = searchQuery.trim().toLowerCase();
-  const filteredUpcoming = useMemo(() => {
-    if (!query) return upcoming;
-    return upcoming.filter(
-      (m) =>
-        m.title.toLowerCase().includes(query) ||
-        m.code.toLowerCase().includes(query)
-    );
-  }, [upcoming, query]);
+  const matchesQuery = (m) =>
+    !query ||
+    m.title?.toLowerCase().includes(query) ||
+    m.code?.toLowerCase().includes(query);
 
-  const filteredRecent = useMemo(() => {
-    if (!query) return recent;
-    return recent.filter(
-      (m) =>
-        m.title.toLowerCase().includes(query) ||
-        m.code.toLowerCase().includes(query)
-    );
-  }, [recent, query]);
+  const filteredInProgress = useMemo(
+    () => inProgress.filter(matchesQuery),
+    [inProgress, query]
+  );
+  const filteredUpcoming = useMemo(
+    () => upcoming.filter(matchesQuery),
+    [upcoming, query]
+  );
+  const filteredRecent = useMemo(
+    () => recent.filter(matchesQuery),
+    [recent, query]
+  );
 
   // Handlers for modals
   async function handleStartInstant(e) {
@@ -347,6 +343,55 @@ export default function Dashboard() {
         </Card>
       )}
 
+      {/* In progress Section - shown only when it has items */}
+      {meetingsState.status === 'ready' && filteredInProgress.length > 0 && (
+        <section className="dash-section" aria-labelledby="in-progress-title">
+          <div className="dash-section__header">
+            <h2 id="in-progress-title" className="dash-section__title">
+              In progress
+            </h2>
+          </div>
+
+          <div className="dash-grid">
+            {filteredInProgress.map((meeting) => (
+              <div key={meeting.id || meeting._id} className="dash-meeting-card">
+                <div className="dash-meeting-card__top">
+                  <h3 className="dash-meeting-card__title">{meeting.title}</h3>
+                  <Badge variant={meeting.isLive ? 'success' : 'neutral'}>
+                    {meeting.isLive
+                      ? `Live (${meeting.participantCount ?? 1})`
+                      : 'Not ended'}
+                  </Badge>
+                </div>
+
+                <div className="dash-meeting-card__meta">
+                  <div className="dash-meeting-card__time">
+                    <Clock size={16} aria-hidden="true" />
+                    <span>
+                      {meeting.scheduledAt
+                        ? `Scheduled · ${formatDateTime(meeting.scheduledAt)}`
+                        : `Instant · ${formatDateTime(meeting.startedAt || meeting.startsAt || meeting.createdAt)}`}
+                    </span>
+                  </div>
+                  <span className="dash-meeting-card__code">{meeting.code}</span>
+                </div>
+
+                <div className="dash-meeting-card__actions">
+                  <Button
+                    variant="primary"
+                    leftIcon={Video}
+                    onClick={() => navigate(`/m/${meeting.code}`)}
+                  >
+                    {meeting.isLive ? 'Rejoin' : 'Continue'}
+                  </Button>
+                  <CopyLinkButton code={meeting.code} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Upcoming Meetings Section */}
       <section className="dash-section" aria-labelledby="upcoming-meetings-title">
         <div className="dash-section__header">
@@ -393,7 +438,7 @@ export default function Dashboard() {
               description={
                 query
                   ? `No upcoming meetings matched "${searchQuery}". Try a different search term or clear the filter.`
-                  : 'Start an instant meeting or schedule one for a later time.'
+                  : 'Schedule a meeting for a future date.'
               }
               action={
                 query ? (
@@ -402,13 +447,13 @@ export default function Dashboard() {
                   </Button>
                 ) : (
                   <Button
-                    leftIcon={Plus}
+                    leftIcon={CalendarClock}
                     onClick={() => {
-                      setInstantError('');
-                      setActiveModal('instant');
+                      setScheduleError('');
+                      setActiveModal('schedule');
                     }}
                   >
-                    Start a meeting
+                    Schedule a meeting
                   </Button>
                 )
               }
@@ -418,45 +463,44 @@ export default function Dashboard() {
 
         {meetingsState.status === 'ready' && filteredUpcoming.length > 0 && (
           <div className="dash-grid">
-            {filteredUpcoming.map((meeting) => (
-              <div key={meeting.id || meeting._id} className="dash-meeting-card">
-                <div className="dash-meeting-card__top">
-                  <h3 className="dash-meeting-card__title">{meeting.title}</h3>
-                  <StatusBadge
-                    kind={
-                      meeting.status === 'cancelled'
-                        ? 'cancelled'
-                        : meeting.scheduledAt
-                        ? 'scheduled'
-                        : 'instant'
-                    }
-                  />
-                </div>
+            {filteredUpcoming.map((meeting) => {
+              const diffMs = new Date(meeting.scheduledAt).getTime() - Date.now();
+              const canJoin = diffMs <= 15 * 60 * 1000;
 
-                <div className="dash-meeting-card__meta">
-                  <div className="dash-meeting-card__time">
-                    <Clock size={16} aria-hidden="true" />
-                    <span>
-                      {meeting.scheduledAt
-                        ? formatDateTime(meeting.scheduledAt)
-                        : `Instant · ${formatDateTime(meeting.startsAt || meeting.createdAt)}`}
-                    </span>
+              return (
+                <div key={meeting.id || meeting._id} className="dash-meeting-card">
+                  <div className="dash-meeting-card__top">
+                    <h3 className="dash-meeting-card__title">{meeting.title}</h3>
+                    <StatusBadge kind="scheduled" />
                   </div>
-                  <span className="dash-meeting-card__code">{meeting.code}</span>
-                </div>
 
-                <div className="dash-meeting-card__actions">
-                  <Button
-                    variant="primary"
-                    leftIcon={Video}
-                    onClick={() => navigate(`/m/${meeting.code}`)}
-                  >
-                    Join
-                  </Button>
-                  <CopyLinkButton code={meeting.code} />
+                  <div className="dash-meeting-card__meta">
+                    <div className="dash-meeting-card__time">
+                      <Clock size={16} aria-hidden="true" />
+                      <span>{formatDateTime(meeting.scheduledAt)}</span>
+                    </div>
+                    <span className="dash-meeting-card__code">{meeting.code}</span>
+                  </div>
+
+                  <div className="dash-meeting-card__actions">
+                    {canJoin ? (
+                      <Button
+                        variant="primary"
+                        leftIcon={Video}
+                        onClick={() => navigate(`/m/${meeting.code}`)}
+                      >
+                        Join
+                      </Button>
+                    ) : (
+                      <Button variant="secondary" disabled>
+                        Starts in {formatDuration(diffMs)}
+                      </Button>
+                    )}
+                    <CopyLinkButton code={meeting.code} />
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
@@ -473,7 +517,7 @@ export default function Dashboard() {
           <div className="dash-skeleton-grid">
             <div className="dash-skeleton-card">
               <Skeleton width="50%" height="1.25rem" />
-              <Skeleton width="30%" height="1rem" />
+              <Skeleton width="40%" height="1rem" />
             </div>
             <div className="dash-skeleton-card">
               <Skeleton width="60%" height="1.25rem" />
@@ -500,23 +544,27 @@ export default function Dashboard() {
             {filteredRecent.map((meeting) => (
               <div key={meeting.id || meeting._id} className="dash-recent-item">
                 <div className="dash-recent-item__main">
-                  <Link
-                    to={`/m/${meeting.code}`}
-                    className="dash-recent-item__title"
-                  >
-                    {meeting.title}
-                  </Link>
+                  {meeting.status === 'ended' || meeting.status === 'cancelled' ? (
+                    <span className="dash-recent-item__title">{meeting.title}</span>
+                  ) : (
+                    <Link
+                      to={`/m/${meeting.code}`}
+                      className="dash-recent-item__title"
+                    >
+                      {meeting.title}
+                    </Link>
+                  )}
                   <p className="dash-recent-item__time">
                     {meeting.scheduledAt
                       ? formatDateTime(meeting.scheduledAt)
-                      : formatDateTime(meeting.startsAt || meeting.createdAt)}
+                      : formatDateTime(meeting.startedAt || meeting.startsAt || meeting.createdAt)}
                     {' · '}
                     <code>{meeting.code}</code>
                   </p>
                 </div>
-                <StatusBadge
-                  kind={meeting.status === 'cancelled' ? 'cancelled' : 'ended'}
-                />
+                <div className="dash-recent-item__actions">
+                  <StatusBadge kind={getRecentBadgeKind(meeting)} />
+                </div>
               </div>
             ))}
           </div>
