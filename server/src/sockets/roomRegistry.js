@@ -19,8 +19,18 @@ class RoomRegistry {
     this.waitingPeerRooms = new Map(); // peerId -> meeting code
 
     this.admittedUsers = new Map(); // meeting code -> Set(userId)
+    this.deniedUsers = new Map(); // meeting code -> Set(userId)
+    this.removedUsers = new Map(); // meeting code -> Set(userId)
     this.hosts = new Map(); // meeting code -> hostUserId
     this.screenSharers = new Map(); // meeting code -> { peerId, streamId }
+  }
+
+  isDenied(code, userId) {
+    return Boolean(this.deniedUsers.get(code)?.has(String(userId)));
+  }
+
+  isRemoved(code, userId) {
+    return Boolean(this.removedUsers.get(code)?.has(String(userId)));
   }
 
   setHost(code, hostId) {
@@ -70,6 +80,8 @@ class RoomRegistry {
     }
   ) {
     userId = String(userId);
+    this.deniedUsers.get(code)?.delete(userId);
+    this.removedUsers.get(code)?.delete(userId);
 
     const currentRoom = this.peerRooms.get(peerId) ?? this.waitingPeerRooms.get(peerId);
     if (currentRoom !== undefined && currentRoom !== code) {
@@ -199,6 +211,11 @@ class RoomRegistry {
     this.waitingPeerRooms.delete(peerId);
     if (waitingMap.size === 0) this.waiting.delete(code);
 
+    if (!this.deniedUsers.has(code)) {
+      this.deniedUsers.set(code, new Set());
+    }
+    this.deniedUsers.get(code).add(String(waitingUser.userId));
+
     return { waitingUser };
   }
 
@@ -251,6 +268,11 @@ class RoomRegistry {
     }
 
     this.admittedUsers.get(code)?.delete(peer.userId);
+
+    if (!this.removedUsers.has(code)) {
+      this.removedUsers.set(code, new Set());
+    }
+    this.removedUsers.get(code).add(String(peer.userId));
 
     return {
       code,
@@ -338,6 +360,8 @@ class RoomRegistry {
     this.waiting.delete(code);
 
     this.admittedUsers.delete(code);
+    this.deniedUsers.delete(code);
+    this.removedUsers.delete(code);
     this.hosts.delete(code);
 
     return { code, peers, waiting: waitingUsers };

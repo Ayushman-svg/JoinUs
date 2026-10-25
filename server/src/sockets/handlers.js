@@ -255,6 +255,72 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     };
   });
 
+  // Query authenticated caller's own status in a meeting
+  on(socket, 'room:status', async (payload) => {
+    const { code } = parse(codeSchema, payload);
+
+    const meeting = await Meeting.findOne({ code }).select('status host').lean();
+    if (!meeting) {
+      throw new AppError(404, 'MEETING_NOT_FOUND', 'Meeting not found');
+    }
+
+    const userId = String(socket.data.user.id);
+
+    // 1. Database ended or cancelled status wins
+    if (
+      meeting.status === MEETING_STATUS.ENDED ||
+      meeting.status === MEETING_STATUS.CANCELLED
+    ) {
+      return { status: 'ended' };
+    }
+
+    // 2. Host
+    const isHostUser = String(meeting.host) === userId || registry.isHost(code, userId);
+    if (isHostUser) {
+      return {
+        status: 'host',
+        peers: registry.getPeers(code).filter((p) => String(p.userId) !== userId).map(toPublicPeer),
+        screenSharer: registry.getScreenSharer(code),
+      };
+    }
+
+    // 3. Denied
+    if (registry.isDenied(code, userId)) {
+      return { status: 'denied' };
+    }
+
+    // 4. Removed
+    if (registry.isRemoved(code, userId)) {
+      return { status: 'removed' };
+    }
+
+    // 5. Waiting
+    const waitingUsers = registry.getWaiting(code);
+    if (waitingUsers.some((w) => String(w.userId) === userId)) {
+      return { status: 'waiting' };
+    }
+
+    // 6. Admitted
+    const roomPeers = registry.getPeers(code);
+    const myPeer = roomPeers.find((p) => String(p.userId) === userId);
+    if (myPeer || registry.isAdmitted(code, userId)) {
+      try {
+        await socket.join(code);
+      } catch {
+        /* ignore */
+      }
+      return {
+        status: 'admitted',
+        peerId: myPeer ? myPeer.peerId : socket.id,
+        peers: roomPeers.filter((p) => String(p.userId) !== userId).map(toPublicPeer),
+        screenSharer: registry.getScreenSharer(code),
+      };
+    }
+
+    // 7. None
+    return { status: 'none' };
+  });
+
   // Host queries the waiting list (database authorized, does not require socket in room registry)
   on(socket, 'host:list-waiting', async (payload) => {
     if (limiters?.host && !limiters.host.check(socket.id)) {
