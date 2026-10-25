@@ -1,8 +1,10 @@
 import {
   Calendar,
   CalendarClock,
+  ChevronDown,
   Clock,
   LogIn,
+  MonitorUp,
   Plus,
   Search,
   Video,
@@ -64,6 +66,21 @@ export default function Dashboard() {
   const [scheduleSubmitting, setScheduleSubmitting] = useState(false);
   const [scheduleError, setScheduleError] = useState('');
   const [scheduleFieldErrors, setScheduleFieldErrors] = useState({});
+
+  // Live clock for Zoom Home widget
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const timeString = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const dateString = currentTime.toLocaleDateString([], {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 
   // Load meetings
   useEffect(() => {
@@ -251,73 +268,121 @@ export default function Dashboard() {
     }
   }
 
+  const nextMeeting = inProgress[0] || upcoming[0] || null;
+
   return (
-    <div className="dash">
-      {/* Greeting Header */}
-      <section className="dash-greeting" aria-label="Welcome banner">
-        <h1 className="dash-greeting__title">Welcome back, {user?.name}</h1>
-        <p className="dash-greeting__subtitle">
-          Manage your video meetings or start a new call instantly.
-        </p>
+    <div className="dash zoom-dash">
+      {/* Zoom Home Hero: 4 Signature Quick Action Tiles + Zoom Live Clock Widget */}
+      <section className="zoom-home-hero" aria-label="Zoom quick actions and schedule">
+        <div className="zoom-actions-grid">
+          {/* 1. New Meeting (Iconic Zoom Orange) */}
+          <button
+            type="button"
+            className="zoom-action-tile zoom-action-tile--orange"
+            onClick={() => {
+              setInstantError('');
+              setActiveModal('instant');
+            }}
+          >
+            <div className="zoom-action-tile__icon-box">
+              <Video size={36} aria-hidden="true" />
+            </div>
+            <span className="zoom-action-tile__label">New Meeting</span>
+          </button>
+
+          {/* 2. Join (Iconic Zoom Blue) */}
+          <button
+            type="button"
+            className="zoom-action-tile zoom-action-tile--blue"
+            onClick={() => {
+              setJoinError('');
+              setActiveModal('join');
+            }}
+          >
+            <div className="zoom-action-tile__icon-box">
+              <Plus size={36} aria-hidden="true" />
+            </div>
+            <span className="zoom-action-tile__label">Join</span>
+          </button>
+
+          {/* 3. Schedule (Iconic Zoom Calendar) */}
+          <button
+            type="button"
+            className="zoom-action-tile zoom-action-tile--blue"
+            onClick={() => {
+              setScheduleError('');
+              setScheduleFieldErrors({});
+              setActiveModal('schedule');
+            }}
+          >
+            <div className="zoom-action-tile__icon-box">
+              <Calendar size={36} aria-hidden="true" />
+            </div>
+            <span className="zoom-action-tile__label">Schedule</span>
+          </button>
+
+          {/* 4. Share Screen (Iconic Zoom Screen Share) */}
+          <button
+            type="button"
+            className="zoom-action-tile zoom-action-tile--teal"
+            onClick={() => {
+              setJoinError('');
+              setActiveModal('join');
+            }}
+          >
+            <div className="zoom-action-tile__icon-box">
+              <MonitorUp size={36} aria-hidden="true" />
+            </div>
+            <span className="zoom-action-tile__label">Share Screen</span>
+          </button>
+        </div>
+
+        {/* Zoom Clock & Next Meeting Widget */}
+        <div className="zoom-widget-card">
+          <div className="zoom-widget-clock">
+            <span className="zoom-widget-time">{timeString}</span>
+            <span className="zoom-widget-date">{dateString}</span>
+          </div>
+
+          <div className="zoom-widget-meeting">
+            {nextMeeting ? (
+              <div className="zoom-next-card">
+                <div className="zoom-next-card__badge">
+                  {nextMeeting.phase === 'ongoing' ? (
+                    <span className="zoom-pulsing-badge">● IN PROGRESS</span>
+                  ) : (
+                    <span>UPCOMING</span>
+                  )}
+                </div>
+                <h3 className="zoom-next-card__title">{nextMeeting.title || 'Meeting'}</h3>
+                <p className="zoom-next-card__time">
+                  {nextMeeting.scheduledAt
+                    ? formatDateTime(nextMeeting.scheduledAt)
+                    : 'Ready to continue'}
+                </p>
+                <div className="zoom-next-card__actions">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => navigate(`/meeting/${nextMeeting.code}`)}
+                  >
+                    {nextMeeting.phase === 'ongoing' ? 'Join Now' : 'Start'}
+                  </Button>
+                  <CopyLinkButton code={nextMeeting.code} variant="secondary" size="sm" />
+                </div>
+              </div>
+            ) : (
+              <div className="zoom-widget-empty">
+                <Clock size={22} className="zoom-widget-empty-icon" aria-hidden="true" />
+                <p className="zoom-widget-empty-text">No more meetings scheduled today</p>
+              </div>
+            )}
+          </div>
+        </div>
       </section>
 
-      {/* Quick Actions */}
-      <section className="dash-actions" aria-label="Quick actions">
-        <button
-          type="button"
-          className="dash-action-card dash-action-card--instant"
-          onClick={() => {
-            setInstantError('');
-            setActiveModal('instant');
-          }}
-        >
-          <span className="dash-action-card__icon">
-            <Video size={24} aria-hidden="true" />
-          </span>
-          <div className="dash-action-card__body">
-            <h2 className="dash-action-card__title">New meeting</h2>
-            <p className="dash-action-card__desc">Start an instant call now</p>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          className="dash-action-card dash-action-card--join"
-          onClick={() => {
-            setJoinError('');
-            setActiveModal('join');
-          }}
-        >
-          <span className="dash-action-card__icon">
-            <LogIn size={24} aria-hidden="true" />
-          </span>
-          <div className="dash-action-card__body">
-            <h2 className="dash-action-card__title">Join meeting</h2>
-            <p className="dash-action-card__desc">Enter a code or link</p>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          className="dash-action-card dash-action-card--schedule"
-          onClick={() => {
-            setScheduleError('');
-            setScheduleFieldErrors({});
-            setActiveModal('schedule');
-          }}
-        >
-          <span className="dash-action-card__icon">
-            <CalendarClock size={24} aria-hidden="true" />
-          </span>
-          <div className="dash-action-card__body">
-            <h2 className="dash-action-card__title">Schedule</h2>
-            <p className="dash-action-card__desc">Plan for a future date</p>
-          </div>
-        </button>
-      </section>
-
-      {/* Simple Stats Row */}
-      <section className="dash-stats" aria-label="Meeting statistics">
+      {/* Stats Summary Bar */}
+      <section className="dash-stats zoom-stats" aria-label="Meeting statistics">
         <div className="dash-stat-card">
           <div className="dash-stat-card__left">
             <span className="dash-stat-card__icon">

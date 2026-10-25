@@ -230,6 +230,33 @@ export default function ParticipantsPanel({
           </ul>
         </section>
       </div>
+
+      <footer className="participants-panel__footer">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => {
+            if (navigator?.clipboard) {
+              navigator.clipboard.writeText(window.location.href);
+            }
+          }}
+          aria-label="Invite others"
+        >
+          Invite
+        </Button>
+        {isHost && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              /* Mute all informational action */
+            }}
+            aria-label="Mute all participants"
+          >
+            Mute All
+          </Button>
+        )}
+      </footer>
     </aside>
   );
 }

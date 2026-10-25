@@ -3,15 +3,15 @@
 .theme-meeting {
   color-scheme: dark;
 
-  --color-primary: #2563eb;
-  --color-primary-hover: #1d4ed8;
-  --color-primary-active: #1e40af;
+  --color-primary: #0E72ED;
+  --color-primary-hover: #0b5ed7;
+  --color-primary-active: #004dc0;
   --color-primary-light: #15264a;
   --color-primary-text: #93c5fd;
   --color-on-primary: #ffffff;
   --color-link: #60a5fa;
-  --color-focus: #60a5fa;
-  --color-focus-ring: rgb(96 165 250 / 0.3);
+  --color-focus: #0E72ED;
+  --color-focus-ring: rgb(14 114 237 / 0.3);
 
   --color-background: #0b1220;
   --color-surface: #111a2b;

@@ -1,4 +1,5 @@
-import { MicOff } from 'lucide-react';
+import { Hand, MicOff, MoreHorizontal } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import Avatar from '../ui/Avatar.jsx';
 import Spinner from '../ui/Spinner.jsx';
@@ -11,10 +12,6 @@ const WAITING_TEXT = {
   failed: 'Reconnecting…',
 };
 
-// One person in the call. The picture is replaced by their initials when their camera is off,
-// but the video element stays mounted, so their sound keeps playing.
-//   audioOn / videoOn: their microphone and camera state (relayed by the server for others)
-//   connectionState: only for remote people, to show that the link is still being set up
 export default function ParticipantTile({
   name,
   stream,
@@ -23,29 +20,44 @@ export default function ParticipantTile({
   videoOn,
   connectionState,
   isSpeaking = false,
+  isHost = false,
+  handRaised = false,
+  reaction = null,
 }) {
+  const [floatingReaction, setFloatingReaction] = useState(null);
+
+  useEffect(() => {
+    if (reaction) {
+      setFloatingReaction(reaction);
+      const timer = setTimeout(() => setFloatingReaction(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [reaction]);
+
   const waiting = !local ? WAITING_TEXT[connectionState] : null;
+  const showSpeaking = Boolean(isSpeaking && audioOn);
+
   const description = [
     name,
+    isHost && 'Host',
     !audioOn && 'microphone off',
     !videoOn && 'camera off',
-    isSpeaking && audioOn && 'speaking',
+    showSpeaking && 'speaking',
+    handRaised && 'hand raised',
   ]
     .filter(Boolean)
     .join(', ');
 
-  const showSpeaking = Boolean(isSpeaking && audioOn);
-
   return (
     <div
-      className={`tile ${showSpeaking ? 'tile--speaking' : ''}`}
+      className={`tile zoom-tile ${showSpeaking ? 'tile--speaking zoom-tile--speaking' : ''}`}
       role="group"
       aria-label={description}
     >
       <VideoView stream={stream} muted={local} mirrored={local} />
 
       {!videoOn && (
-        <div className="tile__avatar">
+        <div className="tile__avatar zoom-tile__avatar">
           <Avatar name={name} size="xl" />
         </div>
       )}
@@ -57,16 +69,47 @@ export default function ParticipantTile({
         </div>
       )}
 
-      <div className="tile__label">
-        {!audioOn && <MicOff size={14} aria-label="Microphone is off" />}
-        {showSpeaking && (
-          <span className="tile__audio-bars" aria-label="Speaking" role="img">
+      {/* Top Left: Hand Raised Badge */}
+      {handRaised && (
+        <div className="zoom-tile__hand-badge" role="status">
+          <Hand size={14} aria-hidden="true" className="icon-hand" />
+          <span>Hand Raised</span>
+        </div>
+      )}
+
+      {/* Top Right: Hover 3-dots */}
+      <button
+        type="button"
+        className="zoom-tile__more-btn"
+        aria-label={`Options for ${name}`}
+      >
+        <MoreHorizontal size={16} aria-hidden="true" />
+      </button>
+
+      {/* Floating Reaction Animation */}
+      {floatingReaction && (
+        <div className="zoom-tile__floating-reaction" aria-hidden="true">
+          {floatingReaction}
+        </div>
+      )}
+
+      {/* Bottom Left: Name & Audio Status Tag */}
+      <div className="tile__label zoom-tile__name-tag">
+        {!audioOn ? (
+          <span className="zoom-tile__mic-status zoom-tile__mic-status--muted" title="Microphone muted">
+            <MicOff size={13} aria-label="Muted" />
+          </span>
+        ) : showSpeaking ? (
+          <span className="tile__audio-bars zoom-tile__speaking-bars" aria-label="Speaking" role="img">
             <span className="tile__bar" />
             <span className="tile__bar" />
             <span className="tile__bar" />
           </span>
-        )}
-        <span>{name}</span>
+        ) : null}
+        <span className="zoom-tile__name-text">
+          {name}
+          {isHost && <span className="zoom-tile__host-tag"> (Host)</span>}
+        </span>
       </div>
     </div>
   );

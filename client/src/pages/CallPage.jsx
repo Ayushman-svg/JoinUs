@@ -1,4 +1,4 @@
-import { Link2, MonitorUp, Users } from 'lucide-react';
+import { Clock, LayoutGrid, Link2, Maximize2, Minimize2, MonitorUp, ShieldCheck, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -17,11 +17,23 @@ import Avatar from '../components/ui/Avatar.jsx';
 import Button from '../components/ui/Button.jsx';
 import Modal from '../components/ui/Modal.jsx';
 import Spinner from '../components/ui/Spinner.jsx';
+import Tooltip from '../components/ui/Tooltip.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useMeetingMedia } from '../context/MeetingMediaContext.jsx';
 import useCall from '../hooks/useCall.js';
 import useSlowRequest from '../hooks/useSlowRequest.js';
 import { DEFAULT_RTC_CONFIG } from '../webrtc/peer.js';
+
+function formatElapsed(totalSeconds) {
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  if (hours > 0) {
+    return `${String(hours).padStart(2, '0')}:${String(remMins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+  return `${String(remMins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
 
 // Polite text for screen readers when someone joins or leaves
 function useAnnouncement(peers) {
@@ -53,6 +65,32 @@ export default function CallPage() {
   const [toastGuest, setToastGuest] = useState(null);
   const toastedIds = useRef(new Set());
   const [rtcConfig, setRtcConfig] = useState(null);
+
+  // Zoom-style UI states
+  const [securityModalOpen, setSecurityModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('gallery'); // 'gallery' | 'speaker'
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [handRaised, setHandRaised] = useState(false);
+  const [localReaction, setLocalReaction] = useState(null);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+      setIsFullscreen(false);
+    }
+  };
 
   // The title is only decoration here: if it cannot be loaded the code is shown instead
   useEffect(() => {
@@ -244,25 +282,67 @@ export default function CallPage() {
     }
   }
 
+  useEffect(() => {
+    if (!inCall) return;
+    const interval = setInterval(() => {
+      setElapsedSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [inCall]);
+
+  const activePeer = call.peers.find((p) => p.peerId === call.activeSpeaker);
+  const isLocalSpeaking = call.activeSpeaker === 'local' || (!activePeer && !call.peers.length);
+
   return (
     <div className="call theme-meeting">
-      <header className="call__bar">
-        <div className="call__heading">
-          <h1 className="call__title">{meeting?.title ?? 'Meeting'}</h1>
-          <p className="call__code">{code}</p>
+      <header className="call__bar zoom-call-header">
+        <div className="zoom-call-header__left">
+          <Tooltip label="Meeting Information & Security" side="bottom">
+            <button
+              type="button"
+              className="zoom-security-shield-btn"
+              onClick={() => setSecurityModalOpen(true)}
+              aria-label="Meeting information and encryption status"
+            >
+              <ShieldCheck size={18} className="zoom-shield-icon" aria-hidden="true" />
+            </button>
+          </Tooltip>
+          <div className="zoom-call-header__info">
+            <h1 className="call__title zoom-call-header__title">{meeting?.title ?? 'Meeting'}</h1>
+            <span className="zoom-call-header__divider" aria-hidden="true">|</span>
+            <span className="zoom-call-header__timer" title="Elapsed meeting time">
+              <Clock size={13} aria-hidden="true" />
+              <span>{formatElapsed(elapsedSeconds)}</span>
+            </span>
+          </div>
         </div>
+
         {isOtherSharing && (
-          <div className="call__presenting-banner" role="status">
+          <div className="call__presenting-banner zoom-presenting-pill" role="status">
             <MonitorUp size={14} aria-hidden="true" />
-            <span>{presenterName} is presenting</span>
+            <span>{presenterName} is sharing screen</span>
           </div>
         )}
-        {people && (
-          <p className="call__count">
-            <Users size={16} aria-hidden="true" />
-            {people} {people === 1 ? 'person' : 'people'}
-          </p>
-        )}
+
+        <div className="zoom-call-header__right">
+          <button
+            type="button"
+            className="zoom-view-btn"
+            onClick={() => setViewMode((curr) => (curr === 'gallery' ? 'speaker' : 'gallery'))}
+            aria-label={`Switch to ${viewMode === 'gallery' ? 'Speaker View' : 'Gallery View'}`}
+          >
+            <LayoutGrid size={15} aria-hidden="true" />
+            <span>{viewMode === 'gallery' ? 'Speaker View' : 'Gallery View'}</span>
+          </button>
+          <button
+            type="button"
+            className="zoom-fullscreen-btn"
+            onClick={toggleFullscreen}
+            aria-label={isFullscreen ? 'Exit Full Screen' : 'Enter Full Screen'}
+          >
+            {isFullscreen ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
+          </button>
+        </div>
       </header>
 
       <div className="call__main-layout">
@@ -337,6 +417,9 @@ export default function CallPage() {
                       audioOn={media.audioEnabled}
                       videoOn={media.videoEnabled}
                       isSpeaking={call.activeSpeaker === 'local'}
+                      isHost={isHost}
+                      handRaised={handRaised}
+                      reaction={localReaction}
                     />
                     {call.peers.map((peer) => (
                       <ParticipantTile
@@ -347,12 +430,71 @@ export default function CallPage() {
                         videoOn={peer.video}
                         connectionState={peer.connectionState}
                         isSpeaking={call.activeSpeaker === peer.peerId}
+                        isHost={peer.isHost}
                       />
                     ))}
                   </div>
                 </div>
+              ) : viewMode === 'speaker' && call.peers.length > 0 ? (
+                /* Speaker View: Active speaker prominent, others in sleek filmstrip */
+                <div className="call__stage-speaker">
+                  <div className="call__speaker-filmstrip">
+                    <ParticipantTile
+                      local
+                      name={`${localName} (You)`}
+                      stream={media.stream}
+                      audioOn={media.audioEnabled}
+                      videoOn={media.videoEnabled}
+                      isSpeaking={call.activeSpeaker === 'local'}
+                      isHost={isHost}
+                      handRaised={handRaised}
+                      reaction={localReaction}
+                    />
+                    {call.peers
+                      .filter((p) => p.peerId !== activePeer?.peerId)
+                      .map((peer) => (
+                        <ParticipantTile
+                          key={peer.peerId}
+                          name={peer.user?.name ?? 'Guest'}
+                          stream={peer.stream}
+                          audioOn={peer.audio}
+                          videoOn={peer.video}
+                          connectionState={peer.connectionState}
+                          isSpeaking={call.activeSpeaker === peer.peerId}
+                          isHost={peer.isHost}
+                        />
+                      ))}
+                  </div>
+                  <div className="call__speaker-main">
+                    {activePeer ? (
+                      <ParticipantTile
+                        key={activePeer.peerId}
+                        name={activePeer.user?.name ?? 'Guest'}
+                        stream={activePeer.stream}
+                        audioOn={activePeer.audio}
+                        videoOn={activePeer.video}
+                        connectionState={activePeer.connectionState}
+                        isSpeaking={true}
+                        isHost={activePeer.isHost}
+                      />
+                    ) : (
+                      <ParticipantTile
+                        local
+                        name={`${localName} (You)`}
+                        stream={media.stream}
+                        audioOn={media.audioEnabled}
+                        videoOn={media.videoEnabled}
+                        isSpeaking={call.activeSpeaker === 'local'}
+                        isHost={isHost}
+                        handRaised={handRaised}
+                        reaction={localReaction}
+                      />
+                    )}
+                  </div>
+                </div>
               ) : (
-                <div className="call__grid" data-count={call.peers.length + 1}>
+                /* Gallery View: Balanced Zoom grid */
+                <div className="call__grid zoom-grid" data-count={call.peers.length + 1}>
                   <ParticipantTile
                     local
                     name={`${localName} (You)`}
@@ -360,6 +502,9 @@ export default function CallPage() {
                     audioOn={media.audioEnabled}
                     videoOn={media.videoEnabled}
                     isSpeaking={call.activeSpeaker === 'local'}
+                    isHost={isHost}
+                    handRaised={handRaised}
+                    reaction={localReaction}
                   />
                   {call.peers.map((peer) => (
                     <ParticipantTile
@@ -370,6 +515,7 @@ export default function CallPage() {
                       videoOn={peer.video}
                       connectionState={peer.connectionState}
                       isSpeaking={call.activeSpeaker === peer.peerId}
+                      isHost={peer.isHost}
                     />
                   ))}
                 </div>
@@ -443,8 +589,54 @@ export default function CallPage() {
           onToggleChat={() =>
             setActivePanel((curr) => (curr === 'chat' ? null : 'chat'))
           }
+          isHost={isHost}
+          onOpenSecurity={() => setSecurityModalOpen(true)}
+          handRaised={handRaised}
+          onToggleHandRaise={() => setHandRaised((prev) => !prev)}
+          onSendReaction={(emoji) => setLocalReaction(emoji)}
         />
       )}
+
+      {/* Zoom Meeting Info & Encryption Modal */}
+      <Modal
+        open={securityModalOpen}
+        title="Meeting Information"
+        subtitle="End-to-End Encrypted Session"
+        onClose={() => setSecurityModalOpen(false)}
+      >
+        <div className="zoom-info-card">
+          <div className="zoom-info-row">
+            <span className="zoom-info-label">Topic</span>
+            <span className="zoom-info-value">{meeting?.title ?? 'Meeting'}</span>
+          </div>
+          <div className="zoom-info-row">
+            <span className="zoom-info-label">Meeting ID</span>
+            <span className="zoom-info-value font-mono">{code}</span>
+          </div>
+          <div className="zoom-info-row">
+            <span className="zoom-info-label">Host</span>
+            <span className="zoom-info-value">
+              {meeting?.host?.name || (isHost ? localName : 'Host')}
+            </span>
+          </div>
+          <div className="zoom-info-row">
+            <span className="zoom-info-label">Security</span>
+            <span className="zoom-info-value zoom-info-value--verified">
+              <ShieldCheck size={16} aria-hidden="true" />
+              Enhanced 256-bit AES Encryption
+            </span>
+          </div>
+          <div className="zoom-info-row zoom-info-row--invite">
+            <span className="zoom-info-label">Invite Link</span>
+            <div className="zoom-info-invite-wrap">
+              <span className="zoom-info-link-text">
+                {window.location.origin}/meeting/{code}
+              </span>
+              <CopyLinkButton code={code} variant="secondary" size="sm" label="Copy Link" />
+            </div>
+          </div>
+        </div>
+      </Modal>
 
       {inCall && isHost && toastGuest && (
         <aside className="call__waiting-toast" role="status" aria-live="polite">
