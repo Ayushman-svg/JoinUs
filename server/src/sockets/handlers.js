@@ -53,6 +53,8 @@ function on(socket, event, handler) {
 }
 
 async function notifyHostWaitingUpdated(io, registry, code, hostIdOverride) {
+  const waitingList = registry.getWaiting(code);
+  console.log(`[room] waiting count: code=${code} count=${waitingList.length}`);
   let hostId = hostIdOverride || registry.getHost(code);
   if (!hostId) {
     try {
@@ -65,9 +67,11 @@ async function notifyHostWaitingUpdated(io, registry, code, hostIdOverride) {
       /* ignore */
     }
   }
-  if (!hostId) return;
-  const waitingList = registry.getWaiting(code);
-  io.to(`user:${hostId}`).emit('room:waiting-updated', { waiting: waitingList });
+  if (!hostId) return 0;
+  const roomName = `user:${hostId}`;
+  const notifiedCount = io.sockets?.adapter?.rooms?.get(roomName)?.size || 0;
+  io.to(roomName).emit('room:waiting-updated', { waiting: waitingList });
+  return notifiedCount;
 }
 
 async function recordAdmittedJoin(code, userId) {
@@ -128,6 +132,7 @@ function leaveRoom(io, registry, socket, limiters) {
   } else if (left.type === 'waiting') {
     notifyHostWaitingUpdated(io, registry, left.code);
   }
+  return left;
 }
 
 function assertHost(registry, socket, limiters) {
@@ -214,21 +219,32 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
 
     if (joinResult.status === 'waiting') {
       // Waiting sockets do NOT join the broadcast room and receive no peer signals
-      await notifyHostWaitingUpdated(io, registry, code, hostId);
+      const notifiedCount = await notifyHostWaitingUpdated(io, registry, code, hostId);
+      console.log(
+        `[room] join: code=${code} userId=${user.id} isHost=${isHost} status=waiting hostInRoom=${Boolean(joinResult.hostInRoom)} notifiedSockets=${notifiedCount}`
+      );
       return { status: 'waiting', hostInRoom: Boolean(joinResult.hostInRoom) };
     }
 
     // Admitted to active room
+    const peersInRoom = io.sockets?.adapter?.rooms?.get(code)?.size || 0;
+    let notifiedCount = 0;
     await socket.join(code);
     await recordAdmittedJoin(code, user.id);
     if (!alreadyInRoom) {
       socket.to(code).emit('room:peer-joined', toPublicPeer(joinResult.peer));
+      notifiedCount = peersInRoom;
     }
 
     // Send host their current waiting list upon entering the room
     if (isHost) {
       socket.emit('room:waiting-updated', { waiting: registry.getWaiting(code) });
+      notifiedCount += 1;
     }
+
+    console.log(
+      `[room] join: code=${code} userId=${user.id} isHost=${isHost} status=admitted hostInRoom=${registry.isHostInRoom(code)} notifiedSockets=${notifiedCount}`
+    );
 
     return {
       status: 'admitted',
@@ -364,6 +380,9 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     ).catch((err) => console.error(`Failed to update meeting status on end for ${code}:`, err));
 
     const { peers, waiting } = registry.end(code);
+    if (waiting && waiting.length > 0) {
+      console.log(`[room] waiting count: code=${code} count=0`);
+    }
 
     io.to(code).emit('room:ended', {});
     for (const w of waiting) {
@@ -502,7 +521,13 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     return {};
   });
 
-  socket.on('disconnect', () => leaveRoom(io, registry, socket, limiters));
+  socket.on('disconnect', () => {
+    const left = leaveRoom(io, registry, socket, limiters);
+    const removedFrom = left
+      ? (left.type === 'waiting' ? `waiting:${left.code}` : `room:${left.code}`)
+      : 'none';
+    console.log(`[room] disconnect: peerId=${socket.id} removedFrom=${removedFrom}`);
+  });
 }
 
 module.exports = { registerHandlers, leaveRoom };
