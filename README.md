@@ -10,20 +10,6 @@ Secure, host-moderated video meetings with custom WebRTC peer-to-peer signaling,
 
 ---
 
-## Screenshots
-
-> *Images are located in the `screenshots/` directory.*
-
-| Screen | Preview |
-| :--- | :--- |
-| **Dashboard** | ![Dashboard](screenshots/dashboard.png) |
-| **Meeting Call & Video Grid** | ![Meeting Call](screenshots/call-grid.png) |
-| **Waiting Room & Moderation** | ![Waiting Room](screenshots/waiting-room.png) |
-| **Screen Sharing & Presentation** | ![Screen Share](screenshots/screen-share.png) |
-| **History & Transcript** | ![Meeting History](screenshots/history.png) |
-
----
-
 ## Problem Statement
 
 Small teams, study groups, clubs, and educators need simple, private, and controlled virtual meeting spaces without the overhead, aggressive paywalls, or privacy concerns of heavyweight commercial video platforms. 
