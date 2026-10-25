@@ -7,7 +7,8 @@ const { initSockets } = require('./sockets');
 
 // One http server shared by Express and Socket.io
 const server = http.createServer(app);
-const { io } = initSockets(server);
+const { io, registry } = initSockets(server);
+app.set('registry', registry);
 
 async function start() {
   try {

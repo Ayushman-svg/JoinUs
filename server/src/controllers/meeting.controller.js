@@ -2,13 +2,21 @@ const AppError = require('../utils/AppError');
 const { generateMeetingCode } = require('../utils/meetingCode');
 const { MEETING_STATUS, MEETING_OPEN_WINDOW_MS } = require('../config/constants');
 const Meeting = require('../models/Meeting');
+const { getMeetingPhase } = require('../utils/meetingPhase');
 
 const MAX_CODE_ATTEMPTS = 5;
 
 const notFound = () => new AppError(404, 'MEETING_NOT_FOUND', 'Meeting not found');
 
+function toEpoch(val) {
+  if (!val) return 0;
+  const t = new Date(val).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
+
 // Full view, returned to the host
-function toOwnerJSON(meeting) {
+function toOwnerJSON(meeting, { isLive = false, participantCount = 0, now = new Date() } = {}) {
+  const phase = getMeetingPhase(meeting, { now, isLive });
   return {
     id: meeting.id,
     code: meeting.code,
@@ -18,6 +26,11 @@ function toOwnerJSON(meeting) {
     status: meeting.status,
     waitingRoom: meeting.waitingRoom,
     createdAt: meeting.createdAt,
+    startedAt: meeting.startedAt ?? null,
+    lastActiveAt: meeting.lastActiveAt ?? null,
+    phase,
+    isLive,
+    participantCount,
   };
 }
 
@@ -77,27 +90,61 @@ async function getMeeting(req, res) {
 
 async function listMeetings(req, res) {
   const { filter, limit } = req.valid.query;
-  const cutoff = new Date(Date.now() - MEETING_OPEN_WINDOW_MS);
-  const mine = { host: req.user._id };
+  const now = new Date();
+  const registry = req.app?.get?.('registry');
 
-  let query = mine;
-  let sort = { startsAt: -1 };
+  const rawMeetings = await Meeting.find({ host: req.user._id });
 
+  const mapped = rawMeetings.map((m) => {
+    const peers = registry ? registry.getPeers(m.code) : [];
+    const isLive = peers.length > 0;
+    const participantCount = peers.length;
+    return toOwnerJSON(m, { isLive, participantCount, now });
+  });
+
+  let filtered = mapped;
   if (filter === 'upcoming') {
-    query = { ...mine, status: MEETING_STATUS.ACTIVE, startsAt: { $gte: cutoff } };
-    sort = { startsAt: 1 };
+    filtered = mapped.filter((m) => m.phase === 'upcoming');
+  } else if (filter === 'ongoing') {
+    filtered = mapped.filter((m) => m.phase === 'ongoing');
   } else if (filter === 'past') {
-    query = {
-      ...mine,
-      $or: [
-        { status: { $in: [MEETING_STATUS.CANCELLED, MEETING_STATUS.ENDED] } },
-        { startsAt: { $lt: cutoff } },
-      ],
-    };
+    filtered = mapped.filter((m) => m.phase === 'past');
   }
 
-  const meetings = await Meeting.find(query).sort(sort).limit(limit);
-  res.json({ meetings: meetings.map(toOwnerJSON) });
+  const phaseOrder = { ongoing: 0, upcoming: 1, past: 2 };
+
+  filtered.sort((a, b) => {
+    if (a.phase !== b.phase) {
+      return (phaseOrder[a.phase] ?? 99) - (phaseOrder[b.phase] ?? 99);
+    }
+    if (a.phase === 'ongoing') {
+      if (a.isLive !== b.isLive) {
+        return a.isLive ? -1 : 1;
+      }
+      const aTime = toEpoch(a.lastActiveAt) || toEpoch(a.startedAt) || toEpoch(a.createdAt);
+      const bTime = toEpoch(b.lastActiveAt) || toEpoch(b.startedAt) || toEpoch(b.createdAt);
+      return bTime - aTime;
+    }
+    if (a.phase === 'upcoming') {
+      return toEpoch(a.scheduledAt) - toEpoch(b.scheduledAt);
+    }
+    if (a.phase === 'past') {
+      const aTime =
+        toEpoch(a.lastActiveAt) ||
+        toEpoch(a.startedAt) ||
+        toEpoch(a.scheduledAt) ||
+        toEpoch(a.createdAt);
+      const bTime =
+        toEpoch(b.lastActiveAt) ||
+        toEpoch(b.startedAt) ||
+        toEpoch(b.scheduledAt) ||
+        toEpoch(b.createdAt);
+      return bTime - aTime;
+    }
+    return 0;
+  });
+
+  res.json({ meetings: filtered.slice(0, limit) });
 }
 
 async function updateMeeting(req, res) {

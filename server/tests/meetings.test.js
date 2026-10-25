@@ -1,6 +1,7 @@
 const request = require('supertest');
 
 const app = require('../src/app');
+const Meeting = require('../src/models/Meeting');
 const { connectTestDB, clearTestDB, disconnectTestDB } = require('./helpers/db');
 const { createUser, bearer } = require('./helpers/users');
 
@@ -226,6 +227,76 @@ describe('Message model', () => {
         text: 'a'.repeat(1001),
       })
     ).rejects.toThrow();
+  });
+});
+
+describe('meeting phase, live state, and filtering', () => {
+  it('returns phase, isLive, participantCount, startedAt, and lastActiveAt on meeting list', async () => {
+    const host = await createUser({ name: 'Phase Host' });
+
+    // 1. Scheduled in future -> upcoming
+    const future = new Date(Date.now() + 3600 * 1000).toISOString();
+    await request(app)
+      .post('/api/meetings')
+      .set(bearer(host.token))
+      .send({ title: 'Future Call', scheduledAt: future });
+
+    // 2. Started meeting within 4 hours -> ongoing
+    const ongoingMeeting = await Meeting.create({
+      code: 'ong-oing-one',
+      title: 'Ongoing Call',
+      host: host.user.id,
+      startsAt: new Date(Date.now() - 30 * 60 * 1000),
+      startedAt: new Date(Date.now() - 30 * 60 * 1000),
+      lastActiveAt: new Date(Date.now() - 10 * 60 * 1000),
+      status: 'active',
+    });
+
+    // 3. Ended meeting -> past
+    await Meeting.create({
+      code: 'end-eddd-one',
+      title: 'Ended Call',
+      host: host.user.id,
+      startsAt: new Date(Date.now() - 60 * 60 * 1000),
+      status: 'ended',
+    });
+
+    // Mock registry with ongoingMeeting being live
+    const mockRegistry = {
+      getPeers: (code) => (code === ongoingMeeting.code ? [{ peerId: 'p1' }, { peerId: 'p2' }] : []),
+    };
+    app.set('registry', mockRegistry);
+
+    // List all
+    const resAll = await request(app).get('/api/meetings').set(bearer(host.token));
+    expect(resAll.status).toBe(200);
+    expect(resAll.body.meetings).toHaveLength(3);
+
+    const ongoingItem = resAll.body.meetings.find((m) => m.code === ongoingMeeting.code);
+    expect(ongoingItem).toMatchObject({
+      phase: 'ongoing',
+      isLive: true,
+      participantCount: 2,
+    });
+    expect(ongoingItem).toHaveProperty('startedAt');
+    expect(ongoingItem).toHaveProperty('lastActiveAt');
+
+    // Filter ongoing
+    const resOngoing = await request(app).get('/api/meetings?filter=ongoing').set(bearer(host.token));
+    expect(resOngoing.status).toBe(200);
+    expect(resOngoing.body.meetings.map((m) => m.code)).toEqual([ongoingMeeting.code]);
+
+    // Filter upcoming
+    const resUpcoming = await request(app).get('/api/meetings?filter=upcoming').set(bearer(host.token));
+    expect(resUpcoming.status).toBe(200);
+    expect(resUpcoming.body.meetings.every((m) => m.phase === 'upcoming')).toBe(true);
+
+    // Filter past
+    const resPast = await request(app).get('/api/meetings?filter=past').set(bearer(host.token));
+    expect(resPast.status).toBe(200);
+    expect(resPast.body.meetings.every((m) => m.phase === 'past')).toBe(true);
+
+    app.set('registry', null);
   });
 });
 

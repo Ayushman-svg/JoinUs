@@ -36,7 +36,7 @@ const updateMeetingSchema = z
   });
 
 const listQuerySchema = z.object({
-  filter: z.enum(['upcoming', 'past', 'all']).default('all'),
+  filter: z.enum(['upcoming', 'past', 'ongoing', 'all']).default('all'),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
