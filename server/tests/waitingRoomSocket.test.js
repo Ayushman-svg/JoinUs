@@ -298,4 +298,48 @@ describe('Waiting room and host controls socket integration', () => {
     expect(endedMeeting.status).toBe('ended');
     expect(endedMeeting.lastActiveAt).toBeTruthy();
   });
+
+  describe('host:list-waiting', () => {
+    it('allows the host to query waiting list even when socket is not in room registry', async () => {
+      const host = await createUser({ name: 'Host Alice' });
+      const guest = await createUser({ name: 'Waiting Bob' });
+      const meeting = await createMeeting(host.user.id);
+
+      // Guest joins and enters waiting room
+      const guestSocket = await connectSocket(port, guest.token);
+      socketsToClose.push(guestSocket);
+      await emitAck(guestSocket, 'room:join', { code: meeting.code });
+
+      // Host socket connects but DOES NOT join the room
+      const hostSocket = await connectSocket(port, host.token);
+      socketsToClose.push(hostSocket);
+
+      const listAck = await emitAck(hostSocket, 'host:list-waiting', { code: meeting.code });
+      expect(listAck).toMatchObject({
+        ok: true,
+        waiting: [
+          expect.objectContaining({
+            peerId: guestSocket.id,
+            user: { id: guest.user.id, name: 'Waiting Bob' },
+          }),
+        ],
+      });
+    });
+
+    it('rejects non-host from calling host:list-waiting with FORBIDDEN', async () => {
+      const host = await createUser({ name: 'Host Alice' });
+      const nonHost = await createUser({ name: 'Attacker Eve' });
+      const meeting = await createMeeting(host.user.id);
+
+      const nonHostSocket = await connectSocket(port, nonHost.token);
+      socketsToClose.push(nonHostSocket);
+
+      const listAck = await emitAck(nonHostSocket, 'host:list-waiting', { code: meeting.code });
+      expect(listAck).toMatchObject({
+        ok: false,
+        error: { code: 'FORBIDDEN' },
+      });
+    });
+  });
 });
+

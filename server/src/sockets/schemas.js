@@ -74,6 +74,7 @@ module.exports = {
   emptySchema,
   chatSendSchema,
   shareStartSchema,
+  codeSchema: codeParamsSchema,
 };
 
 

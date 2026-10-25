@@ -11,6 +11,7 @@ const {
   emptySchema,
   chatSendSchema,
   shareStartSchema,
+  codeSchema,
 } = require('./schemas');
 
 const defaultRateLimiter = new RateLimiter();
@@ -236,6 +237,27 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       isHost,
       screenSharer: registry.getScreenSharer(code),
     };
+  });
+
+  // Host queries the waiting list (database authorized, does not require socket in room registry)
+  on(socket, 'host:list-waiting', async (payload) => {
+    if (limiters?.host && !limiters.host.check(socket.id)) {
+      throw new AppError(429, 'RATE_LIMITED', 'Too many host requests, please slow down');
+    }
+    const { code } = parse(codeSchema, payload);
+
+    const meeting = await Meeting.findOne({ code }).select('host').lean();
+    if (!meeting) {
+      throw new AppError(404, 'MEETING_NOT_FOUND', 'Meeting not found');
+    }
+
+    const hostId = meeting.host.toString();
+    if (hostId !== socket.data.user.id.toString()) {
+      throw new AppError(403, 'FORBIDDEN', 'Only the host can do this');
+    }
+
+    registry.setHost(code, hostId);
+    return { waiting: registry.getWaiting(code) };
   });
 
   // Host admits a waiting guest
