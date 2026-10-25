@@ -329,4 +329,131 @@ test('Active speaker: AudioActivityTracker tracks and untracks streams gracefull
   assert.equal(currentSpeaker, null);
 });
 
+test('Reconnect behavior: enters reconnecting, recovers without duplicates, reloads history', async () => {
+  const mockSignaling = new MockSignaling();
+  let historyLoadCount = 0;
+  const mockMessages = [
+    { id: 'msg-1', text: 'Hello', createdAt: '2026-10-25T00:00:00Z', from: { id: 'u1', name: 'Alice' } },
+  ];
+
+  mockSignaling.mockJoinPeers = [
+    { peerId: 'p1', user: { id: 'u1', name: 'Alice' }, audio: true, video: true },
+  ];
+
+  const call = new CallSession({
+    code: 'reconnect-room',
+    url: 'http://localhost:5000',
+    getToken: () => 'token',
+    createSignalingClient: () => mockSignaling,
+    getMeetingMessagesApi: async () => {
+      historyLoadCount += 1;
+      return mockMessages;
+    },
+  });
+
+  call.start();
+  await new Promise((r) => setTimeout(r, 10));
+
+  assert.equal(call.getState().status, CallStatus.ACTIVE);
+  assert.equal(call.getState().peers.length, 1);
+  assert.equal(call.getState().messages.length, 1);
+  assert.equal(historyLoadCount, 1);
+
+  // Network drops: signaling enters reconnecting
+  mockSignaling.emit('status', { status: 'reconnecting' });
+  assert.equal(call.getState().status, CallStatus.RECONNECTING);
+  assert.equal(call.getState().peers.length, 0); // closed peers
+
+  // Network recovers: signaling enters connected
+  mockSignaling.emit('status', { status: 'connected' });
+  await new Promise((r) => setTimeout(r, 10));
+
+  assert.equal(call.getState().status, CallStatus.ACTIVE);
+  assert.equal(call.getState().peers.length, 1); // 1 peer restored, no duplicate tiles
+  assert.equal(call.getState().messages.length, 1); // no duplicate messages
+  assert.equal(historyLoadCount, 2); // history reloaded
+
+  call.leave();
+});
+
+test('Edge cases: host leaving mid-call removes peer cleanly', async () => {
+  const mockSignaling = new MockSignaling();
+  mockSignaling.mockJoinPeers = [
+    { peerId: 'host-peer', user: { id: 'host-1', name: 'Host Alice' }, audio: true, video: true },
+  ];
+
+  const call = new CallSession({
+    code: 'host-leave-room',
+    url: 'http://localhost:5000',
+    getToken: () => 'token',
+    createSignalingClient: () => mockSignaling,
+    getMeetingMessagesApi: async () => [],
+  });
+
+  call.start();
+  await new Promise((r) => setTimeout(r, 10));
+
+  assert.equal(call.getState().peers.length, 1);
+
+  // Host leaves
+  mockSignaling.emit('room:peer-left', { peerId: 'host-peer' });
+  assert.equal(call.getState().peers.length, 0);
+
+  call.leave();
+});
+
+test('Edge cases: joining ended meeting transitions to ENDED', async () => {
+  const mockSignaling = new MockSignaling();
+  mockSignaling.request = async (event) => {
+    if (event === 'room:join') {
+      const err = new Error('This meeting has ended');
+      err.code = 'MEETING_ENDED';
+      throw err;
+    }
+    return {};
+  };
+
+  const call = new CallSession({
+    code: 'ended-room',
+    url: 'http://localhost:5000',
+    getToken: () => 'token',
+    createSignalingClient: () => mockSignaling,
+    getMeetingMessagesApi: async () => [],
+  });
+
+  call.start();
+  await new Promise((r) => setTimeout(r, 10));
+
+  assert.equal(call.getState().status, CallStatus.ENDED);
+  call.leave();
+});
+
+test('Edge cases: joining full meeting transitions to ERROR with ROOM_FULL', async () => {
+  const mockSignaling = new MockSignaling();
+  mockSignaling.request = async (event) => {
+    if (event === 'room:join') {
+      const err = new Error('This meeting is full');
+      err.code = 'ROOM_FULL';
+      throw err;
+    }
+    return {};
+  };
+
+  const call = new CallSession({
+    code: 'full-room',
+    url: 'http://localhost:5000',
+    getToken: () => 'token',
+    createSignalingClient: () => mockSignaling,
+    getMeetingMessagesApi: async () => [],
+  });
+
+  call.start();
+  await new Promise((r) => setTimeout(r, 10));
+
+  assert.equal(call.getState().status, CallStatus.ERROR);
+  assert.equal(call.getState().error?.code, 'ROOM_FULL');
+  call.leave();
+});
+
+
 
