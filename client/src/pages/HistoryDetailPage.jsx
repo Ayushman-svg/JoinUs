@@ -1,4 +1,4 @@
-import { ArrowLeft, Calendar, Clock, Copy, MessageSquare, ShieldAlert, Users } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, Copy, Lock, MessageSquare, ShieldAlert, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
@@ -69,7 +69,14 @@ export default function HistoryDetailPage() {
       const isHost = m.from?.isHost;
       const baseName = m.from?.name || 'Guest';
       const name = isHost ? `${baseName} (Host)` : baseName;
-      return `[${time}] ${name}: ${m.text}`;
+      const isSelf = user?.id && m.from?.id ? String(m.from.id) === String(user.id) : false;
+      let privacyTag = '';
+      if (m.to) {
+        privacyTag = isSelf
+          ? ` [Private to ${m.to.name || 'User'}]`
+          : ` [Private from ${m.from?.name || 'Guest'}]`;
+      }
+      return `[${time}] ${name}${privacyTag}: ${m.text}`;
     });
     const textToCopy = lines.join('\n');
 
@@ -129,7 +136,14 @@ export default function HistoryDetailPage() {
     const isSelf = user?.id && m.from?.id ? String(m.from.id) === String(user.id) : false;
 
     let isFirstInGroup = true;
-    if (prev && prev.from?.id && m.from?.id && String(prev.from.id) === String(m.from.id)) {
+    if (
+      prev &&
+      prev.from?.id &&
+      m.from?.id &&
+      String(prev.from.id) === String(m.from.id) &&
+      Boolean(prev.to) === Boolean(m.to) &&
+      (prev.to?.id || null) === (m.to?.id || null)
+    ) {
       const prevTime = new Date(prev.createdAt).getTime();
       const currTime = new Date(m.createdAt).getTime();
       if (!isNaN(prevTime) && !isNaN(currTime) && currTime - prevTime < 2 * 60 * 1000) {
@@ -240,7 +254,8 @@ export default function HistoryDetailPage() {
               ) : (
                 <div className="history-transcript__list" role="log">
                   {grouped.map((item) => {
-                    const { message, isSelf, isFirstInGroup, time, senderName } = item;
+                    const { message, isSelf, isFirstInGroup, time } = item;
+                    const isMsgPrivate = Boolean(message.to);
                     return (
                       <div
                         key={message.id}
@@ -265,8 +280,20 @@ export default function HistoryDetailPage() {
                         <div
                           className={`history-bubble ${
                             isSelf ? 'history-bubble--self' : 'history-bubble--other'
-                          }`}
+                          } ${isMsgPrivate ? 'history-bubble--private' : ''} ${
+                            isMsgPrivate && isSelf ? 'history-bubble--private-self' : ''
+                          } ${isMsgPrivate && !isSelf ? 'history-bubble--private-other' : ''}`}
                         >
+                          {isMsgPrivate && (
+                            <div className="history-bubble__private-tag">
+                              <Lock size={11} aria-hidden="true" />
+                              <span>
+                                {isSelf
+                                  ? `Private to ${message.to?.name || 'User'}`
+                                  : `Private from ${message.from?.name || 'Guest'}`}
+                              </span>
+                            </div>
+                          )}
                           <p className="history-bubble__text">{message.text}</p>
                         </div>
                       </div>
