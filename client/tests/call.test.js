@@ -691,5 +691,99 @@ test('Guest in WAITING polls room:status and transitions to ACTIVE on admitted',
   call.leave();
 });
 
+test('Chat: sender own message is confirmed immediately on ack and deduplicated by id', async () => {
+  const mockSignaling = new MockSignaling();
+  mockSignaling.request = async (event, payload) => {
+    if (event === 'room:join') {
+      return { status: 'admitted', peerId: 'p-self', isHost: false, peers: [] };
+    }
+    if (event === 'chat:send') {
+      return {
+        ok: true,
+        message: {
+          id: 'server-msg-1',
+          text: payload.text,
+          from: { id: 'u-self', name: 'Self', isHost: false },
+          createdAt: new Date().toISOString(),
+        },
+      };
+    }
+    return {};
+  };
+
+  const call = new CallSession({
+    code: 'chat-test-room',
+    url: 'http://localhost:5000',
+    currentUser: { id: 'u-self', name: 'Self' },
+    getToken: () => 'token',
+    createSignalingClient: () => mockSignaling,
+    getMeetingMessagesApi: async () => [],
+  });
+
+  call.start();
+  await new Promise((r) => setTimeout(r, 10));
+
+  await call.sendMessage('Hello world');
+  const msgs = call.getState().messages;
+  assert.equal(msgs.length, 1);
+  assert.equal(msgs[0].id, 'server-msg-1');
+  assert.equal(msgs[0].status, 'delivered');
+
+  // Socket broadcast also arrives with same id -> no duplicates
+  mockSignaling.emit('chat:message', {
+    id: 'server-msg-1',
+    text: 'Hello world',
+    from: { id: 'u-self', name: 'Self', isHost: false },
+    createdAt: msgs[0].createdAt,
+  });
+  assert.equal(call.getState().messages.length, 1);
+
+  call.leave();
+});
+
+test('Chat: syncs with GET messages?after=<lastId> and merges by id maintaining stable order', async () => {
+  const mockSignaling = new MockSignaling();
+  const apiCalls = [];
+  const storedMessages = [
+    { id: 'msg-1', text: 'Msg 1', from: { id: 'u1', name: 'Alice' }, createdAt: '2026-10-25T00:00:01Z' },
+    { id: 'msg-2', text: 'Msg 2', from: { id: 'u2', name: 'Bob' }, createdAt: '2026-10-25T00:00:02Z' },
+  ];
+
+  const call = new CallSession({
+    code: 'sync-test-room',
+    url: 'http://localhost:5000',
+    currentUser: { id: 'u1', name: 'Alice' },
+    getToken: () => 'token',
+    createSignalingClient: () => mockSignaling,
+    getMeetingMessagesApi: async (code, limit, options) => {
+      apiCalls.push({ code, limit, options });
+      if (options?.after) {
+        return storedMessages.filter((m) => m.id > options.after);
+      }
+      return storedMessages.slice(0, 1); // initial load returns msg-1
+    },
+  });
+
+  call.start();
+  await new Promise((r) => setTimeout(r, 10));
+
+  // Initial load loaded msg-1
+  assert.equal(call.getState().messages.length, 1);
+  assert.equal(call.getState().messages[0].id, 'msg-1');
+
+  // Trigger syncChat
+  await call.syncChat();
+
+  // Second message msg-2 is merged
+  assert.equal(call.getState().messages.length, 2);
+  assert.equal(call.getState().messages[0].id, 'msg-1');
+  assert.equal(call.getState().messages[1].id, 'msg-2');
+
+  // Verify that options.after was passed as msg-1
+  assert.equal(apiCalls[apiCalls.length - 1].options.after, 'msg-1');
+
+  call.leave();
+});
+
 
 

@@ -73,6 +73,9 @@ export class CallSession {
     this.guestWaitingPollInterval = null;
     this.guestVisibilityListener = null;
     this.inCallPollInterval = null;
+    this.chatSyncInterval = null;
+    this.chatVisibilityListener = null;
+    this.chatSyncing = false;
     this.isWaiting = false;
     this.isReconnecting = false;
     this.wakeLock = null;
@@ -322,6 +325,127 @@ export class CallSession {
     }
   }
 
+  #startChatSync() {
+    this.#stopChatSync();
+
+    this.chatSyncInterval = setInterval(() => {
+      this.syncChat();
+    }, 4000);
+
+    this.chatVisibilityListener = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        this.syncChat();
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this.chatVisibilityListener);
+    }
+  }
+
+  #stopChatSync() {
+    if (this.chatSyncInterval) {
+      clearInterval(this.chatSyncInterval);
+      this.chatSyncInterval = null;
+    }
+    if (this.chatVisibilityListener) {
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', this.chatVisibilityListener);
+      }
+      this.chatVisibilityListener = null;
+    }
+  }
+
+  #getLastMessageId() {
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      const m = this.messages[i];
+      if (m && m.id && !m.isSystem && !m.tempId && m.status !== 'sending' && m.status !== 'failed') {
+        return m.id;
+      }
+    }
+    return null;
+  }
+
+  async syncChat() {
+    if (this.finished || this.state.status !== CallStatus.ACTIVE) return;
+    if (this.chatSyncing) return;
+    this.chatSyncing = true;
+    try {
+      const lastId = this.#getLastMessageId();
+      if (!this.historyLoaded && !lastId) return;
+
+      const options = lastId ? { after: lastId } : {};
+      const newMessages = await this.getMeetingMessagesApi(this.code, 100, options);
+      if (this.finished || this.state.status !== CallStatus.ACTIVE) return;
+      if (Array.isArray(newMessages) && newMessages.length > 0) {
+        this.#mergeIncomingMessages(newMessages);
+      }
+    } catch {
+      // Background sync errors are ignored
+    } finally {
+      this.chatSyncing = false;
+    }
+  }
+
+  #mergeIncomingMessages(incoming = []) {
+    if (!Array.isArray(incoming) || incoming.length === 0) return;
+    let changed = false;
+    let nextMessages = [...this.messages];
+
+    for (const msg of incoming) {
+      if (!msg || !msg.id) continue;
+      const existingIdx = nextMessages.findIndex((m) => m.id === msg.id);
+      if (existingIdx !== -1) {
+        if (nextMessages[existingIdx].status !== 'delivered') {
+          nextMessages[existingIdx] = { ...nextMessages[existingIdx], ...msg, status: 'delivered' };
+          changed = true;
+        }
+        continue;
+      }
+
+      const isSelf = this.currentUser?.id && String(msg.from?.id) === String(this.currentUser.id);
+      let matchedOpt = false;
+      if (isSelf) {
+        const optIdx = nextMessages.findIndex(
+          (m) => (m.status === 'sending' || m.status === 'failed') && m.text === msg.text
+        );
+        if (optIdx !== -1) {
+          nextMessages[optIdx] = { ...msg, status: 'delivered' };
+          matchedOpt = true;
+          changed = true;
+        }
+      }
+
+      if (!matchedOpt) {
+        const deliveredMsg = { ...msg, status: 'delivered' };
+        const msgTime = new Date(deliveredMsg.createdAt).getTime();
+        let insertIdx = nextMessages.length;
+        for (let i = nextMessages.length - 1; i >= 0; i--) {
+          const item = nextMessages[i];
+          if (item.status === 'sending' || item.status === 'failed') {
+            insertIdx = i;
+          } else {
+            const itemTime = new Date(item.createdAt).getTime();
+            if (msgTime >= itemTime) {
+              insertIdx = i + 1;
+              break;
+            }
+          }
+        }
+        nextMessages.splice(insertIdx, 0, deliveredMsg);
+        if (!isSelf && !this.isChatOpen) {
+          this.unreadCount += 1;
+        }
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      this.messages = nextMessages;
+      this.#update({ messages: this.messages, unreadCount: this.unreadCount });
+    }
+  }
+
   async #acquireWakeLock() {
     if (this.wakeLock || typeof navigator === 'undefined' || !navigator.wakeLock?.request) return;
     try {
@@ -452,6 +576,7 @@ export class CallSession {
     this.#stopWaitingPolling();
     this.#stopGuestWaitingPolling();
     this.#stopInCallPolling();
+    this.#stopChatSync();
     this.stopScreenShare();
     if (this.signaling?.connected) this.signaling.send('room:leave');
     this.#finish(CallStatus.LEFT);
@@ -473,6 +598,7 @@ export class CallSession {
     } else if (status === SignalingStatus.RECONNECTING) {
       this.joinAttempt += 1; // forget a join that was still waiting for its answer
       this.#stopInCallPolling();
+      this.#stopChatSync();
       this.#closePeers();
       this.selfId = null;
       if (this.isWaiting) {
@@ -526,7 +652,12 @@ export class CallSession {
         screenShare: this.screenShare,
         isReconnecting: false,
       });
-      this.loadHistory();
+      if (!this.historyLoaded) {
+        this.loadHistory();
+      } else {
+        this.syncChat();
+      }
+      this.#startChatSync();
       if (this.isHost) {
         this.refreshWaitingList();
         this.#startWaitingPolling();
@@ -573,7 +704,12 @@ export class CallSession {
     this.screenShare = screenSharer ?? null;
     this.#update({ status: CallStatus.ACTIVE, selfId: this.selfId, screenShare: this.screenShare, isReconnecting: false });
     this.updateLocalMedia();
-    this.loadHistory();
+    if (!this.historyLoaded) {
+      this.loadHistory();
+    } else {
+      this.syncChat();
+    }
+    this.#startChatSync();
     if (!this.isHost) {
       this.#startInCallPolling();
     }
@@ -702,6 +838,7 @@ export class CallSession {
     this.#stopWaitingPolling();
     this.#stopGuestWaitingPolling();
     this.#stopInCallPolling();
+    this.#stopChatSync();
     this.#closePeers();
     this.audioTracker?.destroy();
     this.unsubscribe.forEach((off) => off());
@@ -738,11 +875,7 @@ export class CallSession {
     try {
       const res = await this.signaling.request('chat:send', { text });
       const confirmed = res?.message || res;
-      this.messages = this.messages.map((m) =>
-        m.id === tempId || m.tempId === tempId ? { ...confirmed, status: 'delivered' } : m
-      );
-      this.rateLimitHint = null;
-      this.#update({ messages: this.messages, rateLimitHint: null });
+      this.#confirmSentMessage(tempId, confirmed);
     } catch (err) {
       const isRateLimit = err?.code === 'RATE_LIMITED';
       this.messages = this.messages.map((m) =>
@@ -761,6 +894,28 @@ export class CallSession {
     }
   }
 
+  #confirmSentMessage(tempId, confirmed) {
+    if (!confirmed || !confirmed.id) return;
+    const msg = { ...confirmed, status: 'delivered' };
+    const existingIdx = this.messages.findIndex((m) => m.id === msg.id);
+    if (existingIdx !== -1) {
+      this.messages = this.messages
+        .filter((m) => m.id !== tempId && m.tempId !== tempId)
+        .map((m) => (m.id === msg.id ? { ...m, ...msg, status: 'delivered' } : m));
+    } else {
+      const tempIdx = this.messages.findIndex((m) => m.id === tempId || m.tempId === tempId);
+      if (tempIdx !== -1) {
+        this.messages = this.messages.map((m) =>
+          m.id === tempId || m.tempId === tempId ? msg : m
+        );
+      } else {
+        this.messages = [...this.messages, msg];
+      }
+    }
+    this.rateLimitHint = null;
+    this.#update({ messages: this.messages, rateLimitHint: null });
+  }
+
   async retryMessage(id) {
     const target = this.messages.find((m) => m.id === id || m.tempId === id);
     if (!target || target.status !== 'failed') return;
@@ -774,11 +929,7 @@ export class CallSession {
     try {
       const res = await this.signaling.request('chat:send', { text: target.text });
       const confirmed = res?.message || res;
-      this.messages = this.messages.map((m) =>
-        m.id === id || m.tempId === id ? { ...confirmed, status: 'delivered' } : m
-      );
-      this.rateLimitHint = null;
-      this.#update({ messages: this.messages, rateLimitHint: null });
+      this.#confirmSentMessage(id, confirmed);
     } catch (err) {
       const isRateLimit = err?.code === 'RATE_LIMITED';
       this.messages = this.messages.map((m) =>

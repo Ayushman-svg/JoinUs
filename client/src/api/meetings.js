@@ -12,10 +12,16 @@ export const getMeeting = (code, options) =>
   api.get(`/api/meetings/${encodeURIComponent(code)}`, options).then((res) => res.meeting);
 
 // Chat messages for an active or past meeting (host or admitted attendee)
-export const getMeetingMessages = (code, limit = 100, options) =>
-  api
-    .get(`/api/meetings/${encodeURIComponent(code)}/messages?limit=${limit}`, options)
+export const getMeetingMessages = (code, limit = 100, options = {}) => {
+  const { after, ...fetchOptions } = options;
+  const params = new URLSearchParams();
+  if (limit) params.set('limit', String(limit));
+  if (after) params.set('after', String(after));
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  return api
+    .get(`/api/meetings/${encodeURIComponent(code)}/messages${qs}`, fetchOptions)
     .then((res) => res.messages);
+};
 
 // History list (host or attendee, started meetings only)
 export const listHistory = (options) =>
