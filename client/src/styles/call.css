@@ -58,11 +58,9 @@
   flex-direction: column;
   gap: var(--space-3);
   min-height: 0;
-  padding: 0 var(--space-4);
+  padding: 0 var(--space-4) var(--space-3);
   padding-right: max(var(--space-4), env(safe-area-inset-right));
   padding-left: max(var(--space-4), env(safe-area-inset-left));
-  /* room for the floating control bar */
-  padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
 }
 
 .call__center {
@@ -343,22 +341,57 @@
   animation: ui-fade-in var(--duration) var(--ease);
 }
 
-.call__sharing-banner {
-  display: flex;
+/* ---------- Zoom Professional Screen Share ---------- */
+.zoom-screen-share-bar {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: 8px 16px;
-  background: rgba(37, 99, 235, 0.15);
-  border: 1px solid rgba(37, 99, 235, 0.3);
-  border-radius: var(--radius-lg);
-  color: #93C5FD;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  animation: ui-fade-in var(--duration) var(--ease);
-  max-width: 600px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #18191D;
   margin: 0 auto var(--space-2);
-  width: 100%;
+  max-width: fit-content;
+  animation: ui-rise 0.25s var(--ease) both;
+}
+
+.zoom-screen-share-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: #22C55E;
+  color: #052E16;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.zoom-screen-share-badge--remote {
+  background: #0E72ED;
+  color: #FFFFFF;
+}
+
+.zoom-screen-share-stop-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: #DC2626;
+  color: #FFFFFF;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.zoom-screen-share-stop-btn:hover {
+  background: #B91C1C;
+}
+
+.zoom-screen-share-stop-btn:active {
+  transform: scale(0.97);
 }
 
 .call__stage-presentation {
@@ -367,7 +400,50 @@
   min-height: 0;
   width: 100%;
   gap: 12px;
+  position: relative;
   animation: ui-fade-in 200ms var(--ease) both;
+}
+
+.call__presentation-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0B0D11;
+  border: 2.5px solid #22C55E;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 0 24px rgba(34, 197, 94, 0.22);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.zoom-presentation-tag {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(15, 17, 23, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #E2E8F0;
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.call__presentation-main .presentation-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000000;
 }
 
 /* Desktop: Screen share is main stage, filmstrip is right column */
@@ -377,35 +453,23 @@
     align-items: stretch;
   }
 
-  .call__presentation-main {
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #0B0F15;
-    border: 1px solid #2D3742;
-    border-radius: 12px;
-    overflow: hidden;
-    position: relative;
-  }
-
   .call__filmstrip {
-    width: 220px;
-    flex: 0 0 220px;
+    width: 240px;
+    flex: 0 0 240px;
     display: flex;
     flex-direction: column;
     gap: 10px;
     overflow-y: auto;
     min-height: 0;
-    padding-right: 2px;
+    padding-right: 4px;
   }
 
   .call__filmstrip .tile {
     width: 100%;
     aspect-ratio: 16 / 9;
     flex: 0 0 auto;
+    border-radius: 8px;
+    overflow: hidden;
   }
 }
 
@@ -419,14 +483,6 @@
     flex: 1;
     min-height: 0;
     width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #0B0F15;
-    border: 1px solid #2D3742;
-    border-radius: 12px;
-    overflow: hidden;
-    position: relative;
   }
 
   .call__filmstrip {
@@ -448,13 +504,6 @@
     flex: 0 0 140px;
     scroll-snap-align: start;
   }
-}
-
-.call__presentation-main .presentation-video {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  background: #0B0F15;
 }
 
 .call__screen-toast {
@@ -1224,10 +1273,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
+  padding: 12px 16px 14px 16px;
   border-top: 1px solid #2D3742;
   background: #151A21;
   position: relative;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .chat-panel__recipient-bar {
@@ -1323,10 +1374,14 @@
 
 .chat-panel__char-counter {
   position: absolute;
-  bottom: -18px;
-  right: 4px;
+  bottom: 6px;
+  right: 8px;
   font-size: 10px;
   color: #8C9BAE;
+  pointer-events: none;
+  background: rgba(28, 35, 43, 0.85);
+  padding: 1px 4px;
+  border-radius: 4px;
 }
 
 .chat-panel__send-btn {
@@ -1485,10 +1540,9 @@
 
 /* ---------- Zoom Bottom Toolbar ---------- */
 .zoom-toolbar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  position: relative;
+  flex-shrink: 0;
+  width: 100%;
   height: 72px;
   background: #18191D;
   border-top: 1px solid #282A30;
@@ -1727,74 +1781,72 @@
 /* Reactions Popover */
 .zoom-reactions-popover {
   position: absolute;
-  bottom: 68px;
+  bottom: 74px;
   left: 50%;
   transform: translateX(-50%);
   background: #1F2229;
   border: 1px solid #333742;
   border-radius: 12px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
-  padding: 10px;
+  padding: 12px;
   z-index: 50;
-  width: 240px;
+  width: 294px;
+  box-sizing: border-box;
   animation: ui-rise 0.2s var(--ease) both;
 }
 
+.zoom-reactions-popover__title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8C909D;
+  margin-bottom: 8px;
+  padding-left: 2px;
+}
+
 .zoom-reactions-grid {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .zoom-reaction-btn {
-  font-size: 24px;
-  line-height: 1;
-  background: transparent;
-  border: none;
-  border-radius: 8px;
-  padding: 4px;
-  cursor: pointer;
-  transition: transform 0.15s, background 0.15s;
-}
-
-.zoom-reaction-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  transform: scale(1.25);
-}
-
-.zoom-reactions-divider {
-  height: 1px;
-  background: #333742;
-  margin: 8px 0;
-}
-
-.zoom-raise-hand-btn {
-  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 8px;
-  background: #282C35;
-  border: 1px solid #3C424F;
+  font-size: 22px;
+  line-height: 1;
+  width: 38px;
+  height: 38px;
+  background: transparent;
+  border: none;
   border-radius: 8px;
-  color: #FFFFFF;
-  font-size: 13px;
-  font-weight: 500;
+  padding: 0;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: transform 0.15s, background 0.15s;
+  box-sizing: border-box;
 }
 
-.zoom-raise-hand-btn:hover {
-  background: #343944;
-  border-color: #0E72ED;
+.zoom-reaction-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: scale(1.2);
 }
 
-.zoom-raise-hand-btn.is-raised {
+.zoom-reaction-btn:active {
+  transform: scale(0.95);
+}
+
+.zoom-btn--raise-hand.is-hand-raised {
   background: rgba(251, 191, 36, 0.15);
-  border-color: #FBBF24;
   color: #FBBF24;
+}
+
+.zoom-btn--raise-hand.is-hand-raised .zoom-btn__label {
+  color: #FBBF24;
+  font-weight: 600;
 }
 
 /* ---------- Zoom Video Tiles ---------- */

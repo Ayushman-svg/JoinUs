@@ -318,10 +318,12 @@ export default function CallPage() {
         </div>
 
         {isOtherSharing && (
-          <div className="call__presenting-banner zoom-presenting-pill" role="status">
-            <MonitorUp size={14} aria-hidden="true" />
-            <span>{presenterName} is sharing screen</span>
-          </div>
+          <aside className="zoom-screen-share-bar zoom-screen-share-bar--remote" role="status">
+            <span className="zoom-screen-share-badge zoom-screen-share-badge--remote">
+              <MonitorUp size={14} aria-hidden="true" />
+              <span>{presenterName} is sharing screen</span>
+            </span>
+          </aside>
         )}
 
         <div className="zoom-call-header__right">
@@ -375,12 +377,18 @@ export default function CallPage() {
           {inCall && (
             <>
               {isSelfSharing && (
-                <aside className="call__sharing-banner" role="status">
-                  <MonitorUp size={16} aria-hidden="true" />
-                  <span>You&apos;re sharing your screen</span>
-                  <Button variant="danger" size="sm" onClick={call.stopScreenShare}>
-                    Stop sharing
-                  </Button>
+                <aside className="zoom-screen-share-bar" role="status">
+                  <span className="zoom-screen-share-badge">
+                    <MonitorUp size={14} aria-hidden="true" />
+                    <span>You are screen sharing</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="zoom-screen-share-stop-btn"
+                    onClick={call.stopScreenShare}
+                  >
+                    Stop Share
+                  </button>
                 </aside>
               )}
 
@@ -403,6 +411,10 @@ export default function CallPage() {
               {isPresenting ? (
                 <div className="call__stage-presentation">
                   <div className="call__presentation-main">
+                    <div className="zoom-presentation-tag">
+                      <MonitorUp size={13} aria-hidden="true" />
+                      <span>{isSelfSharing ? 'Your Shared Screen' : `${presenterName}'s Screen`}</span>
+                    </div>
                     <VideoView
                       stream={call.screenStream}
                       muted={true}
