@@ -98,7 +98,7 @@ export default function CallPage() {
     rtcConfig: rtcConfig ?? DEFAULT_RTC_CONFIG,
     currentUser: user,
   });
-  const slow = useSlowRequest(call.status === 'connecting' || call.status === 'idle', 6000);
+  const slow = useSlowRequest(call.status === 'connecting' || call.status === 'idle', 4000);
   const announcement = useAnnouncement(call.peers);
 
   const isHost = Boolean(
@@ -230,7 +230,7 @@ export default function CallPage() {
           <span className="call__notice-line">
             <Spinner size="sm" />
             {call.status === 'joining' ? 'Joining the meeting…' : 'Connecting to the meeting…'}
-            {slow && ' The server is waking up, which can take up to a minute.'}
+            {slow && ' Waking up the server, this can take up to a minute on the free plan.'}
           </span>
         </Alert>
       );

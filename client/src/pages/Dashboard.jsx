@@ -25,6 +25,7 @@ import Skeleton from '../components/ui/Skeleton.jsx';
 import { useToast } from '../components/ui/Toast.jsx';
 import Toggle from '../components/ui/Toggle.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import useSlowRequest from '../hooks/useSlowRequest.js';
 import { formatDateTime, nextFullHour, toLocalInputValue } from '../lib/datetime.js';
 import { extractMeetingCode } from '../lib/meetingLink.js';
 
@@ -41,6 +42,8 @@ export default function Dashboard() {
     meetings: [],
     error: '',
   });
+
+  const isSlow = useSlowRequest(meetingsState.status === 'loading', 4000);
 
   const [activeModal, setActiveModal] = useState(null); // 'instant' | 'join' | 'schedule' | null
   const [reloadKey, setReloadKey] = useState(0);
@@ -374,6 +377,11 @@ export default function Dashboard() {
               <Skeleton height="2.5rem" />
             </div>
           </div>
+        )}
+        {meetingsState.status === 'loading' && isSlow && (
+          <p className="auth__hint" style={{ textAlign: 'center', marginTop: 'var(--space-4)' }} role="status">
+            Waking up the server, this can take up to a minute on the free plan
+          </p>
         )}
 
         {/* Ready: List or Empty State */}

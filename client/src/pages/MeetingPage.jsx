@@ -17,10 +17,12 @@ import ErrorState from '../components/ui/ErrorState.jsx';
 import Skeleton from '../components/ui/Skeleton.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useMeetingMedia } from '../context/MeetingMediaContext.jsx';
+import useSlowRequest from '../hooks/useSlowRequest.js';
 import { formatDateTime } from '../lib/datetime.js';
 import { inviteLink } from '../lib/meetingLink.js';
 
 function PrejoinSkeleton() {
+  const isSlow = useSlowRequest(true, 4000);
   return (
     <Card className="prejoin__card" padding="none" aria-busy="true" aria-label="Loading meeting">
       <div className="prejoin__head">
@@ -34,6 +36,11 @@ function PrejoinSkeleton() {
       <div className="prejoin__actions">
         <Skeleton height="3rem" />
         <Skeleton width="60%" height="1rem" />
+        {isSlow && (
+          <p className="auth__hint" style={{ marginTop: 'var(--space-2)', textAlign: 'center' }} role="status">
+            Waking up the server, this can take up to a minute on the free plan
+          </p>
+        )}
       </div>
     </Card>
   );

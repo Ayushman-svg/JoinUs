@@ -75,14 +75,25 @@ async function request(path, { method = 'GET', body, signal } = {}) {
 
   if (!res.ok) {
     const e = data?.error;
+    let message = e?.message || 'Something went wrong. Please try again.';
+    if (res.status === 429 || e?.code === 'RATE_LIMITED') {
+      message = 'Too many attempts, try again in a few minutes';
+    }
     const error = new ApiError(
       res.status,
-      e?.code || 'UNKNOWN_ERROR',
-      e?.message || 'Something went wrong. Please try again.',
+      e?.code || (res.status === 429 ? 'RATE_LIMITED' : 'UNKNOWN_ERROR'),
+      message,
       e?.details
     );
-    if (res.status === 401 && token && AUTH_ERROR_CODES.includes(error.code) && unauthorizedHandler) {
-      unauthorizedHandler();
+    if (res.status === 401 && token && AUTH_ERROR_CODES.includes(error.code)) {
+      try {
+        sessionStorage.setItem('joinus_session_expired', '1');
+      } catch {
+        /* ignore */
+      }
+      if (unauthorizedHandler) {
+        unauthorizedHandler({ expired: true });
+      }
     }
     throw error;
   }

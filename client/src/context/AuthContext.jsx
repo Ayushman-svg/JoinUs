@@ -40,7 +40,14 @@ export function AuthProvider({ children }) {
       })
       .catch((err) => {
         if (err.name === 'AbortError') return;
-        if (err.status === 401) tokenStorage.clear();
+        if (err.status === 401) {
+          tokenStorage.clear();
+          try {
+            sessionStorage.setItem('joinus_session_expired', '1');
+          } catch {
+            /* ignore */
+          }
+        }
         setUser(null);
         setStatus('unauthenticated');
       });

@@ -1,6 +1,6 @@
 import { Lock, Mail } from 'lucide-react';
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 import AuthCard from '../components/AuthCard.jsx';
 import FormField from '../components/FormField.jsx';
@@ -12,6 +12,19 @@ import { fieldErrorsFromApi, focusField } from '../lib/formErrors.js';
 
 export default function Login() {
   const { login } = useAuth();
+  const location = useLocation();
+  const [sessionNotice] = useState(() => {
+    if (location.state?.message) return location.state.message;
+    try {
+      if (sessionStorage.getItem('joinus_session_expired') === '1') {
+        sessionStorage.removeItem('joinus_session_expired');
+        return 'Your session expired, please sign in again';
+      }
+    } catch {
+      /* ignore */
+    }
+    return '';
+  });
   const [form, setForm] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
@@ -65,6 +78,7 @@ export default function Login() {
       }
     >
       <form className="auth__form" onSubmit={onSubmit} noValidate>
+        {sessionNotice && !formError && <Alert variant="warning">{sessionNotice}</Alert>}
         {formError && <Alert variant="error">{formError}</Alert>}
         <FormField
           id="email"

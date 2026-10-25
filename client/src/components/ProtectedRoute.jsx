@@ -10,7 +10,25 @@ export default function ProtectedRoute() {
 
   if (status === 'loading') return <FullPageLoader label="Checking your session…" />;
   if (status === 'unauthenticated') {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    let expiredNotice = false;
+    try {
+      if (sessionStorage.getItem('joinus_session_expired') === '1') {
+        sessionStorage.removeItem('joinus_session_expired');
+        expiredNotice = true;
+      }
+    } catch {
+      /* ignore */
+    }
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{
+          from: location,
+          message: expiredNotice ? 'Your session expired, please sign in again' : undefined,
+        }}
+      />
+    );
   }
   return <Outlet />;
 }
