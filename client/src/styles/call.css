@@ -120,33 +120,77 @@
   color: var(--color-text-secondary);
 }
 
-/* ---------- Grid of people (one or two for now) ---------- */
+/* ---------- Adaptive Video Grid (1, 2, 3, 4 participants) ---------- */
 .call__grid {
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(0, 1fr);
-  grid-auto-rows: minmax(0, 1fr);
-  gap: var(--space-3);
+  gap: 10px; /* 8-12px gap */
   width: 100%;
   min-height: 0;
+  align-content: center;
+  justify-content: center;
+  transition: all 200ms ease;
 }
 
+/* 1 tile: centered, max-width about 1100px */
 .call__grid[data-count='1'] {
-  max-width: 72rem;
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 1100px;
   margin: 0 auto;
+  width: 100%;
 }
 
-@media (min-width: 800px) {
-  /* Two people side by side, in a video shape, centred in the space */
+.call__grid[data-count='1'] .tile {
+  aspect-ratio: 16 / 9;
+  max-height: 100%;
+  width: 100%;
+}
+
+/* 2 tiles: side by side on desktop, stacked on portrait and mobile */
+.call__grid[data-count='2'] {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+@media (min-width: 768px) and (orientation: landscape) {
   .call__grid[data-count='2'] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-rows: auto;
-    align-content: center;
   }
+}
 
-  .call__grid[data-count='2'] .tile {
-    aspect-ratio: 16 / 10;
-    max-height: 100%;
+/* 3 or 4 tiles: 2x2 grid, 2 columns on mobile */
+.call__grid[data-count='3'],
+.call__grid[data-count='4'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+@media (max-width: 480px) {
+  .call__grid[data-count='3'] .tile:last-child {
+    grid-column: span 2;
+    max-width: 80%;
+    margin: 0 auto;
+    width: 100%;
+  }
+}
+
+/* 5-6 tiles fallback */
+.call__grid[data-count='5'],
+.call__grid[data-count='6'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+@media (min-width: 900px) {
+  .call__grid[data-count='5'],
+  .call__grid[data-count='6'] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -154,15 +198,23 @@
   position: relative;
   min-height: 0;
   overflow: hidden;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
+  background: #151A21;
+  border: 1px solid #2D3742;
+  border-radius: 12px;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   animation: ui-fade-in var(--duration-slow) var(--ease) both;
+  transition: all 200ms ease;
 }
 
 .tile .video-view {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .tile__avatar {
@@ -171,38 +223,44 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-surface-2);
+  background: #1A202C;
   animation: ui-fade-in var(--duration) var(--ease);
 }
 
 .tile__status {
   position: absolute;
-  top: var(--space-3);
-  right: var(--space-3);
+  top: 10px;
+  right: 10px;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   padding: 4px 10px;
   font-size: var(--text-xs);
-  color: var(--color-text);
-  background: color-mix(in srgb, var(--color-background) 72%, transparent);
+  color: #F9FAFB;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-radius: var(--radius-full);
+  z-index: 2;
 }
 
 .tile__label {
   position: absolute;
-  bottom: var(--space-3);
-  left: var(--space-3);
+  bottom: 10px;
+  left: 10px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: calc(100% - 1.5rem);
+  max-width: calc(100% - 20px);
   padding: 4px 10px;
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
-  color: var(--color-text);
-  background: color-mix(in srgb, var(--color-background) 72%, transparent);
+  color: #F9FAFB;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-radius: var(--radius-full);
+  z-index: 2;
 }
 
 .tile__label span {
@@ -213,7 +271,7 @@
 
 .tile__label svg {
   flex: none;
-  color: var(--color-danger);
+  color: #EF4444;
 }
 
 /* ---------- Floating controls ---------- */

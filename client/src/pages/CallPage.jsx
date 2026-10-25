@@ -244,7 +244,7 @@ export default function CallPage() {
                 )}
               </div>
 
-              <div className="call__grid" data-count={Math.min(call.peers.length + 1, 2)}>
+              <div className="call__grid" data-count={call.peers.length + 1}>
                 <ParticipantTile
                   local
                   name={`${localName} (You)`}
