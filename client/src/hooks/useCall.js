@@ -9,6 +9,8 @@ const INITIAL = {
   error: null,
   selfId: null,
   peers: [],
+  screenShare: null,
+  screenStream: null,
   waitingList: [],
   hostInRoom: true,
   isHost: false,
@@ -93,6 +95,10 @@ export default function useCall({
   const setChatOpen = useCallback((isOpen) => sessionRef.current?.setChatOpen(isOpen), []);
   const loadHistory = useCallback(() => sessionRef.current?.loadHistory(), []);
 
+  const startScreenShare = useCallback(() => sessionRef.current?.startScreenShare(), []);
+  const stopScreenShare = useCallback(() => sessionRef.current?.stopScreenShare(), []);
+  const stopHostScreenShare = useCallback(() => sessionRef.current?.stopHostScreenShare(), []);
+
   return {
     ...state,
     retry,
@@ -106,5 +112,8 @@ export default function useCall({
     clearUnread,
     setChatOpen,
     loadHistory,
+    startScreenShare,
+    stopScreenShare,
+    stopHostScreenShare,
   };
 }

@@ -243,3 +243,71 @@ test('Multi-party call logic: peer cleanup and media state updates for N peers',
 
   call.leave();
 });
+
+test('Screen sharing: startScreenShare, cancellation, and remote stream resolution', async () => {
+  const mockSignaling = new MockSignaling();
+  mockSignaling.mockJoinPeers = [
+    { peerId: 'p1', user: { id: 'u1', name: 'User 1' }, audio: true, video: true },
+  ];
+
+  let displayMediaStream = null;
+  Object.defineProperty(globalThis.navigator, 'mediaDevices', {
+    value: {
+      getDisplayMedia: async () => {
+        const track = {
+          kind: 'video',
+          stop: () => {},
+          onended: null,
+        };
+        displayMediaStream = {
+          id: 'mock-screen-stream-id',
+          getTracks: () => [track],
+          getVideoTracks: () => [track],
+        };
+        return displayMediaStream;
+      },
+    },
+    configurable: true,
+    writable: true,
+  });
+
+  const call = new CallSession({
+    code: 'test-room',
+    url: 'http://localhost:5000',
+    getToken: () => 'token',
+    createSignalingClient: () => mockSignaling,
+    getMeetingMessagesApi: async () => [],
+  });
+
+  call.start();
+  await new Promise((r) => setTimeout(r, 10));
+
+  // User starts screen sharing
+  await call.startScreenShare();
+  assert.equal(call.getState().screenShare?.peerId, 'self-peer-id');
+  assert.equal(call.getState().screenShare?.streamId, 'mock-screen-stream-id');
+  assert.equal(call.getState().screenStream?.id, 'mock-screen-stream-id');
+
+  // Verify share:start was sent via signaling
+  const shareReq = mockSignaling.sentRequests.find((r) => r.event === 'share:start');
+  assert.ok(shareReq);
+  assert.equal(shareReq.payload.streamId, 'mock-screen-stream-id');
+
+  // User stops screen sharing
+  call.stopScreenShare();
+  assert.equal(call.getState().screenShare, null);
+  assert.equal(call.getState().screenStream, null);
+
+  // Cancellation (NotAllowedError) should not throw
+  globalThis.navigator.mediaDevices.getDisplayMedia = async () => {
+    const err = new Error('Permission denied');
+    err.name = 'NotAllowedError';
+    throw err;
+  };
+  await assert.doesNotReject(async () => {
+    await call.startScreenShare();
+  });
+
+  call.leave();
+});
+

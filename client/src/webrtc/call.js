@@ -83,6 +83,7 @@ export class CallSession {
       selfId: null,
       peers: [],
       screenShare: null,
+      screenStream: null,
       waitingList: [],
       hostInRoom: true,
       isHost: false,
@@ -165,6 +166,95 @@ export class CallSession {
     return this.signaling.request('host:end', {});
   }
 
+  async startScreenShare() {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getDisplayMedia) {
+      throw new Error('Screen sharing is not supported by your browser');
+    }
+    if (this.localScreenStream) return;
+    if (this.screenShare && this.screenShare.peerId !== this.selfId) {
+      const err = new Error('Someone else is already sharing');
+      err.code = 'SCREEN_SHARE_BUSY';
+      throw err;
+    }
+
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    } catch (err) {
+      // User cancelled browser screen picker: not an error
+      if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
+        return;
+      }
+      throw err;
+    }
+
+    if (this.finished || this.state.status !== CallStatus.ACTIVE) {
+      stream.getTracks().forEach((t) => t.stop());
+      return;
+    }
+
+    try {
+      await this.signaling.request('share:start', { streamId: stream.id });
+    } catch (err) {
+      stream.getTracks().forEach((t) => t.stop());
+      throw err;
+    }
+
+    this.localScreenStream = stream;
+    this.screenShare = { peerId: this.selfId, streamId: stream.id };
+
+    // Handle user clicking native browser "Stop sharing" chrome
+    stream.getVideoTracks().forEach((track) => {
+      track.onended = () => {
+        this.stopScreenShare();
+      };
+    });
+
+    // Add screen tracks to all active peer connections
+    for (const entry of this.peers.values()) {
+      stream.getTracks().forEach((track) => {
+        entry.peer.addTrack(track, stream);
+      });
+    }
+
+    this.#update({ screenShare: this.screenShare });
+  }
+
+  stopScreenShare() {
+    if (!this.localScreenStream) return;
+    const stream = this.localScreenStream;
+    this.localScreenStream = null;
+
+    stream.getTracks().forEach((track) => {
+      track.onended = null;
+      track.stop();
+    });
+
+    for (const entry of this.peers.values()) {
+      const senders = entry.peer.getSenders();
+      for (const sender of senders) {
+        if (sender.track && stream.getTracks().includes(sender.track)) {
+          entry.peer.removeTrack(sender);
+        }
+      }
+    }
+
+    if (this.signaling?.connected) {
+      this.signaling.send('share:stop', {});
+    }
+
+    if (this.screenShare?.peerId === this.selfId) {
+      this.screenShare = null;
+    }
+
+    this.#update({ screenShare: this.screenShare });
+  }
+
+  async stopHostScreenShare() {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    return this.signaling.request('host:stop-share', {});
+  }
+
   // Tell the others that our microphone or camera was switched on or off
   updateLocalMedia() {
     if (this.state.status === CallStatus.ACTIVE && this.signaling?.connected) {
@@ -175,6 +265,7 @@ export class CallSession {
   // Leaves the room and closes everything. Safe to call more than once.
   leave() {
     if (this.finished) return;
+    this.stopScreenShare();
     if (this.signaling?.connected) this.signaling.send('room:leave');
     this.#finish(CallStatus.LEFT);
   }
@@ -281,7 +372,15 @@ export class CallSession {
       return;
     }
 
-    const entry = { peer: null, user, stream: null, connectionState: 'new', audio, video };
+    const entry = {
+      peer: null,
+      user,
+      stream: null,
+      remoteStreams: new Map(),
+      connectionState: 'new',
+      audio,
+      video,
+    };
     entry.peer = new Peer({
       remoteId: peerId,
       // Opposite roles on the two sides: the smaller id is the polite one
@@ -294,6 +393,16 @@ export class CallSession {
         entry.stream = stream;
         this.#update();
       },
+      onTrack: ({ track, stream }) => {
+        let s = entry.remoteStreams.get(stream.id);
+        if (!s) {
+          s = stream;
+          entry.remoteStreams.set(stream.id, s);
+        } else if (!s.getTracks().includes(track)) {
+          s.addTrack(track);
+        }
+        this.#update();
+      },
       onConnectionState: (connectionState) => {
         entry.connectionState = connectionState;
         this.#update();
@@ -301,6 +410,13 @@ export class CallSession {
       onError: (err) => console.warn(`Peer ${peerId}: ${err.code}`, err.cause ?? err.message),
     });
     this.peers.set(peerId, entry);
+
+    if (this.localScreenStream) {
+      this.localScreenStream.getTracks().forEach((track) => {
+        entry.peer.addTrack(track, this.localScreenStream);
+      });
+    }
+
     this.#update();
 
     this.#replayPending(peerId, entry.peer);
@@ -551,6 +667,16 @@ export class CallSession {
     this.#update({ messages: this.messages, unreadCount: this.unreadCount });
   }
 
+  #resolveScreenStream() {
+    if (!this.screenShare) return null;
+    if (this.selfId && this.screenShare.peerId === this.selfId) {
+      return this.localScreenStream ?? null;
+    }
+    const sharer = this.peers.get(this.screenShare.peerId);
+    if (!sharer) return null;
+    return sharer.remoteStreams?.get(this.screenShare.streamId) ?? null;
+  }
+
   #update(patch = {}) {
     if ('waitingList' in patch) this.waitingList = patch.waitingList;
     if ('hostInRoom' in patch) this.hostInRoom = patch.hostInRoom;
@@ -561,6 +687,7 @@ export class CallSession {
     if ('historyError' in patch) this.historyError = patch.historyError;
     if ('rateLimitHint' in patch) this.rateLimitHint = patch.rateLimitHint;
     if ('screenShare' in patch) this.screenShare = patch.screenShare;
+    const activeScreen = this.#resolveScreenStream();
     this.state = {
       ...this.state,
       ...patch,
@@ -573,6 +700,7 @@ export class CallSession {
       historyError: this.historyError,
       rateLimitHint: this.rateLimitHint,
       screenShare: this.screenShare,
+      screenStream: activeScreen,
       peers: [...this.peers.entries()].map(([peerId, entry]) => ({
         peerId,
         user: entry.user,
