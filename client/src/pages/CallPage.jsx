@@ -1,4 +1,4 @@
-import { Clock, LayoutGrid, Link2, Maximize2, Minimize2, MonitorUp, ShieldCheck, Users } from 'lucide-react';
+import { Clock, LayoutGrid, Link2, Maximize2, Minimize2, MonitorUp, ShieldCheck, User, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -202,6 +202,20 @@ export default function CallPage() {
       return () => clearTimeout(t);
     }
   }, [call.screenShare, call.selfId, call.peers]);
+
+  const [peerToast, setPeerToast] = useState(null);
+  const lastPeerToastIdRef = useRef(null);
+
+  useEffect(() => {
+    if (call.peerToast && call.peerToast.id !== lastPeerToastIdRef.current) {
+      lastPeerToastIdRef.current = call.peerToast.id;
+      setPeerToast(call.peerToast.message);
+      const timer = setTimeout(() => {
+        setPeerToast(null);
+      }, 1800);
+      return () => clearTimeout(timer);
+    }
+  }, [call.peerToast]);
 
   const isSelfSharing = Boolean(call.screenShare && call.selfId && call.screenShare.peerId === call.selfId);
   const isOtherSharing = Boolean(call.screenShare && (!call.selfId || call.screenShare.peerId !== call.selfId));
@@ -789,6 +803,13 @@ export default function CallPage() {
         <aside className="call__screen-toast" role="status" aria-live="polite">
           <MonitorUp size={16} aria-hidden="true" />
           <span>{screenToast}</span>
+        </aside>
+      )}
+
+      {peerToast && (
+        <aside className="call__peer-toast" role="status" aria-live="polite">
+          <User size={14} aria-hidden="true" />
+          <span>{peerToast}</span>
         </aside>
       )}
 

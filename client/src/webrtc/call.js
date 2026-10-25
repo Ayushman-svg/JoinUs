@@ -96,6 +96,8 @@ export class CallSession {
     this.historyError = null;
     this.rateLimitHint = null;
 
+    this.peerToast = null;
+
     this.state = {
       status: CallStatus.CONNECTING,
       error: null,
@@ -112,6 +114,7 @@ export class CallSession {
       historyLoading: false,
       historyError: null,
       rateLimitHint: null,
+      peerToast: null,
     };
   }
 
@@ -138,13 +141,16 @@ export class CallSession {
       signaling.on('status', (event) => this.#onSignalingStatus(event)),
       // Someone joined after us: they make the first offer
       signaling.on('room:peer-joined', (info) => {
-        this.#addSystemMessage(`${info.user?.name ?? 'Someone'} joined`);
+        const name = info.user?.name ?? 'Someone';
+        this.peerToast = { message: `${name} joined`, id: `${Date.now()}-${Math.random()}` };
+        this.#update({ peerToast: this.peerToast });
         this.#addPeer(info, { initiator: false });
       }),
       signaling.on('room:peer-left', ({ peerId }) => {
         const existing = this.peers.get(peerId);
         const name = existing?.user?.name ?? 'Someone';
-        this.#addSystemMessage(`${name} left`);
+        this.peerToast = { message: `${name} left`, id: `${Date.now()}-${Math.random()}` };
+        this.#update({ peerToast: this.peerToast });
         this.#removePeer(peerId);
       }),
       signaling.on('room:peer-updated', (update) => this.#updatePeerMedia(update)),
@@ -1017,17 +1023,6 @@ export class CallSession {
     }
   }
 
-  #addSystemMessage(text) {
-    const sysMsg = {
-      id: `sys-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      isSystem: true,
-      text,
-      createdAt: new Date().toISOString(),
-    };
-    this.messages = [...this.messages, sysMsg];
-    this.#update({ messages: this.messages });
-  }
-
   #onChatMessage(message) {
     if (this.finished) return;
     if (!message || !message.id) return;
@@ -1083,6 +1078,7 @@ export class CallSession {
     if ('rateLimitHint' in patch) this.rateLimitHint = patch.rateLimitHint;
     if ('screenShare' in patch) this.screenShare = patch.screenShare;
     if ('activeSpeaker' in patch) this.activeSpeaker = patch.activeSpeaker;
+    if ('peerToast' in patch) this.peerToast = patch.peerToast;
     const activeScreen = this.#resolveScreenStream();
     this.state = {
       ...this.state,
@@ -1099,6 +1095,7 @@ export class CallSession {
       screenShare: this.screenShare,
       screenStream: activeScreen,
       activeSpeaker: this.activeSpeaker,
+      peerToast: this.peerToast,
       peers: [...this.peers.entries()].map(([peerId, entry]) => ({
         peerId,
         user: entry.user,

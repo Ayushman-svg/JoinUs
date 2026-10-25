@@ -130,15 +130,11 @@ export default function ChatPanel({
   };
 
   // Group messages: consecutive from same user within 2 minutes, separating on privacy change
+  const userMessages = messages.filter((m) => !m.isSystem);
   const grouped = [];
-  for (let i = 0; i < messages.length; i++) {
-    const m = messages[i];
-    if (m.isSystem) {
-      grouped.push({ type: 'system', message: m });
-      continue;
-    }
-
-    const prev = i > 0 ? messages[i - 1] : null;
+  for (let i = 0; i < userMessages.length; i++) {
+    const m = userMessages[i];
+    const prev = i > 0 ? userMessages[i - 1] : null;
     const isSelf =
       currentUser?.id && m.from?.id ? String(m.from.id) === String(currentUser.id) : false;
 
@@ -242,7 +238,7 @@ export default function ChatPanel({
             </div>
           )}
 
-          {!historyLoading && messages.length === 0 && (
+          {!historyLoading && userMessages.length === 0 && (
             <div className="chat-panel__empty" role="status">
               <p className="chat-panel__empty-title">No messages yet</p>
               <p className="chat-panel__empty-subtitle">Messages are saved with this meeting</p>
@@ -250,13 +246,6 @@ export default function ChatPanel({
           )}
 
           {grouped.map((item) => {
-            if (item.type === 'system') {
-              return (
-                <div key={item.message.id} className="chat-system-line">
-                  {item.message.text}
-                </div>
-              );
-            }
 
             const { message, isSelf, isFirstInGroup, time } = item;
             const isSending = message.status === 'sending';

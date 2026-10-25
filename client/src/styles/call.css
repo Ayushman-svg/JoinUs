@@ -534,6 +534,29 @@
   }
 }
 
+.call__peer-toast {
+  position: fixed;
+  bottom: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #F0F4F8;
+  background: rgba(27, 30, 37, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid #383D4A;
+  border-radius: var(--radius-full);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  animation: ui-rise 0.2s var(--ease) both;
+  white-space: nowrap;
+}
+
 /* ---------- Floating controls ---------- */
 .controls {
   position: fixed;

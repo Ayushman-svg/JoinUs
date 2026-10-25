@@ -20,6 +20,7 @@ const INITIAL = {
   historyLoading: false,
   historyError: null,
   rateLimitHint: null,
+  peerToast: null,
 };
 
 // Joins the meeting `code` once `enabled` is true and leaves when the component unmounts,
