@@ -3,10 +3,22 @@ import assert from 'node:assert/strict';
 
 import { formatDuration, nextFullHour, toLocalInputValue } from '../src/lib/datetime.js';
 import { extractMeetingCode } from '../src/lib/meetingLink.js';
+import { getInitials } from '../src/lib/avatar.js';
 
 if (!globalThis.window) {
   globalThis.window = { location: { origin: 'http://localhost:5173' } };
 }
+
+test('Avatar helpers: getInitials uses person name only and first letters of first two words', () => {
+  assert.equal(getInitials('Alice (You)'), 'A');
+  assert.equal(getInitials('Alice Smith (You)'), 'AS');
+  assert.equal(getInitials('Alice Bob Charlie (You)'), 'AB');
+  assert.equal(getInitials('Alice'), 'A');
+  assert.equal(getInitials('Alice Smith'), 'AS');
+  assert.equal(getInitials('Alice Bob Charlie'), 'AB');
+  assert.equal(getInitials('(You)'), '?');
+  assert.equal(getInitials(''), '?');
+});
 
 test('datetime helpers: formatDuration formats durations correctly', () => {
   assert.equal(formatDuration(0), '0 min');
