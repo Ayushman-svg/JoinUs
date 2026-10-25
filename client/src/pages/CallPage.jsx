@@ -104,6 +104,12 @@ export default function CallPage() {
   const isHost = Boolean(call.isHost);
 
   useEffect(() => {
+    if (['ended', 'denied', 'removed'].includes(call.status)) {
+      media.stop();
+    }
+  }, [call.status, media]);
+
+  useEffect(() => {
     if (!isHost || !call.waitingList?.length) return;
     const newest = call.waitingList[call.waitingList.length - 1];
     if (newest && !toastedIds.current.has(newest.peerId)) {
@@ -532,9 +538,13 @@ export default function CallPage() {
                 <Button
                   variant="danger"
                   className="leave-modal__btn"
-                  onClick={() => {
-                    call.endMeeting();
+                  onClick={async () => {
                     setConfirmingLeave(false);
+                    try {
+                      await call.endMeeting();
+                    } catch (err) {
+                      console.error('Failed to end meeting:', err);
+                    }
                   }}
                 >
                   End meeting for all

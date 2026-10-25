@@ -72,6 +72,7 @@ export class CallSession {
     this.waitingPollInterval = null;
     this.guestWaitingPollInterval = null;
     this.guestVisibilityListener = null;
+    this.inCallPollInterval = null;
     this.isWaiting = false;
     this.isReconnecting = false;
     this.wakeLock = null;
@@ -187,7 +188,9 @@ export class CallSession {
 
   async endMeeting() {
     if (!this.signaling?.connected) throw new Error('Not connected');
-    return this.signaling.request('host:end', {});
+    const res = await this.signaling.request('host:end', {});
+    this.#finish(CallStatus.ENDED);
+    return res;
   }
 
   async refreshWaitingList() {
@@ -282,6 +285,40 @@ export class CallSession {
         document.removeEventListener('visibilitychange', this.guestVisibilityListener);
       }
       this.guestVisibilityListener = null;
+    }
+  }
+
+  #startInCallPolling() {
+    this.#stopInCallPolling();
+    if (this.isHost) return;
+
+    this.inCallPollInterval = setInterval(async () => {
+      if (this.finished || this.state.status !== CallStatus.ACTIVE || !this.signaling?.connected) {
+        return;
+      }
+      try {
+        const res = await this.signaling.request('room:status', { code: this.code });
+        if (this.finished) return;
+        if (res?.status === 'ended') {
+          this.#stopInCallPolling();
+          this.#finish(CallStatus.ENDED);
+        } else if (res?.status === 'removed') {
+          this.#stopInCallPolling();
+          this.#finish(CallStatus.REMOVED, { reason: 'REMOVED_BY_HOST' });
+        }
+      } catch (err) {
+        if (err?.code === 'MEETING_ENDED') {
+          this.#stopInCallPolling();
+          this.#finish(CallStatus.ENDED);
+        }
+      }
+    }, 10000);
+  }
+
+  #stopInCallPolling() {
+    if (this.inCallPollInterval) {
+      clearInterval(this.inCallPollInterval);
+      this.inCallPollInterval = null;
     }
   }
 
@@ -414,6 +451,7 @@ export class CallSession {
     this.#releaseWakeLock();
     this.#stopWaitingPolling();
     this.#stopGuestWaitingPolling();
+    this.#stopInCallPolling();
     this.stopScreenShare();
     if (this.signaling?.connected) this.signaling.send('room:leave');
     this.#finish(CallStatus.LEFT);
@@ -434,6 +472,7 @@ export class CallSession {
       }
     } else if (status === SignalingStatus.RECONNECTING) {
       this.joinAttempt += 1; // forget a join that was still waiting for its answer
+      this.#stopInCallPolling();
       this.#closePeers();
       this.selfId = null;
       if (this.isWaiting) {
@@ -491,6 +530,8 @@ export class CallSession {
       if (this.isHost) {
         this.refreshWaitingList();
         this.#startWaitingPolling();
+      } else {
+        this.#startInCallPolling();
       }
 
       // Everyone already in the room is offered a connection by us, the newcomer. Peers that
@@ -533,6 +574,9 @@ export class CallSession {
     this.#update({ status: CallStatus.ACTIVE, selfId: this.selfId, screenShare: this.screenShare, isReconnecting: false });
     this.updateLocalMedia();
     this.loadHistory();
+    if (!this.isHost) {
+      this.#startInCallPolling();
+    }
 
     const waiting = this.earlyPeers;
     this.earlyPeers = [];
@@ -657,6 +701,7 @@ export class CallSession {
     this.#releaseWakeLock();
     this.#stopWaitingPolling();
     this.#stopGuestWaitingPolling();
+    this.#stopInCallPolling();
     this.#closePeers();
     this.audioTracker?.destroy();
     this.unsubscribe.forEach((off) => off());
