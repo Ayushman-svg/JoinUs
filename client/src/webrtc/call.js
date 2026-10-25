@@ -65,6 +65,7 @@ export class CallSession {
     this.hostInRoom = true;
     this.isHost = false;
     this.selfId = null;
+    this.screenShare = null;
     this.joinAttempt = 0;
     this.finished = false;
 
@@ -81,6 +82,7 @@ export class CallSession {
       error: null,
       selfId: null,
       peers: [],
+      screenShare: null,
       waitingList: [],
       hostInRoom: true,
       isHost: false,
@@ -121,6 +123,7 @@ export class CallSession {
         this.#removePeer(peerId);
       }),
       signaling.on('room:peer-updated', (update) => this.#updatePeerMedia(update)),
+      signaling.on('room:screen-updated', (screen) => this.#onScreenUpdated(screen)),
       signaling.on('room:kicked', ({ reason }) => this.#finish(CallStatus.KICKED, { reason })),
       signaling.on('room:waiting-updated', ({ waiting }) => this.#onWaitingUpdated(waiting)),
       signaling.on('room:admitted', (data) => this.#onAdmitted(data)),
@@ -219,7 +222,13 @@ export class CallSession {
 
       this.selfId = response.peerId;
       this.isHost = Boolean(response.isHost);
-      this.#update({ status: CallStatus.ACTIVE, selfId: this.selfId, isHost: this.isHost });
+      this.screenShare = response.screenSharer ?? null;
+      this.#update({
+        status: CallStatus.ACTIVE,
+        selfId: this.selfId,
+        isHost: this.isHost,
+        screenShare: this.screenShare,
+      });
       this.loadHistory();
 
       // Everyone already in the room is offered a connection by us, the newcomer. Peers that
@@ -238,6 +247,12 @@ export class CallSession {
     }
   }
 
+  #onScreenUpdated(screen) {
+    if (this.finished) return;
+    this.screenShare = screen && screen.peerId && screen.streamId ? screen : null;
+    this.#update({ screenShare: this.screenShare });
+  }
+
   #onWaitingUpdated(waiting) {
     if (this.finished) return;
     this.isHost = true;
@@ -245,10 +260,11 @@ export class CallSession {
     this.#update({ waitingList: this.waitingList, isHost: true });
   }
 
-  #onAdmitted({ peerId, peers }) {
+  #onAdmitted({ peerId, peers, screenSharer }) {
     if (this.finished) return;
     this.selfId = peerId;
-    this.#update({ status: CallStatus.ACTIVE, selfId: this.selfId });
+    this.screenShare = screenSharer ?? null;
+    this.#update({ status: CallStatus.ACTIVE, selfId: this.selfId, screenShare: this.screenShare });
     this.updateLocalMedia();
     this.loadHistory();
 
@@ -300,11 +316,15 @@ export class CallSession {
 
   #removePeer(peerId) {
     this.pending.delete(peerId);
+    this.earlyPeers = this.earlyPeers.filter((p) => p.peerId !== peerId);
     const entry = this.peers.get(peerId);
     if (!entry) return;
     entry.peer.close();
     this.peers.delete(peerId);
-    this.#update();
+    if (this.screenShare?.peerId === peerId) {
+      this.screenShare = null;
+    }
+    this.#update({ screenShare: this.screenShare });
   }
 
   #onSignal(message) {
@@ -332,6 +352,7 @@ export class CallSession {
     this.peers.clear();
     this.pending.clear();
     this.earlyPeers = [];
+    this.screenShare = null;
   }
 
   // Ends the session for good with a final status
@@ -344,7 +365,8 @@ export class CallSession {
     this.signaling?.close();
     this.signaling = null;
     this.selfId = null;
-    this.#update({ status, error: null, selfId: null, ...extra });
+    this.screenShare = null;
+    this.#update({ status, error: null, selfId: null, screenShare: null, ...extra });
   }
 
   async sendMessage(rawText) {
@@ -538,6 +560,7 @@ export class CallSession {
     if ('historyLoading' in patch) this.historyLoading = patch.historyLoading;
     if ('historyError' in patch) this.historyError = patch.historyError;
     if ('rateLimitHint' in patch) this.rateLimitHint = patch.rateLimitHint;
+    if ('screenShare' in patch) this.screenShare = patch.screenShare;
     this.state = {
       ...this.state,
       ...patch,
@@ -549,6 +572,7 @@ export class CallSession {
       historyLoading: this.historyLoading,
       historyError: this.historyError,
       rateLimitHint: this.rateLimitHint,
+      screenShare: this.screenShare,
       peers: [...this.peers.entries()].map(([peerId, entry]) => ({
         peerId,
         user: entry.user,

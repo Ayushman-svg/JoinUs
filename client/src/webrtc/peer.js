@@ -28,6 +28,7 @@ export class Peer {
     rtcConfig = DEFAULT_RTC_CONFIG,
     sendSignal,
     onRemoteStream,
+    onTrack,
     onConnectionState,
     onError,
   }) {
@@ -36,6 +37,7 @@ export class Peer {
     this.initiator = initiator;
     this.sendSignal = sendSignal;
     this.onRemoteStream = onRemoteStream;
+    this.onTrack = onTrack;
     this.onConnectionState = onConnectionState;
     this.onError = onError;
 
@@ -55,6 +57,21 @@ export class Peer {
 
   get connectionState() {
     return this.pc.connectionState;
+  }
+
+  addTrack(track, stream) {
+    if (this.closed) return null;
+    return this.pc.addTrack(track, stream);
+  }
+
+  removeTrack(sender) {
+    if (this.closed) return;
+    this.pc.removeTrack(sender);
+  }
+
+  getSenders() {
+    if (this.closed) return [];
+    return this.pc.getSenders();
   }
 
   #bind() {
@@ -80,8 +97,15 @@ export class Peer {
     };
 
     pc.ontrack = ({ track, streams }) => {
-      if (!this.remoteStream) this.remoteStream = streams[0] ?? new MediaStream();
-      if (!this.remoteStream.getTracks().includes(track)) this.remoteStream.addTrack(track);
+      const stream = streams[0] ?? new MediaStream([track]);
+      this.onTrack?.({ track, stream, streams });
+      if (!this.remoteStream) {
+        this.remoteStream = stream;
+      } else if (stream.id === this.remoteStream.id) {
+        if (!this.remoteStream.getTracks().includes(track)) {
+          this.remoteStream.addTrack(track);
+        }
+      }
       this.onRemoteStream?.(this.remoteStream);
     };
 
