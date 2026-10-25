@@ -101,11 +101,7 @@ export default function CallPage() {
   const slow = useSlowRequest(call.status === 'connecting' || call.status === 'idle', 4000);
   const announcement = useAnnouncement(call.peers);
 
-  const isHost = Boolean(
-    call.isHost ||
-      (meeting?.host?.id && user?.id ? String(meeting.host.id) === String(user.id) : false) ||
-      (meeting?.host?.name && user?.name ? meeting.host.name === user.name : false)
-  );
+  const isHost = Boolean(call.isHost);
 
   useEffect(() => {
     if (!isHost || !call.waitingList?.length) return;
