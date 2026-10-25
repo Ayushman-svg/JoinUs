@@ -296,7 +296,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
 
     // 5. Waiting
     const waitingUsers = registry.getWaiting(code);
-    if (waitingUsers.some((w) => String(w.userId) === userId)) {
+    if (waitingUsers.some((w) => String(w.user?.id || w.userId) === userId)) {
       return { status: 'waiting' };
     }
 

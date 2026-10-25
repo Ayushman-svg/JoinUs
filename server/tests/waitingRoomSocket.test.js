@@ -433,6 +433,120 @@ describe('Waiting room and host controls socket integration', () => {
       expect(list.waiting[0].peerId).toBe(guestSocket2.id);
       expect(list.waiting[0].user.id).toBe(guest.user.id);
     });
+
+    it('guest admitted when the registry peer id no longer matches any live socket', async () => {
+      const host = await createUser({ name: 'Host Ghost' });
+      const guest = await createUser({ name: 'Guest Ghost' });
+      const meeting = await createMeeting(host.user.id);
+
+      const hostSocket = await connectSocket(port, host.token);
+      socketsToClose.push(hostSocket);
+      await emitAck(hostSocket, 'room:join', { code: meeting.code });
+
+      const guestSocket1 = await connectSocket(port, guest.token);
+      socketsToClose.push(guestSocket1);
+      const joinAck = await emitAck(guestSocket1, 'room:join', { code: meeting.code });
+      expect(joinAck).toMatchObject({ ok: true, status: 'waiting' });
+      const oldPeerId = guestSocket1.id;
+
+      // Guest connects second socket on same user account
+      const guestSocket2 = await connectSocket(port, guest.token);
+      socketsToClose.push(guestSocket2);
+
+      // Simulate old live socket vanishing (e.g. abrupt network cut before cleanup)
+      ioInstance.sockets.sockets.delete(oldPeerId);
+
+      const admittedPromise = new Promise((resolve) => {
+        guestSocket2.once('room:admitted', resolve);
+      });
+
+      // Host admits the oldPeerId from registry
+      const admitAck = await emitAck(hostSocket, 'host:admit', { peerId: oldPeerId });
+      expect(admitAck).toMatchObject({ ok: true });
+
+      // guestSocket2 receives admission via user channel
+      const pushAdmitted = await admittedPromise;
+      expect(pushAdmitted).toBeDefined();
+
+      // And room:status on guestSocket2 returns admitted
+      const statusAck = await emitAck(guestSocket2, 'room:status', { code: meeting.code });
+      expect(statusAck).toMatchObject({ ok: true, status: 'admitted' });
+    });
+
+    it('room:ended reaches a host whose socket was removed from the socket.io room', async () => {
+      const host = await createUser({ name: 'Host Inactive' });
+      const meeting = await createMeeting(host.user.id);
+
+      const hostSocket = await connectSocket(port, host.token);
+      socketsToClose.push(hostSocket);
+      await emitAck(hostSocket, 'room:join', { code: meeting.code });
+
+      // Remove host socket from the socket.io room explicitly
+      const serverSocket = ioInstance.sockets.sockets.get(hostSocket.id);
+      serverSocket?.leave(meeting.code);
+
+      const endedPromise = new Promise((resolve) => {
+        hostSocket.once('room:ended', resolve);
+      });
+
+      // Host triggers host:end
+      await emitAck(hostSocket, 'host:end', {});
+
+      // Host still receives room:ended via user:<hostId> channel
+      const res = await Promise.race([
+        endedPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 1000)),
+      ]);
+      expect(res).toBeDefined();
+    });
+
+    it('room:status returns the right value for every state', async () => {
+      const host = await createUser({ name: 'Status Host' });
+      const guest = await createUser({ name: 'Status Guest' });
+      const outsider = await createUser({ name: 'Outsider' });
+      const meeting = await createMeeting(host.user.id);
+
+      const hostSocket = await connectSocket(port, host.token);
+      const guestSocket = await connectSocket(port, guest.token);
+      const outsiderSocket = await connectSocket(port, outsider.token);
+      socketsToClose.push(hostSocket, guestSocket, outsiderSocket);
+
+      // Host status
+      const hostStatus = await emitAck(hostSocket, 'room:status', { code: meeting.code });
+      expect(hostStatus).toMatchObject({ ok: true, status: 'host' });
+
+      // Outsider status before joining
+      const noneStatus = await emitAck(outsiderSocket, 'room:status', { code: meeting.code });
+      expect(noneStatus).toMatchObject({ ok: true, status: 'none' });
+
+      // Guest joins -> waiting
+      await emitAck(guestSocket, 'room:join', { code: meeting.code });
+      const waitingStatus = await emitAck(guestSocket, 'room:status', { code: meeting.code });
+      expect(waitingStatus).toMatchObject({ ok: true, status: 'waiting' });
+
+      // Host admits guest -> admitted
+      await emitAck(hostSocket, 'room:join', { code: meeting.code });
+      await emitAck(hostSocket, 'host:admit', { peerId: guestSocket.id });
+      const admittedStatus = await emitAck(guestSocket, 'room:status', { code: meeting.code });
+      expect(admittedStatus).toMatchObject({ ok: true, status: 'admitted' });
+      expect(Array.isArray(admittedStatus.peers)).toBe(true);
+
+      // Host removes guest -> removed
+      await emitAck(hostSocket, 'host:remove', { peerId: guestSocket.id });
+      const removedStatus = await emitAck(guestSocket, 'room:status', { code: meeting.code });
+      expect(removedStatus).toMatchObject({ ok: true, status: 'removed' });
+
+      // Guest rejoins and host denies -> denied
+      await emitAck(guestSocket, 'room:join', { code: meeting.code });
+      await emitAck(hostSocket, 'host:deny', { peerId: guestSocket.id });
+      const deniedStatus = await emitAck(guestSocket, 'room:status', { code: meeting.code });
+      expect(deniedStatus).toMatchObject({ ok: true, status: 'denied' });
+
+      // End meeting -> ended
+      await emitAck(hostSocket, 'host:end', {});
+      const endedStatus = await emitAck(guestSocket, 'room:status', { code: meeting.code });
+      expect(endedStatus).toMatchObject({ ok: true, status: 'ended' });
+    });
   });
 });
 

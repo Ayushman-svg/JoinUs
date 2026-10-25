@@ -574,5 +574,122 @@ test('Guest client: auto-rejoins on reconnect and acquires/releases wake lock wh
   call.leave();
 });
 
+test('Repeated events: room:ended and room:admitted are harmless and idempotent', async () => {
+  const mockSignaling = new MockSignaling();
+  mockSignaling.request = async (event) => {
+    if (event === 'room:join') {
+      return { status: 'waiting', hostInRoom: true };
+    }
+    return {};
+  };
+
+  const call = new CallSession({
+    code: 'repeated-events-test',
+    url: 'http://localhost:5000',
+    getToken: () => 'token',
+    createSignalingClient: () => mockSignaling,
+    getMeetingMessagesApi: async () => [],
+  });
+
+  call.start();
+  await new Promise((r) => setTimeout(r, 20));
+
+  assert.equal(call.getState().status, CallStatus.WAITING);
+
+  // First room:admitted
+  mockSignaling.emit('room:admitted', { peerId: 'peer-1', peers: [] });
+  assert.equal(call.getState().status, CallStatus.ACTIVE);
+  assert.equal(call.getState().selfId, 'peer-1');
+
+  // Second room:admitted (repeated) -> changes nothing, does not throw
+  mockSignaling.emit('room:admitted', { peerId: 'peer-1', peers: [] });
+  assert.equal(call.getState().status, CallStatus.ACTIVE);
+  assert.equal(call.getState().selfId, 'peer-1');
+
+  // First room:ended
+  mockSignaling.emit('room:ended', {});
+  assert.equal(call.getState().status, CallStatus.ENDED);
+
+  // Second room:ended (repeated) -> changes nothing, does not throw
+  mockSignaling.emit('room:ended', {});
+  assert.equal(call.getState().status, CallStatus.ENDED);
+
+  call.leave();
+});
+
+test('host:end finishes session immediately as ENDED', async () => {
+  const mockSignaling = new MockSignaling();
+  let endCalled = false;
+  mockSignaling.request = async (event) => {
+    if (event === 'room:join') {
+      return { status: 'admitted', peerId: 'host-id', isHost: true, peers: [] };
+    }
+    if (event === 'host:end') {
+      endCalled = true;
+      return {};
+    }
+    return {};
+  };
+
+  const call = new CallSession({
+    code: 'host-end-test',
+    url: 'http://localhost:5000',
+    getToken: () => 'token',
+    createSignalingClient: () => mockSignaling,
+    getMeetingMessagesApi: async () => [],
+  });
+
+  call.start();
+  await new Promise((r) => setTimeout(r, 20));
+
+  assert.equal(call.getState().status, CallStatus.ACTIVE);
+  assert.equal(call.getState().isHost, true);
+
+  await call.endMeeting();
+  assert.equal(endCalled, true);
+  assert.equal(call.getState().status, CallStatus.ENDED);
+});
+
+test('Guest in WAITING polls room:status and transitions to ACTIVE on admitted', async () => {
+  const mockSignaling = new MockSignaling();
+  let statusPolled = 0;
+  mockSignaling.request = async (event) => {
+    if (event === 'room:join') {
+      return { status: 'waiting', hostInRoom: true };
+    }
+    if (event === 'room:status') {
+      statusPolled += 1;
+      return {
+        status: 'admitted',
+        peerId: 'guest-polled-id',
+        peers: [],
+      };
+    }
+    return {};
+  };
+
+  const call = new CallSession({
+    code: 'guest-status-poll',
+    url: 'http://localhost:5000',
+    getToken: () => 'token',
+    createSignalingClient: () => mockSignaling,
+    getMeetingMessagesApi: async () => [],
+  });
+
+  call.start();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(call.getState().status, CallStatus.WAITING);
+
+  // Trigger reconnect which calls #pollGuestStatus immediately
+  mockSignaling.emit('status', { status: 'connected' });
+  await new Promise((r) => setTimeout(r, 30));
+
+  assert.equal(call.getState().status, CallStatus.ACTIVE);
+  assert.equal(call.getState().selfId, 'guest-polled-id');
+  assert.ok(statusPolled >= 1);
+
+  call.leave();
+});
+
 
 
