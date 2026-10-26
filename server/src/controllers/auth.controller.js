@@ -50,4 +50,28 @@ function me(req, res) {
   res.json({ user: req.user });
 }
 
-module.exports = { register, login, me };
+async function updateMe(req, res) {
+  const { name, timeZone, defaultWaitingRoom, defaultMuteOnEntry } = req.body;
+  const user = await User.findById(req.user.id);
+  if (!user) {
+    throw new AppError(404, 'USER_NOT_FOUND', 'User not found');
+  }
+
+  if (name !== undefined) {
+    user.name = name;
+  }
+  if (timeZone !== undefined) {
+    user.timeZone = timeZone;
+  }
+  if (defaultWaitingRoom !== undefined) {
+    user.defaultWaitingRoom = Boolean(defaultWaitingRoom);
+  }
+  if (defaultMuteOnEntry !== undefined) {
+    user.defaultMuteOnEntry = Boolean(defaultMuteOnEntry);
+  }
+
+  await user.save();
+  res.json({ user });
+}
+
+module.exports = { register, login, me, updateMe };

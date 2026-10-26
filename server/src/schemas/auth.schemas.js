@@ -31,4 +31,20 @@ const loginSchema = z.object({
     .max(72, 'Password must be at most 72 characters'),
 });
 
-module.exports = { registerSchema, loginSchema };
+const updateProfileSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, 'Name must be at least 2 characters')
+    .max(50, 'Name must be at most 50 characters')
+    .optional(),
+  timeZone: z
+    .string()
+    .trim()
+    .max(100, 'Time zone is too long')
+    .optional(),
+  defaultWaitingRoom: z.boolean().optional(),
+  defaultMuteOnEntry: z.boolean().optional(),
+});
+
+module.exports = { registerSchema, loginSchema, updateProfileSchema };

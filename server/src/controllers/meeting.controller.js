@@ -130,8 +130,11 @@ async function createMeeting(req, res) {
     passcodeHash = await bcrypt.hash(passcode, 10);
   }
 
+  const userMuteDefault = req.user?.defaultMuteOnEntry ?? false;
+  const userWaitingDefault = req.user?.defaultWaitingRoom ?? true;
+
   const initialSettings = {
-    muteOnEntry: Boolean(muteOnEntry ?? settings?.muteOnEntry ?? false),
+    muteOnEntry: Boolean(muteOnEntry ?? settings?.muteOnEntry ?? userMuteDefault),
     chatAllowed: settings?.chatAllowed !== undefined ? Boolean(settings.chatAllowed) : true,
     shareAllowed: settings?.shareAllowed === 'host-only' ? 'host-only' : 'all',
     locked: Boolean(settings?.locked ?? false),
@@ -151,7 +154,7 @@ async function createMeeting(req, res) {
         host: req.user._id,
         scheduledAt: scheduledAt || null,
         startsAt: scheduledAt || new Date(),
-        waitingRoom: waitingRoom !== undefined ? Boolean(waitingRoom) : true,
+        waitingRoom: waitingRoom !== undefined ? Boolean(waitingRoom) : userWaitingDefault,
         passcodeHash,
         settings: initialSettings,
       });

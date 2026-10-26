@@ -31,6 +31,19 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    timeZone: {
+      type: String,
+      default: 'UTC',
+      trim: true,
+    },
+    defaultWaitingRoom: {
+      type: Boolean,
+      default: true,
+    },
+    defaultMuteOnEntry: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: { createdAt: true, updatedAt: false },
@@ -38,6 +51,9 @@ const userSchema = new mongoose.Schema(
       transform(doc, ret) {
         ret.id = ret._id.toString();
         ret.personalRoomSlug = ret.personalRoomSlug || (doc.name ? generateUserSlug(doc.name) : undefined);
+        ret.timeZone = ret.timeZone || 'UTC';
+        ret.defaultWaitingRoom = ret.defaultWaitingRoom !== undefined ? ret.defaultWaitingRoom : true;
+        ret.defaultMuteOnEntry = ret.defaultMuteOnEntry !== undefined ? ret.defaultMuteOnEntry : false;
         delete ret._id;
         delete ret.__v;
         delete ret.passwordHash;
