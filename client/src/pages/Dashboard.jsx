@@ -284,6 +284,7 @@ export default function Dashboard() {
   }
 
   const newHomeEnabled = useFeature('NEW_HOME');
+  const schedulingEnabled = useFeature('SCHEDULING');
   const supportsScreenShare =
     typeof navigator !== 'undefined' && Boolean(navigator?.mediaDevices?.getDisplayMedia);
 
@@ -319,6 +320,16 @@ export default function Dashboard() {
     }
   }
 
+  const handleOpenSchedule = () => {
+    if (schedulingEnabled) {
+      navigate('/schedule');
+      return;
+    }
+    setScheduleError('');
+    setScheduleFieldErrors({});
+    setActiveModal('schedule');
+  };
+
   const nextMeeting = inProgress[0] || upcoming[0] || null;
 
   return (
@@ -335,12 +346,9 @@ export default function Dashboard() {
             setJoinError('');
             setActiveModal('join');
           }}
-          onOpenSchedule={() => {
-            setScheduleError('');
-            setScheduleFieldErrors({});
-            setActiveModal('schedule');
-          }}
+          onOpenSchedule={handleOpenSchedule}
           onStartShare={handleStartShare}
+
           supportsScreenShare={supportsScreenShare}
           todayMeetings={todayMeetings}
           inProgress={filteredInProgress}
@@ -373,11 +381,7 @@ export default function Dashboard() {
             setJoinError('');
             setActiveModal('join');
           }}
-          onOpenSchedule={() => {
-            setScheduleError('');
-            setScheduleFieldErrors({});
-            setActiveModal('schedule');
-          }}
+          onOpenSchedule={handleOpenSchedule}
           navigate={navigate}
           getRecentBadgeKind={getRecentBadgeKind}
           meetingsStatus={meetingsState.status}

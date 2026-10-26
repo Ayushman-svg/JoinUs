@@ -22,6 +22,8 @@ import PrivacyPage from './pages/public/PrivacyPage.jsx';
 import SecurityPage from './pages/public/SecurityPage.jsx';
 import TermsPage from './pages/public/TermsPage.jsx';
 import Register from './pages/Register.jsx';
+import SchedulePage from './pages/SchedulePage.jsx';
+
 
 export default function App() {
   const landingEnabled = useFeature('LANDING');
@@ -54,8 +56,10 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
             {!isGuestLanding && <Route path="/" element={<Dashboard />} />}
+            <Route path="/schedule" element={<SchedulePage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/history/:code" element={<HistoryDetailPage />} />
+
           </Route>
           <Route element={<MeetingLayout />}>
             <Route path="/m/:code" element={<MeetingPage />} />

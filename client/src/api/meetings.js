@@ -1,7 +1,14 @@
 import { api } from './client.js';
+import { API_URL as BASE_URL } from '../config.js';
 
 export const createMeeting = (payload) =>
   api.post('/api/meetings', payload).then((res) => res.meeting);
+
+export const updateMeeting = (code, payload) =>
+  api.patch(`/api/meetings/${encodeURIComponent(code)}`, payload).then((res) => res.meeting);
+
+export const cancelMeeting = (code) =>
+  api.delete(`/api/meetings/${encodeURIComponent(code)}`).then((res) => res.meeting);
 
 // filter: 'upcoming' | 'past' | 'all'
 export const listMeetings = (filter, options) =>
@@ -10,6 +17,15 @@ export const listMeetings = (filter, options) =>
 // Public endpoint: minimal info for the invite page
 export const getMeeting = (code, options) =>
   api.get(`/api/meetings/${encodeURIComponent(code)}`, options).then((res) => res.meeting);
+
+// Personal room endpoint
+export const getPersonalRoom = (slug, options) =>
+  api.get(`/api/rooms/${encodeURIComponent(slug)}`, options);
+
+// URL to download .ics calendar event
+export const getCalendarIcsUrl = (code) =>
+  `${BASE_URL}/api/meetings/${encodeURIComponent(code)}/calendar.ics`;
+
 
 // Chat messages for an active or past meeting (host or admitted attendee)
 export const getMeetingMessages = (code, limit = 100, options = {}) => {
