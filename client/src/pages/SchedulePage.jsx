@@ -69,8 +69,8 @@ function getInitialDateTime() {
   return { dateStr, timeStr };
 }
 
-export default function SchedulePage() {
-  const { user } = useAuth();
+export default function SchedulePage({ initialCreatedMeeting = null } = {}) {
+  const { user } = useAuth() || {};
   const navigate = useNavigate();
 
   const hostSecurityEnabled = useFeature('HOST_SECURITY');
@@ -108,7 +108,7 @@ export default function SchedulePage() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [createdMeeting, setCreatedMeeting] = useState(null);
+  const [createdMeeting, setCreatedMeeting] = useState(initialCreatedMeeting);
   const [copied, setCopied] = useState(false);
 
   const availableTimeZones = getTimeZones();

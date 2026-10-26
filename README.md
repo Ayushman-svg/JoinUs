@@ -145,8 +145,8 @@ sequenceDiagram
 
 ### Data Model Summary
 
-- **`User`**: Manages credentials (`email`, `passwordHash`), display name (`name`), and timestamps.
-- **`Meeting`**: Stores meeting lifecycle details (`code`, `title`, `host`, `scheduledAt`, `startedAt`, `lastActiveAt`, `durationMs`, `status`: `'active'` | `'ended'` | `'cancelled'`, `waitingRoom`: boolean, and an `attendees` array of user IDs).
+- **`User`**: Manages credentials (`email`, `passwordHash`), display name (`name`), `personalRoomSlug` (permanent unique slug for personal meeting room `/room/<slug>`), and timestamps.
+- **`Meeting`**: Stores meeting lifecycle details (`code`, `title`, `description`, `host`, `scheduledAt`, `duration` (in minutes), `timeZone`, `recurrence` (`{ frequency, count, until }`), `isPersonalRoom` (boolean), `startedAt`, `lastActiveAt`, `durationMs`, `status`: `'active'` | `'ended'` | `'cancelled'`, `waitingRoom`: boolean, `passcode`, `muteOnEntry`, and an `attendees` array of user IDs).
 - **`Message`**: Stores persistent in-meeting chat (`meetingCode`, `sender`: `{ id, name }`, `text`: 1–1000 characters, optional `to` (User ID) and `toName` for private messages, `createdAt`).
 
 ### Authorization Matrix
@@ -157,10 +157,12 @@ sequenceDiagram
 | `POST /api/auth/login` | REST | Public | Rate limited (10/15m/IP+email), bcrypt comparison |
 | `GET /api/auth/me` | REST | Authenticated User | Bearer JWT verification |
 | `POST /api/meetings` | REST | Authenticated User | Bearer JWT verification, Zod schema |
-| `GET /api/meetings` | REST | Authenticated User | Bearer JWT verification (returns user's meetings) |
-| `GET /api/meetings/:code` | REST | Public | Minimal public metadata (title, host name, status) |
-| `PATCH /api/meetings/:code` | REST | Meeting Host | Verified `userId === meeting.host` |
-| `DELETE /api/meetings/:code`| REST | Meeting Host | Verified `userId === meeting.host` |
+| `GET /api/meetings` | REST | Authenticated User | Bearer JWT verification (returns user's meetings, expands recurrence series) |
+| `GET /api/meetings/:code` | REST | Public | Minimal public metadata (title, host, duration, timeZone, status) |
+| `PATCH /api/meetings/:code` | REST | Meeting Host | Verified `userId === meeting.host` (updates series/meeting) |
+| `DELETE /api/meetings/:code`| REST | Meeting Host | Verified `userId === meeting.host` (cancels meeting) |
+| `GET /api/meetings/:code/calendar.ics` | REST | Public | Generates RFC 5545 compliant `.ics` iCalendar export with UTC dates |
+| `GET /api/rooms/:slug` | REST | Public / Optional Auth | Resolves personal room; auto-creates/reuses for host, reports status for guest |
 | `GET /api/history` | REST | Authenticated User | Returns meetings where user was host or attendee |
 | `GET /api/history/:code` | REST | Host or Attendee | Verified user is in `meeting.attendees` or is host |
 | `GET /api/meetings/:code/messages` | REST | Host or Attendee | Verified user is in `meeting.attendees` or is host; returns public messages plus private messages where user is sender or recipient |
@@ -304,6 +306,35 @@ Roles are derived strictly on the server:
 
 > **Browser Media Limitation Note:** Web browsers do not provide an operating system or hardware-level API that allows a remote web server to forcefully switch off or disable a client's physical microphone or camera hardware. Consequently, "Mute" and "Stop video" host controls operate as authoritative software directives sent to the client browser, which stops/disables the local media track. An unmute request is strictly a non-coercive prompt that the user may accept or dismiss.
 
+### Scheduling, Invitations, and Personal Meeting Room (`FEATURE_SCHEDULING`)
+
+JoinUs provides end-to-end meeting scheduling, RFC 5545 calendar invitations, recurring series management, and permanent personal meeting rooms:
+
+1. **Schedule Full-Page Form (`/schedule`):**
+   - Configures title, agenda description, date, start time, duration (15 to 120 minutes), time zone selector (defaults to viewer browser timezone, populated via `Intl.supportedValuesOf`), and waiting room admission toggle.
+   - **Host Security Gating:** Passcode and "Mute participants upon entry" appear conditionally **only if `FEATURE_HOST_SECURITY` is ON**.
+   - **Recurrence Series:** Choose Daily, Weekly, or Monthly repeating with count (up to 20 occurrences) or end date.
+   - **Success Card:** Immediately presents formatted invite copying, direct meeting links, `.ics` download, and Google Calendar entry.
+
+2. **Meeting Details Page (`/meetings/:code`):**
+   - Displays scheduled meeting details, formatted duration, viewer's local time zone (with host scheduled zone indicated), meeting link, code, and host name.
+   - **Host Controls:** Host can Edit details (applies updates across the recurring series) or Cancel the meeting (with a confirmation modal).
+   - **Guest Controls:** Guests can view details, copy invitations, add to calendar, and join when scheduled.
+
+3. **Invitations & Calendar Integration:**
+   - **Copy Invitation:** Formats title, date/time with time zone, direct join URL, meeting code, and passcode (if any) as ready-to-paste text.
+   - **RFC 5545 `.ics` Export:** Server generates standard iCalendar `.ics` files (`GET /api/meetings/:code/calendar.ics`) with exact UTC `DTSTART`/`DTEND` timestamps, unique `UID`, and character escaping (`\,`, `\;`, `\n`).
+   - **Google Calendar URL:** Generates direct template links (`action=TEMPLATE`) with encoded title, UTC timestamps, details, and meeting link.
+
+4. **Recurrence Series Expansion:**
+   - Recurrence rules (`{ frequency, count, until }`) are stored on the parent meeting record and expanded dynamically up to 20 occurrences when listing upcoming meetings.
+
+5. **Personal Meeting Room (`/room/:slug`):**
+   - Each registered user has a permanent personal meeting room link (`/room/<slug>`).
+   - **Host Experience:** When the host opens their permanent link, any ongoing active meeting is reused, or a fresh meeting is created, and the host enters immediately.
+   - **Guest Experience:** When guests open the link, they see the host's active meeting if live, or an informative waiting card stating: *"The host has not started the room yet"* with a manual refresh button.
+   - **History Preservation:** Ended and cancelled meetings are never reused, ensuring that past meeting recordings, attendance, and transcripts remain isolated and accurate.
+
 ---
 
 ## Testing
@@ -315,13 +346,16 @@ JoinUs maintains extensive automated test suites across both the server and the 
 cd server
 npm test
 ```
-*Covers 15 test suites and 123 tests using Jest, Supertest, and `mongodb-memory-server`:*
+*Covers 23 test suites and 176 tests using Jest, Supertest, and `mongodb-memory-server`:*
 - `auth.test.js` & `security.test.js`: Registration, password length validation, JWT generation, error masking.
 - `meetings.test.js` & `history.test.js`: Meeting creation, lifecycle states, participant authorization, chat history queries.
+- `scheduling.test.js`: Scheduling full-page metadata, duration/timeZone persistence, RFC 5545 `.ics` iCalendar output/escaping/404 handling, and recurrence series expansion.
+- `personalRoom.test.js`: `/api/rooms/:slug` host automatic meeting creation/reuse, guest waiting vs active states, ended meeting reuse prevention, and 404 for non-existent slugs.
 - `ice.test.js`: ICE / STUN endpoints and sanitized Metered TURN fallback.
 - `rateLimitRest.test.js` & `rateLimitSocket.test.js`: REST 429 responses and socket sliding-window limits.
 - `roomRegistry.test.js` & `waitingRoomSocket.test.js`: Room admission, capacity capping, host moderation, reconnection bypass.
 - `chatSocket.test.js`, `chatPrivate.test.js` & `chatPlus.test.js`: Chat authorization, persistence, private messaging isolation, host/outsider privacy, and thread reply validation.
+- `captions.test.js` & `polls.test.js`: Speech recognition caption segment storage and in-call interactive polls.
 - `screenShareSocket.test.js`: Single-presenter enforcement and room capacity boundaries.
 - `features.test.js`: Feature flag resolution, fallback defaults, and `requireFeature` route middleware.
 - `sanitizeLog.test.js`: Secret masking and log sanitation for uncaught exceptions and fatal errors.
@@ -331,9 +365,12 @@ npm test
 cd client
 npm test
 ```
-*Covers 80 unit tests using Node.js test runner (`node:test`):*
+*Covers 91 unit tests using Node.js test runner (`node:test`):*
 - `call.test.js`: Multi-party mesh offer generation, polite/impolite polarity derivation, peer cleanup, screen sharing lifecycle, active speaker audio tracking, network reconnection recovery without duplicate tiles, and room-full/ended meeting transitions.
+- `schedulingUi.test.js`: Schedule page form validation, browser timezone detection, Prompt 5 security gating (passcode & mute on entry), recurrence rule configuration, viewer local timezone display, Edit and Cancel host actions, Copy Invitation and Add to Calendar (.ics & Google Calendar), and PersonalRoomPage states ("The host has not started the room yet", live active room, and not found).
 - `chatPlusSession.test.js` & `chatPlusUi.test.js`: CallSession private and replyTo sending, optimistic updates, unread count tracking, auto link detection, in-chat search filtering, message actions, emoji popover, and recipient left status.
+- `captionsSession.test.js` & `captionsUi.test.js`: Live captions rendering, clamp/position styling, consent modal, and transcript panel.
+- `pollsSession.test.js` & `pollsUi.test.js`: Poll voting, live results bar, and moderator controls.
 - `helpers.test.js`: Duration formatting, local input string parsing, and meeting code extraction.
 - `useFeature.test.js`: Feature flag fetching, cache storage, focus refetching, and fail-closed behavior on network failures.
 

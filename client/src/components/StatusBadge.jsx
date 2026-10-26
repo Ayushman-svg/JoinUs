@@ -1,6 +1,8 @@
 import Badge from './ui/Badge.jsx';
 
 const KINDS = {
+  live: { label: 'Live', variant: 'success' },
+  active: { label: 'Active', variant: 'success' },
   scheduled: { label: 'Scheduled', variant: 'primary' },
   instant: { label: 'Instant', variant: 'neutral' },
   ended: { label: 'Ended', variant: 'neutral' },

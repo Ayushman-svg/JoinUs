@@ -42,15 +42,21 @@ const DURATION_OPTIONS = [
   { value: 120, label: '2 hours' },
 ];
 
-export default function MeetingDetailsPage() {
+export default function MeetingDetailsPage({
+  initialLoading,
+  initialMeeting = null,
+  initialError = '',
+} = {}) {
   const { code } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useAuth() || {};
   const hostSecurityEnabled = useFeature('HOST_SECURITY');
 
-  const [meeting, setMeeting] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [meeting, setMeeting] = useState(initialMeeting);
+  const [loading, setLoading] = useState(
+    initialLoading !== undefined ? initialLoading : (initialMeeting || initialError ? false : true)
+  );
+  const [error, setError] = useState(initialError);
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -85,6 +91,7 @@ export default function MeetingDetailsPage() {
   };
 
   useEffect(() => {
+    if (initialMeeting || initialError) return;
     loadDetails();
   }, [code]);
 

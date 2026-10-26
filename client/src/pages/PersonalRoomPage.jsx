@@ -9,14 +9,20 @@ import StatusBadge from '../components/StatusBadge.jsx';
 import { getPersonalRoom } from '../api/meetings.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
-export default function PersonalRoomPage() {
+export default function PersonalRoomPage({
+  initialLoading,
+  initialRoomData = null,
+  initialError = '',
+} = {}) {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useAuth() || {};
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [roomData, setRoomData] = useState(null);
+  const [loading, setLoading] = useState(
+    initialLoading !== undefined ? initialLoading : (initialRoomData || initialError ? false : true)
+  );
+  const [error, setError] = useState(initialError);
+  const [roomData, setRoomData] = useState(initialRoomData);
 
   const fetchRoomStatus = () => {
     setLoading(true);
@@ -42,6 +48,7 @@ export default function PersonalRoomPage() {
   };
 
   useEffect(() => {
+    if (initialRoomData || initialError) return;
     fetchRoomStatus();
   }, [slug]);
 
