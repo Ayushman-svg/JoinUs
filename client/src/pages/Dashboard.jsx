@@ -342,6 +342,7 @@ export default function Dashboard() {
           meetingsStatus={meetingsState.status}
           meetingsError={meetingsState.error}
           onRetry={() => setReloadKey((k) => k + 1)}
+          isSlow={isSlow}
         />
       ) : (
         <ClassicDashboard
@@ -370,6 +371,7 @@ export default function Dashboard() {
           meetingsStatus={meetingsState.status}
           meetingsError={meetingsState.error}
           onRetry={() => setReloadKey((k) => k + 1)}
+          isSlow={isSlow}
         />
       )}
 

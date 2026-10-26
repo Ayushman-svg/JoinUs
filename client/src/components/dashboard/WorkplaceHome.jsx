@@ -43,6 +43,7 @@ export default function WorkplaceHome({
   meetingsStatus,
   meetingsError,
   onRetry,
+  isSlow = false,
 }) {
   // Collapsible section states for In progress, Upcoming, and Recent
   const [collapsedSections, setCollapsedSections] = useState({
@@ -85,7 +86,7 @@ export default function WorkplaceHome({
               <div className="workplace-tile__icon-box" aria-hidden="true">
                 <Video size={28} />
               </div>
-              <span className="workplace-tile__label">New Meeting</span>
+              <span className="workplace-tile__label">New meeting</span>
             </button>
 
             {/* Tile 2: Join (Blue) */}
@@ -159,6 +160,21 @@ export default function WorkplaceHome({
                 </div>
                 <Skeleton width="72px" height="32px" />
               </div>
+              {isSlow && (
+                <p className="auth__hint" style={{ textAlign: 'center', marginTop: 'var(--space-4)' }} role="status">
+                  Waking up the server, this can take up to a minute on the free plan
+                </p>
+              )}
+            </div>
+          )}
+
+          {meetingsStatus === 'error' && (
+            <div className="workplace-today-empty" role="alert">
+              <ErrorState
+                title="Could not load today's schedule"
+                description={meetingsError || 'Please try again in a moment.'}
+                onRetry={onRetry}
+              />
             </div>
           )}
 
@@ -329,6 +345,21 @@ export default function WorkplaceHome({
 
         {!collapsedSections.upcoming && (
           <div id="section-upcoming" className="workplace-collapsible-body">
+            {meetingsStatus === 'loading' && (
+              <div className="dash-skeleton-grid" aria-busy="true">
+                <div className="dash-skeleton-card">
+                  <Skeleton width="60%" height="1.5rem" />
+                  <Skeleton width="40%" height="1rem" />
+                  <Skeleton height="2.5rem" />
+                </div>
+                <div className="dash-skeleton-card">
+                  <Skeleton width="70%" height="1.5rem" />
+                  <Skeleton width="50%" height="1rem" />
+                  <Skeleton height="2.5rem" />
+                </div>
+              </div>
+            )}
+
             {meetingsStatus === 'ready' && upcoming.length === 0 && (
               <EmptyState
                 title={query ? 'No matching upcoming meetings' : 'No upcoming meetings'}
@@ -415,6 +446,19 @@ export default function WorkplaceHome({
 
         {!collapsedSections.recent && (
           <div id="section-recent" className="workplace-collapsible-body">
+            {meetingsStatus === 'loading' && (
+              <div className="dash-skeleton-grid" aria-busy="true">
+                <div className="dash-skeleton-card">
+                  <Skeleton width="50%" height="1.25rem" />
+                  <Skeleton width="40%" height="1rem" />
+                </div>
+                <div className="dash-skeleton-card">
+                  <Skeleton width="60%" height="1.25rem" />
+                  <Skeleton width="30%" height="1rem" />
+                </div>
+              </div>
+            )}
+
             {meetingsStatus === 'ready' && recent.length === 0 && (
               <EmptyState
                 title={query ? 'No matching recent meetings' : 'No past meetings yet'}

@@ -33,6 +33,7 @@ export default function ClassicDashboard({
   meetingsStatus,
   meetingsError,
   onRetry,
+  isSlow = false,
 }) {
   const query = searchQuery.trim().toLowerCase();
 
@@ -204,6 +205,12 @@ export default function ClassicDashboard({
               <Skeleton width="100%" height="2.5rem" />
             </div>
           </div>
+        )}
+
+        {meetingsStatus === 'loading' && isSlow && (
+          <p className="auth__hint" style={{ textAlign: 'center', marginTop: 'var(--space-4)' }} role="status">
+            Waking up the server, this can take up to a minute on the free plan
+          </p>
         )}
 
         {meetingsStatus === 'ready' && upcoming.length === 0 && (
