@@ -271,6 +271,30 @@ The client will start at `http://localhost:5173` and proxy/communicate with the 
 - **Private Chat Messages:** In-meeting private messages between two participants are private to the sender and recipient. They are never broadcast to the room, never delivered to the host (unless the host is one of the two parties), and never viewable by any third party.
 - **REST & History Authorization:** `GET /api/meetings/:code/messages` and History transcript views filter messages strictly on the server: attendees and hosts can only read public messages plus private messages where they are the sender or the recipient.
 
+### Host Security & Permission Matrix (`FEATURE_HOST_SECURITY`)
+
+Roles are derived strictly on the server:
+- **Host (Creator):** The meeting owner. Holds root authority: end meeting for all, promote and demote co-hosts, lock/unlock room, adjust room settings, and moderate participants.
+- **Co-host:** Promoted by the host. Can moderate participants (mute, ask to unmute, stop video, rename, remove, block, lock meeting, change room settings). **Co-hosts can never act on the host or promote/demote anyone.**
+- **Participant:** Regular meeting attendee without moderation capabilities.
+
+| Action | Host | Co-Host | Participant |
+| :--- | :---: | :---: | :---: |
+| End meeting for all | ✅ | ❌ | ❌ |
+| Promote / Demote Co-Host | ✅ | ❌ | ❌ |
+| Lock / Unlock Meeting | ✅ | ✅ | ❌ |
+| Update Security Settings (`chatAllowed`, `shareAllowed`, `muteOnEntry`) | ✅ | ✅ | ❌ |
+| Mute Participant | ✅ | ✅ *(participants only)* | ❌ |
+| Mute All Participants | ✅ | ✅ *(excluding host)* | ❌ |
+| Ask to Unmute *(dismissable prompt, never forced)* | ✅ | ✅ *(participants only)* | ❌ |
+| Stop Video | ✅ | ✅ *(participants only)* | ❌ |
+| Rename Participant *(for this room only)* | ✅ | ✅ *(participants only)* | ❌ |
+| Remove / Block Participant | ✅ | ✅ *(participants only)* | ❌ |
+| Send Chat *(when `chatAllowed = false`)* | ✅ | ✅ | ❌ |
+| Share Screen *(when `shareAllowed = 'host-only'`)* | ✅ | ✅ | ❌ |
+
+> **Browser Media Limitation Note:** Web browsers do not provide an operating system or hardware-level API that allows a remote web server to forcefully switch off or disable a client's physical microphone or camera hardware. Consequently, "Mute" and "Stop video" host controls operate as authoritative software directives sent to the client browser, which stops/disables the local media track. An unmute request is strictly a non-coercive prompt that the user may accept or dismiss.
+
 ---
 
 ## Testing

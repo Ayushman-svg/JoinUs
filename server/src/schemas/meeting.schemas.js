@@ -20,20 +20,47 @@ const futureDate = z
     message: 'Scheduled time must be within one year',
   });
 
+const passcode = z
+  .string()
+  .trim()
+  .min(4, 'Passcode must be between 4 and 10 characters')
+  .max(10, 'Passcode must be between 4 and 10 characters');
+
+const settingsSchema = z.object({
+  muteOnEntry: z.boolean().optional(),
+  chatAllowed: z.boolean().optional(),
+  shareAllowed: z.enum(['all', 'host-only']).optional(),
+  locked: z.boolean().optional(),
+});
+
 const createMeetingSchema = z.object({
   title: title.optional(),
   scheduledAt: futureDate.nullish(),
   waitingRoom: z.boolean().optional(),
+  passcode: passcode.nullish(),
+  settings: settingsSchema.optional(),
+  muteOnEntry: z.boolean().optional(),
 });
 
 const updateMeetingSchema = z
   .object({
     title: title.optional(),
     scheduledAt: futureDate.optional(),
+    passcode: passcode.nullish(),
+    settings: settingsSchema.optional(),
+    waitingRoom: z.boolean().optional(),
   })
-  .refine((data) => data.title !== undefined || data.scheduledAt !== undefined, {
-    message: 'Provide a title or a scheduledAt to update',
-  });
+  .refine(
+    (data) =>
+      data.title !== undefined ||
+      data.scheduledAt !== undefined ||
+      data.passcode !== undefined ||
+      data.settings !== undefined ||
+      data.waitingRoom !== undefined,
+    {
+      message: 'Provide at least one field to update',
+    }
+  );
 
 const listQuerySchema = z.object({
   filter: z.enum(['upcoming', 'past', 'ongoing', 'all']).default('all'),

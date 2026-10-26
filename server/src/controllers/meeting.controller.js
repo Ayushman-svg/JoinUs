@@ -1,3 +1,4 @@
+const bcrypt = require('bcryptjs');
 const AppError = require('../utils/AppError');
 const { generateMeetingCode } = require('../utils/meetingCode');
 const { MEETING_STATUS, MEETING_OPEN_WINDOW_MS } = require('../config/constants');
@@ -25,6 +26,15 @@ function toOwnerJSON(meeting, { isLive = false, participantCount = 0, now = new 
     startsAt: meeting.startsAt,
     status: meeting.status,
     waitingRoom: meeting.waitingRoom,
+    hasPasscode: Boolean(meeting.passcodeHash),
+    settings: meeting.settings || {
+      muteOnEntry: false,
+      chatAllowed: true,
+      shareAllowed: 'all',
+      locked: false,
+    },
+    coHosts: meeting.coHosts || [],
+    blocked: meeting.blocked || [],
     createdAt: meeting.createdAt,
     startedAt: meeting.startedAt ?? null,
     lastActiveAt: meeting.lastActiveAt ?? null,
@@ -35,7 +45,7 @@ function toOwnerJSON(meeting, { isLive = false, participantCount = 0, now = new 
 }
 
 async function findOwnedMeeting(code, user) {
-  const meeting = await Meeting.findOne({ code });
+  const meeting = await Meeting.findOne({ code }).select('+passcodeHash');
   if (!meeting) throw notFound();
   if (!meeting.host.equals(user._id)) {
     throw new AppError(403, 'FORBIDDEN', 'Only the host can do this');
@@ -44,7 +54,19 @@ async function findOwnedMeeting(code, user) {
 }
 
 async function createMeeting(req, res) {
-  const { title, scheduledAt, waitingRoom } = req.body;
+  const { title, scheduledAt, waitingRoom, passcode, settings, muteOnEntry } = req.body;
+
+  let passcodeHash = null;
+  if (passcode) {
+    passcodeHash = await bcrypt.hash(passcode, 10);
+  }
+
+  const initialSettings = {
+    muteOnEntry: Boolean(muteOnEntry ?? settings?.muteOnEntry ?? false),
+    chatAllowed: settings?.chatAllowed !== undefined ? Boolean(settings.chatAllowed) : true,
+    shareAllowed: settings?.shareAllowed === 'host-only' ? 'host-only' : 'all',
+    locked: Boolean(settings?.locked ?? false),
+  };
 
   let meeting;
   for (let attempt = 1; ; attempt += 1) {
@@ -56,6 +78,8 @@ async function createMeeting(req, res) {
         scheduledAt: scheduledAt || null,
         startsAt: scheduledAt || new Date(),
         waitingRoom: waitingRoom !== undefined ? Boolean(waitingRoom) : true,
+        passcodeHash,
+        settings: initialSettings,
       });
       break;
     } catch (err) {
@@ -69,8 +93,12 @@ async function createMeeting(req, res) {
 
 // Public: anyone with the code can see the basics
 async function getMeeting(req, res) {
-  const meeting = await Meeting.findOne({ code: req.valid.params.code }).populate('host', 'name');
+  const meeting = await Meeting.findOne({ code: req.valid.params.code })
+    .select('+passcodeHash')
+    .populate('host', 'name');
   if (!meeting) throw notFound();
+
+  const isLocked = Boolean(meeting.settings?.locked);
 
   res.json({
     meeting: {
@@ -80,6 +108,14 @@ async function getMeeting(req, res) {
       startsAt: meeting.startsAt,
       status: meeting.status,
       waitingRoom: meeting.waitingRoom,
+      hasPasscode: Boolean(meeting.passcodeHash),
+      locked: isLocked,
+      settings: {
+        muteOnEntry: Boolean(meeting.settings?.muteOnEntry),
+        chatAllowed: meeting.settings?.chatAllowed !== false,
+        shareAllowed: meeting.settings?.shareAllowed === 'host-only' ? 'host-only' : 'all',
+        locked: isLocked,
+      },
       host: {
         id: meeting.host?._id ? meeting.host._id.toString() : undefined,
         name: meeting.host?.name ?? 'Unknown',
@@ -157,11 +193,38 @@ async function updateMeeting(req, res) {
     throw new AppError(409, 'MEETING_ENDED', 'Ended meetings cannot be edited');
   }
 
-  const { title, scheduledAt } = req.body;
+  const { title, scheduledAt, passcode, settings, waitingRoom } = req.body;
   if (title !== undefined) meeting.title = title;
   if (scheduledAt !== undefined) {
     meeting.scheduledAt = scheduledAt;
     meeting.startsAt = scheduledAt;
+  }
+  if (waitingRoom !== undefined) {
+    meeting.waitingRoom = Boolean(waitingRoom);
+  }
+  if (passcode !== undefined) {
+    if (passcode === null || passcode === '') {
+      meeting.passcodeHash = null;
+    } else {
+      meeting.passcodeHash = await bcrypt.hash(passcode, 10);
+    }
+  }
+  if (settings !== undefined) {
+    const current = meeting.settings ? meeting.settings.toObject() : {};
+    meeting.settings = {
+      muteOnEntry: settings.muteOnEntry !== undefined ? Boolean(settings.muteOnEntry) : current.muteOnEntry ?? false,
+      chatAllowed: settings.chatAllowed !== undefined ? Boolean(settings.chatAllowed) : current.chatAllowed ?? true,
+      shareAllowed: settings.shareAllowed !== undefined ? settings.shareAllowed : current.shareAllowed ?? 'all',
+      locked: settings.locked !== undefined ? Boolean(settings.locked) : current.locked ?? false,
+    };
+
+    const registry = req.app?.get?.('registry');
+    if (registry) {
+      registry.setSettings?.(meeting.code, meeting.settings);
+      if (settings.locked !== undefined) {
+        registry.setLocked?.(meeting.code, meeting.settings.locked);
+      }
+    }
   }
 
   await meeting.save();

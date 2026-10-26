@@ -43,6 +43,43 @@ const meetingSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // Excluded from queries by default; never returned by any API
+    passcodeHash: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    coHosts: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    blocked: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    settings: {
+      muteOnEntry: {
+        type: Boolean,
+        default: false,
+      },
+      chatAllowed: {
+        type: Boolean,
+        default: true,
+      },
+      shareAllowed: {
+        type: String,
+        enum: ['all', 'host-only'],
+        default: 'all',
+      },
+      locked: {
+        type: Boolean,
+        default: false,
+      },
+    },
     attendees: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -58,13 +95,40 @@ const meetingSchema = new mongoose.Schema(
       default: null,
     },
   },
-  { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
+  {
+    timestamps: true,
+    toJSON: {
+      virtuals: true,
+      transform(doc, ret) {
+        delete ret.passcodeHash;
+        return ret;
+      },
+    },
+    toObject: {
+      virtuals: true,
+      transform(doc, ret) {
+        delete ret.passcodeHash;
+        return ret;
+      },
+    },
+  }
 );
 
 meetingSchema.virtual('durationMs').get(function () {
   if (!this.startedAt || !this.lastActiveAt) return 0;
   return Math.max(0, this.lastActiveAt.getTime() - this.startedAt.getTime());
 });
+
+meetingSchema.virtual('hasPasscode').get(function () {
+  return Boolean(this.passcodeHash);
+});
+
+meetingSchema.methods.verifyPasscode = async function (passcode) {
+  if (!this.passcodeHash) return true;
+  if (!passcode) return false;
+  const bcrypt = require('bcryptjs');
+  return bcrypt.compare(passcode, this.passcodeHash);
+};
 
 meetingSchema.index({ host: 1, startsAt: -1 });
 meetingSchema.index({ host: 1, startedAt: -1 });
