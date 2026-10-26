@@ -25,6 +25,7 @@ import Register from './pages/Register.jsx';
 import SchedulePage from './pages/SchedulePage.jsx';
 import MeetingDetailsPage from './pages/MeetingDetailsPage.jsx';
 import PersonalRoomPage from './pages/PersonalRoomPage.jsx';
+import SettingsPage from './pages/SettingsPage.jsx';
 
 
 
@@ -63,9 +64,8 @@ export default function App() {
             <Route path="/schedule" element={<SchedulePage />} />
             <Route path="/meetings/:code" element={<MeetingDetailsPage />} />
             <Route path="/history" element={<HistoryPage />} />
-
             <Route path="/history/:code" element={<HistoryDetailPage />} />
-
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
           <Route element={<MeetingLayout />}>
             <Route path="/m/:code" element={<MeetingPage />} />
