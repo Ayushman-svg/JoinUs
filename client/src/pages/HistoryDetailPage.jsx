@@ -1,8 +1,10 @@
-import { ArrowLeft, Calendar, Clock, Copy, Lock, MessageSquare, ShieldAlert, Users } from 'lucide-react';
+import { ArrowLeft, BarChart2, Calendar, Clock, Copy, Download, Eye, EyeOff, Lock, MessageSquare, ShieldAlert, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
-import { getHistoryDetail, getMeetingMessages } from '../api/meetings.js';
+import { exportPollCsv, getHistoryDetail, getMeetingMessages, getMeetingPolls } from '../api/meetings.js';
+import PollResultBar from '../components/call/PollResultBar.jsx';
+import { useFeature } from '../hooks/useFeature.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
 import Badge from '../components/ui/Badge.jsx';
@@ -28,10 +30,13 @@ export default function HistoryDetailPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
+  const pollsEnabled = useFeature('POLLS');
 
   const [loading, setLoading] = useState(true);
   const [meeting, setMeeting] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [polls, setPolls] = useState([]);
+  const [activeTab, setActiveTab] = useState('chat');
   const [isForbidden, setIsForbidden] = useState(false);
   const [error, setError] = useState(null);
 
@@ -41,12 +46,19 @@ export default function HistoryDetailPage() {
     setIsForbidden(false);
 
     try {
-      const [detailData, messagesData] = await Promise.all([
+      const promises = [
         getHistoryDetail(code),
         getMeetingMessages(code, 200),
-      ]);
+      ];
+      if (pollsEnabled) {
+        promises.push(getMeetingPolls(code).catch(() => []));
+      }
+      const [detailData, messagesData, pollsData] = await Promise.all(promises);
       setMeeting(detailData);
       setMessages(messagesData || []);
+      if (pollsData) {
+        setPolls(pollsData);
+      }
       setLoading(false);
     } catch (err) {
       if (err?.status === 403 || err?.code === 'FORBIDDEN') {
@@ -60,7 +72,23 @@ export default function HistoryDetailPage() {
 
   useEffect(() => {
     fetchData();
-  }, [code]);
+  }, [code, pollsEnabled]);
+
+  const handleExportCsv = async (pollId) => {
+    try {
+      await exportPollCsv(code, pollId);
+      toast({
+        title: 'Poll CSV downloaded',
+        variant: 'success',
+      });
+    } catch (err) {
+      toast({
+        title: 'Failed to download CSV',
+        description: err?.message || 'Please try again',
+        variant: 'error',
+      });
+    }
+  };
 
   const handleCopyTranscript = async () => {
     if (!messages.length) return;
@@ -223,7 +251,35 @@ export default function HistoryDetailPage() {
             )}
           </header>
 
-          <section className="history-detail__transcript-card" aria-label="Chat transcript">
+          <div className="history-detail__tabs" role="tablist" aria-label="Meeting history views">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'chat'}
+              className={`history-detail__tab ${activeTab === 'chat' ? 'is-active' : ''}`}
+              onClick={() => setActiveTab('chat')}
+            >
+              <MessageSquare size={16} aria-hidden="true" />
+              <span>Chat transcript</span>
+              <span className="history-detail__tab-badge">{messages.length}</span>
+            </button>
+            {pollsEnabled && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'polls'}
+                className={`history-detail__tab ${activeTab === 'polls' ? 'is-active' : ''}`}
+                onClick={() => setActiveTab('polls')}
+              >
+                <BarChart2 size={16} aria-hidden="true" />
+                <span>Polls</span>
+                <span className="history-detail__tab-badge">{polls.length}</span>
+              </button>
+            )}
+          </div>
+
+          {activeTab === 'chat' && (
+            <section className="history-detail__transcript-card" aria-label="Chat transcript">
             <div className="history-detail__transcript-header">
               <div className="history-detail__transcript-title-wrap">
                 <MessageSquare size={18} aria-hidden="true" />
@@ -303,6 +359,101 @@ export default function HistoryDetailPage() {
               )}
             </div>
           </section>
+          )}
+
+          {activeTab === 'polls' && pollsEnabled && (
+            <section className="history-detail__transcript-card" aria-label="Meeting polls">
+              <div className="history-detail__transcript-header">
+                <div className="history-detail__transcript-title-wrap">
+                  <BarChart2 size={18} aria-hidden="true" />
+                  <h2 className="history-detail__transcript-title">Polls</h2>
+                  <span className="history-detail__transcript-count">
+                    ({polls.length} {polls.length === 1 ? 'poll' : 'polls'})
+                  </span>
+                </div>
+              </div>
+
+              <div className="history-detail__transcript-body">
+                {polls.length === 0 ? (
+                  <div className="history-detail__empty-transcript" role="status">
+                    <p>No polls in this meeting</p>
+                  </div>
+                ) : (
+                  <div className="history-polls__list">
+                    {polls.map((poll) => {
+                      const isHostUser =
+                        (meeting?.host?.id && user?.id && String(meeting.host.id) === String(user.id)) ||
+                        Boolean(meeting?.isHost);
+
+                      return (
+                        <div key={poll.id} className="history-poll-item">
+                          <div className="history-poll-item__header">
+                            <div className="history-poll-item__badges">
+                              <Badge
+                                variant={
+                                  poll.status === 'open'
+                                    ? 'success'
+                                    : poll.status === 'draft'
+                                    ? 'neutral'
+                                    : 'secondary'
+                                }
+                              >
+                                {poll.status === 'open'
+                                  ? 'Open'
+                                  : poll.status === 'draft'
+                                  ? 'Draft'
+                                  : 'Closed'}
+                              </Badge>
+                              {poll.anonymous ? (
+                                <Badge variant="neutral">
+                                  <EyeOff size={12} aria-hidden="true" style={{ marginRight: 4 }} />
+                                  Anonymous
+                                </Badge>
+                              ) : (
+                                <Badge variant="neutral">
+                                  <Eye size={12} aria-hidden="true" style={{ marginRight: 4 }} />
+                                  Public
+                                </Badge>
+                              )}
+                              {poll.multiple && <Badge variant="neutral">Multiple choice</Badge>}
+                            </div>
+
+                            {isHostUser && (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                leftIcon={Download}
+                                onClick={() => handleExportCsv(poll.id)}
+                                aria-label="Export poll results to CSV"
+                              >
+                                Export CSV
+                              </Button>
+                            )}
+                          </div>
+
+                          <h3 className="history-poll-item__question">{poll.question}</h3>
+
+                          <div className="history-poll-item__results" role="region" aria-label="Poll options">
+                            {(poll.options || []).map((opt) => (
+                              <PollResultBar
+                                key={opt.id}
+                                option={opt}
+                                totalVotes={poll.totalVotes || 0}
+                              />
+                            ))}
+                          </div>
+
+                          <div className="history-poll-item__meta">
+                            <span>Total votes: {poll.totalVotes || 0}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
         </>
       )}
     </div>

@@ -47,11 +47,13 @@ export default function ParticipantsPanel({
   onDemoteCoHost,
   onMuteAll,
   onSwitchToChat,
+  onSwitchToPolls,
   unreadCount = 0,
   onLowerHand,
   onLowerSelfHand,
 }) {
   const reactionsEnabled = useFeature('REACTIONS');
+  const pollsEnabled = useFeature('POLLS');
   const inMeetingCount = peers.length + 1;
 
   const sortedPeers = useMemo(() => {
@@ -98,6 +100,17 @@ export default function ParticipantsPanel({
               <span className="call-panel__tab-badge">{unreadCount}</span>
             )}
           </button>
+          {pollsEnabled && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={false}
+              className="call-panel__tab"
+              onClick={onSwitchToPolls}
+            >
+              Polls
+            </button>
+          )}
         </nav>
         <Tooltip label="Close panel" side="left">
           <Button

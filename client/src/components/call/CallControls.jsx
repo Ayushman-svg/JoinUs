@@ -1,4 +1,5 @@
 import {
+  BarChart2,
   Check,
   ChevronUp,
   Hand,
@@ -29,6 +30,7 @@ export default function CallControls({
   participantCount = 1,
   isPanelOpen = false,
   isChatOpen = false,
+  isPollsOpen = false,
   unreadCount = 0,
   isSharing = false,
   someoneElseSharing = false,
@@ -36,6 +38,7 @@ export default function CallControls({
   onStopScreenShare,
   onToggleParticipants,
   onToggleChat,
+  onTogglePolls,
   isHost = false,
   canModerate = false,
   isLocked = false,
@@ -52,6 +55,7 @@ export default function CallControls({
 }) {
   const reactionsEnabled = useFeature('REACTIONS');
   const hostSecurityEnabled = useFeature('HOST_SECURITY');
+  const pollsEnabled = useFeature('POLLS');
   const [showAudioMenu, setShowAudioMenu] = useState(false);
   const [showVideoMenu, setShowVideoMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -561,6 +565,22 @@ export default function CallControls({
             <span className="zoom-btn__label">Chat</span>
           </button>
 
+          {/* Polls button */}
+          {pollsEnabled && (
+            <button
+              type="button"
+              className={`zoom-btn ${isPollsOpen ? 'is-active' : ''}`}
+              onClick={onTogglePolls}
+              aria-label="Polls"
+              aria-pressed={isPollsOpen}
+            >
+              <span className="zoom-btn__icon">
+                <BarChart2 size={20} aria-hidden="true" />
+              </span>
+              <span className="zoom-btn__label">Polls</span>
+            </button>
+          )}
+
           {/* Reactions button & Popover */}
           {reactionsEnabled && (
             <div className="zoom-control-relative">
@@ -709,6 +729,23 @@ export default function CallControls({
                 <span className="zoom-sheet-item__label">Participants</span>
                 <span className="zoom-sheet-item__badge">{badgeCount}</span>
               </button>
+
+              {/* Polls (if enabled) */}
+              {pollsEnabled && (
+                <button
+                  type="button"
+                  className="zoom-sheet-item"
+                  onClick={() => {
+                    setShowMoreMenu(false);
+                    onTogglePolls?.();
+                  }}
+                >
+                  <span className="zoom-sheet-item__icon">
+                    <BarChart2 size={20} aria-hidden="true" />
+                  </span>
+                  <span className="zoom-sheet-item__label">Polls</span>
+                </button>
+              )}
 
               {/* Security */}
               <button

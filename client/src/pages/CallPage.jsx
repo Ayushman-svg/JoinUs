@@ -10,8 +10,10 @@ import CallStatusCard from '../components/call/CallStatusCard.jsx';
 import ChatPanel from '../components/call/ChatPanel.jsx';
 import FloatingReactions from '../components/call/FloatingReactions.jsx';
 import MeetingHeader from '../components/call/MeetingHeader.jsx';
+import ParticipantPollCard from '../components/call/ParticipantPollCard.jsx';
 import ParticipantsPanel from '../components/call/ParticipantsPanel.jsx';
 import ParticipantTile from '../components/call/ParticipantTile.jsx';
+import PollsPanel from '../components/call/PollsPanel.jsx';
 import ViewMenu from '../components/call/ViewMenu.jsx';
 import VideoView from '../components/VideoView.jsx';
 import CopyLinkButton from '../components/CopyLinkButton.jsx';
@@ -95,6 +97,7 @@ export default function CallPage() {
   const media = useMeetingMedia();
   const roomViewsEnabled = useFeature('ROOM_VIEWS');
   const reactionsEnabled = useFeature('REACTIONS');
+  const pollsEnabled = useFeature('POLLS');
 
   const location = useLocation();
   const [meeting, setMeeting] = useState(null);
@@ -801,6 +804,13 @@ export default function CallPage() {
           )}
 
           {reactionsEnabled && <FloatingReactions reactions={call.reactions} />}
+          {pollsEnabled && inCall && call.activePoll && activePanel !== 'polls' && (
+            <ParticipantPollCard
+              poll={call.activePoll}
+              onSubmitVote={call.submitVote}
+              onDismiss={call.dismissActivePoll}
+            />
+          )}
         </main>
 
         {inCall && activePanel && (
@@ -819,6 +829,7 @@ export default function CallPage() {
                   isOpen={activePanel === 'participants'}
                   onClose={() => setActivePanel(null)}
                   onSwitchToChat={() => setActivePanel('chat')}
+                  onSwitchToPolls={() => setActivePanel('polls')}
                   unreadCount={call.unreadCount}
                   isHost={call.isHost}
                   isCoHost={call.isCoHost}
@@ -859,6 +870,7 @@ export default function CallPage() {
                   isOpen={activePanel === 'chat'}
                   onClose={() => setActivePanel(null)}
                   onSwitchToParticipants={() => setActivePanel('participants')}
+                  onSwitchToPolls={() => setActivePanel('polls')}
                   participantCount={call.peers.length + 1}
                   waitingCount={call.canModerate ? call.waitingList.length : 0}
                   messages={call.messages}
@@ -875,6 +887,27 @@ export default function CallPage() {
                 />
               </FeatureBoundary>
             )}
+            {activePanel === 'polls' && pollsEnabled && (
+              <FeatureBoundary title="Polls panel is unavailable">
+                <PollsPanel
+                  isOpen={activePanel === 'polls'}
+                  onClose={() => setActivePanel(null)}
+                  onSwitchToParticipants={() => setActivePanel('participants')}
+                  onSwitchToChat={() => setActivePanel('chat')}
+                  participantCount={call.peers.length + 1}
+                  waitingCount={call.canModerate ? call.waitingList.length : 0}
+                  unreadCount={call.unreadCount}
+                  canModerate={call.canModerate}
+                  isHost={call.isHost}
+                  activePoll={call.activePoll}
+                  meetingCode={code}
+                  onCreatePoll={call.createPoll}
+                  onLaunchPoll={call.launchPoll}
+                  onClosePoll={call.closePoll}
+                  onSubmitVote={call.submitVote}
+                />
+              </FeatureBoundary>
+            )}
           </div>
         )}
       </div>
@@ -887,6 +920,7 @@ export default function CallPage() {
           participantCount={call.peers.length + 1}
           isPanelOpen={activePanel === 'participants'}
           isChatOpen={activePanel === 'chat'}
+          isPollsOpen={activePanel === 'polls'}
           unreadCount={call.unreadCount}
           isSharing={isSelfSharing}
           someoneElseSharing={isOtherSharing}
@@ -897,6 +931,9 @@ export default function CallPage() {
           }
           onToggleChat={() =>
             setActivePanel((curr) => (curr === 'chat' ? null : 'chat'))
+          }
+          onTogglePolls={() =>
+            setActivePanel((curr) => (curr === 'polls' ? null : 'polls'))
           }
           isHost={call.isHost}
           canModerate={call.canModerate}

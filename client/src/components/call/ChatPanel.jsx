@@ -3,6 +3,7 @@ import { Send, X, Lock, AlertCircle } from 'lucide-react';
 
 import Button from '../ui/Button.jsx';
 import Tooltip from '../ui/Tooltip.jsx';
+import { useFeature } from '../../hooks/useFeature.js';
 
 function formatTime(isoString) {
   if (!isoString) return '';
@@ -17,6 +18,7 @@ export default function ChatPanel({
   isOpen,
   onClose,
   onSwitchToParticipants,
+  onSwitchToPolls,
   participantCount = 1,
   waitingCount = 0,
   messages = [],
@@ -35,6 +37,7 @@ export default function ChatPanel({
   const [showNewPill, setShowNewPill] = useState(false);
   const [selectedRecipientId, setSelectedRecipientId] = useState('');
   const [selectedRecipientName, setSelectedRecipientName] = useState('');
+  const pollsEnabled = useFeature('POLLS');
   const listRef = useRef(null);
   const textareaRef = useRef(null);
   const isNearBottomRef = useRef(true);
@@ -197,6 +200,17 @@ export default function ChatPanel({
           >
             Chat
           </button>
+          {pollsEnabled && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={false}
+              className="call-panel__tab"
+              onClick={onSwitchToPolls}
+            >
+              Polls
+            </button>
+          )}
         </nav>
         <Tooltip label="Close panel" side="left">
           <Button
