@@ -1177,9 +1177,9 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     return { ...feedbackPayload };
   });
 
-  // chat:send { text, to? }
+  // chat:send { text, to?, replyTo? }
   on(socket, 'chat:send', async (payload) => {
-    const { text, to } = parse(chatSendSchema, payload);
+    const { text, to, replyTo } = parse(chatSendSchema, payload);
 
     const code = registry.getRoomCode(socket.id);
     if (!code) {
@@ -1198,6 +1198,11 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
 
     const { user } = socket.data;
 
+    const meeting = await Meeting.findOne({ code }).select('_id host').lean();
+    if (!meeting) {
+      throw new AppError(404, 'MEETING_NOT_FOUND', 'Meeting not found');
+    }
+
     let recipientPeer = null;
     if (to) {
       if (String(to) === String(user.id)) {
@@ -1210,9 +1215,24 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       }
     }
 
-    const meeting = await Meeting.findOne({ code }).select('_id host').lean();
-    if (!meeting) {
-      throw new AppError(404, 'MEETING_NOT_FOUND', 'Meeting not found');
+    let replyToData = null;
+    if (replyTo) {
+      const parentMsg = await Message.findOne({ _id: replyTo, meeting: meeting._id });
+      if (!parentMsg) {
+        throw new AppError(400, 'INVALID_REPLY', 'Referenced message does not exist');
+      }
+      if (
+        parentMsg.to &&
+        String(parentMsg.to) !== String(user.id) &&
+        String(parentMsg.user) !== String(user.id)
+      ) {
+        throw new AppError(403, 'FORBIDDEN', 'Cannot reply to a private message you cannot see');
+      }
+      replyToData = {
+        id: parentMsg._id,
+        text: parentMsg.text.slice(0, 300),
+        fromName: parentMsg.name,
+      };
     }
 
     let saved;
@@ -1226,6 +1246,9 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       if (recipientPeer) {
         docData.to = recipientPeer.userId;
         docData.toName = recipientPeer.name;
+      }
+      if (replyToData) {
+        docData.replyTo = replyToData;
       }
       saved = await Message.create(docData);
     } catch (err) {
@@ -1248,6 +1271,13 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       message.to = {
         id: saved.to.toString(),
         name: saved.toName,
+      };
+    }
+    if (saved.replyTo && saved.replyTo.id) {
+      message.replyTo = {
+        id: saved.replyTo.id.toString(),
+        text: saved.replyTo.text,
+        fromName: saved.replyTo.fromName,
       };
     }
 
