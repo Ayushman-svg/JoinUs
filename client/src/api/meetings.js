@@ -30,3 +30,30 @@ export const listHistory = (options) =>
 // History details for a meeting
 export const getHistoryDetail = (code, options) =>
   api.get(`/api/history/${encodeURIComponent(code)}`, options).then((res) => res.meeting);
+
+// Polls for an active or past meeting (host or admitted attendee)
+export const getMeetingPolls = (code, options = {}) =>
+  api.get(`/api/meetings/${encodeURIComponent(code)}/polls`, options).then((res) => res.polls);
+
+// Download Poll CSV (host only)
+export const exportPollCsv = async (code, pollId) => {
+  const token = localStorage.getItem('token');
+  const res = await fetch(`/api/meetings/${encodeURIComponent(code)}/polls/${encodeURIComponent(pollId)}/export.csv`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData?.error?.message || 'Failed to export CSV');
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `poll-${pollId}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};

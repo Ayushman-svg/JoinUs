@@ -38,6 +38,7 @@ const INITIAL = {
   selfHandRaised: false,
   selfRaisedAt: null,
   selfFeedback: null,
+  activePoll: null,
 };
 
 // Joins the meeting `code` once `enabled` is true and leaves when the component unmounts,
@@ -160,6 +161,12 @@ export default function useCall({
   const setFeedback = useCallback((kind) => sessionRef.current?.setFeedback(kind), []);
   const lowerPeerHand = useCallback((peerId) => sessionRef.current?.lowerPeerHand(peerId), []);
 
+  const createPoll = useCallback((payload) => sessionRef.current?.createPoll(payload), []);
+  const launchPoll = useCallback((pollId) => sessionRef.current?.launchPoll(pollId), []);
+  const closePoll = useCallback((pollId) => sessionRef.current?.closePoll(pollId), []);
+  const submitVote = useCallback((pollId, optionIds) => sessionRef.current?.submitVote(pollId, optionIds), []);
+  const dismissActivePoll = useCallback(() => sessionRef.current?.dismissActivePoll(), []);
+
   return {
     ...state,
     retry,
@@ -193,5 +200,10 @@ export default function useCall({
     setHandRaised,
     setFeedback,
     lowerPeerHand,
+    createPoll,
+    launchPoll,
+    closePoll,
+    submitVote,
+    dismissActivePoll,
   };
 }

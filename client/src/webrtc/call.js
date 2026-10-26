@@ -85,6 +85,7 @@ export class CallSession {
     this.isLocked = false;
     this.securityToast = null;
     this.unmuteRequestPrompt = null;
+    this.activePoll = null;
     this.selfId = null;
     this.screenShare = null;
     this.joinAttempt = 0;
@@ -157,6 +158,7 @@ export class CallSession {
       selfHandRaised: false,
       selfRaisedAt: null,
       selfFeedback: null,
+      activePoll: null,
     };
   }
 
@@ -311,6 +313,26 @@ export class CallSession {
       signaling.on('reaction:new', (reaction) => this.#onReactionNew(reaction)),
       signaling.on('hand:changed', (data) => this.#onHandChanged(data)),
       signaling.on('feedback:changed', (data) => this.#onFeedbackChanged(data)),
+      signaling.on('poll:launched', ({ poll }) => {
+        this.activePoll = poll;
+        this.#update({ activePoll: this.activePoll });
+      }),
+      signaling.on('poll:updated', ({ poll }) => {
+        if (this.activePoll && this.activePoll.id === poll?.id) {
+          this.activePoll = { ...this.activePoll, ...poll };
+        } else {
+          this.activePoll = poll;
+        }
+        this.#update({ activePoll: this.activePoll });
+      }),
+      signaling.on('poll:closed', ({ poll }) => {
+        if (this.activePoll && this.activePoll.id === poll?.id) {
+          this.activePoll = { ...this.activePoll, ...poll, status: 'closed' };
+        } else {
+          this.activePoll = poll;
+        }
+        this.#update({ activePoll: this.activePoll });
+      }),
       signaling.on('signal', (message) => this.#onSignal(message)),
     ];
 
@@ -412,6 +434,51 @@ export class CallSession {
     return res;
   }
 
+  async createPoll(payload) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    const res = await this.signaling.request('poll:create', payload);
+    if (res?.poll && payload?.launchNow) {
+      this.activePoll = res.poll;
+      this.#update({ activePoll: this.activePoll });
+    }
+    return res?.poll;
+  }
+
+  async launchPoll(pollId) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    const res = await this.signaling.request('poll:launch', { pollId });
+    if (res?.poll) {
+      this.activePoll = res.poll;
+      this.#update({ activePoll: this.activePoll });
+    }
+    return res?.poll;
+  }
+
+  async closePoll(pollId) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    const res = await this.signaling.request('poll:close', { pollId });
+    if (res?.poll) {
+      this.activePoll = res.poll;
+      this.#update({ activePoll: this.activePoll });
+    }
+    return res?.poll;
+  }
+
+  async submitVote(pollId, optionIds) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    const res = await this.signaling.request('poll:vote', { pollId, optionIds });
+    if (res?.poll) {
+      this.activePoll = res.poll;
+      this.#update({ activePoll: this.activePoll });
+    }
+    return res?.poll;
+  }
+
+  dismissActivePoll() {
+    this.activePoll = null;
+    this.#update({ activePoll: null });
+  }
+
   async refreshWaitingList() {
     if (this.finished || !this.canModerate || !this.signaling?.connected) return;
     try {
@@ -460,6 +527,7 @@ export class CallSession {
           isCoHost: res.isCoHost,
           settings: res.settings,
           locked: res.locked,
+          activePoll: res.activePoll,
         });
       } else if (res?.status === 'ended') {
         this.#stopGuestWaitingPolling();
@@ -529,6 +597,11 @@ export class CallSession {
         } else if (res?.status === 'removed') {
           this.#stopInCallPolling();
           this.#finish(CallStatus.REMOVED, { reason: 'REMOVED_BY_HOST' });
+        } else if (res?.activePoll !== undefined) {
+          if (JSON.stringify(this.activePoll) !== JSON.stringify(res.activePoll)) {
+            this.activePoll = res.activePoll;
+            this.#update({ activePoll: this.activePoll });
+          }
         }
       } catch (err) {
         if (err?.code === 'MEETING_ENDED') {
@@ -1017,6 +1090,9 @@ export class CallSession {
       this.selfHandRaised = Boolean(response.handRaised);
       this.selfRaisedAt = response.raisedAt || null;
       this.selfFeedback = response.feedback || null;
+      if (response.activePoll !== undefined) {
+        this.activePoll = response.activePoll;
+      }
       this.#update({
         status: CallStatus.ACTIVE,
         selfId: this.selfId,
@@ -1031,6 +1107,7 @@ export class CallSession {
         selfHandRaised: this.selfHandRaised,
         selfRaisedAt: this.selfRaisedAt,
         selfFeedback: this.selfFeedback,
+        activePoll: this.activePoll,
       });
       if (!this.historyLoaded) {
         this.loadHistory();
@@ -1073,7 +1150,7 @@ export class CallSession {
     this.#update({ waitingList: this.waitingList });
   }
 
-  #onAdmitted({ peerId, peers, screenSharer, role, isCoHost, isHost, settings, locked }) {
+  #onAdmitted({ peerId, peers, screenSharer, role, isCoHost, isHost, settings, locked, activePoll }) {
     if (this.finished) return;
     if (this.state.status === CallStatus.ACTIVE && this.selfId) return;
     this.isWaiting = false;
@@ -1087,6 +1164,7 @@ export class CallSession {
     if (settings) this.roomSettings = settings;
     if (locked !== undefined) this.isLocked = Boolean(locked || this.roomSettings?.locked);
     this.screenShare = screenSharer ?? null;
+    if (activePoll !== undefined) this.activePoll = activePoll;
     this.#update({
       status: CallStatus.ACTIVE,
       selfId: this.selfId,
@@ -1097,6 +1175,7 @@ export class CallSession {
       roomSettings: this.roomSettings,
       isLocked: this.isLocked,
       screenShare: this.screenShare,
+      activePoll: this.activePoll,
       isReconnecting: false,
     });
     this.updateLocalMedia();
@@ -1521,6 +1600,7 @@ export class CallSession {
     if ('selfHandRaised' in patch) this.selfHandRaised = patch.selfHandRaised;
     if ('selfRaisedAt' in patch) this.selfRaisedAt = patch.selfRaisedAt;
     if ('selfFeedback' in patch) this.selfFeedback = patch.selfFeedback;
+    if ('activePoll' in patch) this.activePoll = patch.activePoll;
     const activeScreen = this.#resolveScreenStream();
     this.state = {
       ...this.state,
@@ -1550,6 +1630,7 @@ export class CallSession {
       selfHandRaised: this.selfHandRaised,
       selfRaisedAt: this.selfRaisedAt,
       selfFeedback: this.selfFeedback,
+      activePoll: this.activePoll,
       peers: [...this.peers.entries()].map(([peerId, entry]) => ({
         peerId,
         user: entry.user,
