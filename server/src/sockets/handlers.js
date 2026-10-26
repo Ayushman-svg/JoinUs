@@ -617,6 +617,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       settings: registry.getSettings(code),
       locked: registry.isLocked(code),
       role: 'participant',
+      activePoll: registry.formatPollForUser(code, peer.userId) || null,
     };
 
     const guestSocket = io.sockets.sockets.get(peerId);
