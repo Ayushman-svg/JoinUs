@@ -23,6 +23,46 @@ const meetingSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    description: {
+      type: String,
+      trim: true,
+      default: '',
+      maxlength: 2000,
+    },
+    // Duration in minutes
+    duration: {
+      type: Number,
+      default: 30,
+      min: 5,
+      max: 1440,
+    },
+    timeZone: {
+      type: String,
+      trim: true,
+      default: 'UTC',
+    },
+    // Recurrence rule: frequency (daily, weekly, monthly), count (up to 20), or until date
+    recurrence: {
+      frequency: {
+        type: String,
+        enum: ['daily', 'weekly', 'monthly'],
+        default: null,
+      },
+      count: {
+        type: Number,
+        min: 1,
+        max: 20,
+        default: null,
+      },
+      until: {
+        type: Date,
+        default: null,
+      },
+    },
+    isPersonalRoom: {
+      type: Boolean,
+      default: false,
+    },
     // Null for instant meetings
     scheduledAt: {
       type: Date,

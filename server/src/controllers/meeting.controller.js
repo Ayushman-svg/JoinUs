@@ -1,7 +1,8 @@
 const bcrypt = require('bcryptjs');
 const AppError = require('../utils/AppError');
 const { generateMeetingCode } = require('../utils/meetingCode');
-const { MEETING_STATUS, MEETING_OPEN_WINDOW_MS } = require('../config/constants');
+const { generateIcs } = require('../utils/ics');
+const { MEETING_STATUS } = require('../config/constants');
 const Meeting = require('../models/Meeting');
 const { getMeetingPhase } = require('../utils/meetingPhase');
 
@@ -22,6 +23,11 @@ function toOwnerJSON(meeting, { isLive = false, participantCount = 0, now = new 
     id: meeting.id,
     code: meeting.code,
     title: meeting.title,
+    description: meeting.description || '',
+    duration: meeting.duration || 30,
+    timeZone: meeting.timeZone || 'UTC',
+    recurrence: meeting.recurrence || null,
+    isPersonalRoom: Boolean(meeting.isPersonalRoom),
     scheduledAt: meeting.scheduledAt,
     startsAt: meeting.startsAt,
     status: meeting.status,
@@ -44,6 +50,57 @@ function toOwnerJSON(meeting, { isLive = false, participantCount = 0, now = new 
   };
 }
 
+function expandOccurrences(meeting, { isLive, participantCount, now }) {
+  const baseJson = toOwnerJSON(meeting, { isLive, participantCount, now });
+  if (!meeting.recurrence?.frequency || !meeting.scheduledAt) {
+    return [baseJson];
+  }
+
+  const { frequency, count, until } = meeting.recurrence;
+  const maxOccurrences = Math.min(count || 20, 20);
+  const occurrences = [baseJson];
+
+  let current = new Date(meeting.scheduledAt);
+  const untilDate = until ? new Date(until) : null;
+
+  for (let i = 1; i < maxOccurrences; i += 1) {
+    const next = new Date(current);
+    if (frequency === 'daily') {
+      next.setDate(next.getDate() + 1);
+    } else if (frequency === 'weekly') {
+      next.setDate(next.getDate() + 7);
+    } else if (frequency === 'monthly') {
+      next.setMonth(next.getMonth() + 1);
+    }
+
+    if (untilDate && next.getTime() > untilDate.getTime()) {
+      break;
+    }
+
+    current = next;
+    const occDoc = {
+      ...meeting.toObject(),
+      scheduledAt: next,
+      startsAt: next,
+    };
+    const occPhase = getMeetingPhase(occDoc, { now, isLive: false });
+
+    occurrences.push({
+      ...baseJson,
+      id: `${meeting.id}_occ_${i}`,
+      scheduledAt: next,
+      startsAt: next,
+      phase: occPhase,
+      isLive: false,
+      participantCount: 0,
+      isOccurrence: true,
+      occurrenceIndex: i,
+    });
+  }
+
+  return occurrences;
+}
+
 async function findOwnedMeeting(code, user) {
   const meeting = await Meeting.findOne({ code }).select('+passcodeHash');
   if (!meeting) throw notFound();
@@ -54,7 +111,19 @@ async function findOwnedMeeting(code, user) {
 }
 
 async function createMeeting(req, res) {
-  const { title, scheduledAt, waitingRoom, passcode, settings, muteOnEntry } = req.body;
+  const {
+    title,
+    description,
+    duration,
+    timeZone,
+    recurrence,
+    isPersonalRoom,
+    scheduledAt,
+    waitingRoom,
+    passcode,
+    settings,
+    muteOnEntry,
+  } = req.body;
 
   let passcodeHash = null;
   if (passcode) {
@@ -74,6 +143,11 @@ async function createMeeting(req, res) {
       meeting = await Meeting.create({
         code: generateMeetingCode(),
         title: title || `${req.user.name}'s meeting`,
+        description: description || '',
+        duration: duration || 30,
+        timeZone: timeZone || 'UTC',
+        recurrence: recurrence || null,
+        isPersonalRoom: Boolean(isPersonalRoom),
         host: req.user._id,
         scheduledAt: scheduledAt || null,
         startsAt: scheduledAt || new Date(),
@@ -104,6 +178,11 @@ async function getMeeting(req, res) {
     meeting: {
       code: meeting.code,
       title: meeting.title,
+      description: meeting.description || '',
+      duration: meeting.duration || 30,
+      timeZone: meeting.timeZone || 'UTC',
+      recurrence: meeting.recurrence || null,
+      isPersonalRoom: Boolean(meeting.isPersonalRoom),
       scheduledAt: meeting.scheduledAt,
       startsAt: meeting.startsAt,
       status: meeting.status,
@@ -131,11 +210,11 @@ async function listMeetings(req, res) {
 
   const rawMeetings = await Meeting.find({ host: req.user._id });
 
-  const mapped = rawMeetings.map((m) => {
+  const mapped = rawMeetings.flatMap((m) => {
     const peers = registry ? registry.getPeers(m.code) : [];
     const isLive = peers.length > 0;
     const participantCount = peers.length;
-    return toOwnerJSON(m, { isLive, participantCount, now });
+    return expandOccurrences(m, { isLive, participantCount, now });
   });
 
   let filtered = mapped;
@@ -193,8 +272,23 @@ async function updateMeeting(req, res) {
     throw new AppError(409, 'MEETING_ENDED', 'Ended meetings cannot be edited');
   }
 
-  const { title, scheduledAt, passcode, settings, waitingRoom } = req.body;
+  const {
+    title,
+    description,
+    duration,
+    timeZone,
+    recurrence,
+    scheduledAt,
+    passcode,
+    settings,
+    waitingRoom,
+  } = req.body;
+
   if (title !== undefined) meeting.title = title;
+  if (description !== undefined) meeting.description = description;
+  if (duration !== undefined) meeting.duration = duration;
+  if (timeZone !== undefined) meeting.timeZone = timeZone;
+  if (recurrence !== undefined) meeting.recurrence = recurrence;
   if (scheduledAt !== undefined) {
     meeting.scheduledAt = scheduledAt;
     meeting.startsAt = scheduledAt;
@@ -212,10 +306,20 @@ async function updateMeeting(req, res) {
   if (settings !== undefined) {
     const current = meeting.settings ? meeting.settings.toObject() : {};
     meeting.settings = {
-      muteOnEntry: settings.muteOnEntry !== undefined ? Boolean(settings.muteOnEntry) : current.muteOnEntry ?? false,
-      chatAllowed: settings.chatAllowed !== undefined ? Boolean(settings.chatAllowed) : current.chatAllowed ?? true,
-      shareAllowed: settings.shareAllowed !== undefined ? settings.shareAllowed : current.shareAllowed ?? 'all',
-      locked: settings.locked !== undefined ? Boolean(settings.locked) : current.locked ?? false,
+      muteOnEntry:
+        settings.muteOnEntry !== undefined
+          ? Boolean(settings.muteOnEntry)
+          : current.muteOnEntry ?? false,
+      chatAllowed:
+        settings.chatAllowed !== undefined
+          ? Boolean(settings.chatAllowed)
+          : current.chatAllowed ?? true,
+      shareAllowed:
+        settings.shareAllowed !== undefined
+          ? settings.shareAllowed
+          : current.shareAllowed ?? 'all',
+      locked:
+        settings.locked !== undefined ? Boolean(settings.locked) : current.locked ?? false,
     };
 
     const registry = req.app?.get?.('registry');
@@ -243,4 +347,23 @@ async function cancelMeeting(req, res) {
   res.json({ meeting: toOwnerJSON(meeting) });
 }
 
-module.exports = { createMeeting, getMeeting, listMeetings, updateMeeting, cancelMeeting };
+async function downloadCalendarIcs(req, res) {
+  const meeting = await Meeting.findOne({ code: req.valid.params.code }).select('+passcodeHash');
+  if (!meeting) throw notFound();
+
+  const clientOrigin = process.env.CLIENT_ORIGIN?.split(',')[0] || 'http://localhost:5173';
+  const icsContent = generateIcs(meeting, { baseUrl: clientOrigin });
+
+  res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="meeting-${meeting.code}.ics"`);
+  res.send(icsContent);
+}
+
+module.exports = {
+  createMeeting,
+  getMeeting,
+  listMeetings,
+  updateMeeting,
+  cancelMeeting,
+  downloadCalendarIcs,
+};

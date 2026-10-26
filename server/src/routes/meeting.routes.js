@@ -18,7 +18,9 @@ const {
   listMeetings,
   updateMeeting,
   cancelMeeting,
+  downloadCalendarIcs,
 } = require('../controllers/meeting.controller');
+
 const { getMeetingMessages } = require('../controllers/history.controller');
 const { getMeetingPolls, exportPollCsv } = require('../controllers/polls.controller');
 const { getMeetingCaptions } = require('../controllers/captions.controller');
@@ -64,8 +66,16 @@ router.get(
   asyncHandler(getMeetingCaptions)
 );
 
+// Download .ics calendar event
+router.get(
+  '/:code/calendar.ics',
+  validate(codeParamsSchema, 'params'),
+  asyncHandler(downloadCalendarIcs)
+);
+
 // Public: minimal info for the invite page
 router.get('/:code', validate(codeParamsSchema, 'params'), asyncHandler(getMeeting));
+
 
 // Host-only
 router.patch(

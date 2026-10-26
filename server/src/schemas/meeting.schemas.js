@@ -33,8 +33,21 @@ const settingsSchema = z.object({
   locked: z.boolean().optional(),
 });
 
+const recurrenceSchema = z
+  .object({
+    frequency: z.enum(['daily', 'weekly', 'monthly']),
+    count: z.coerce.number().int().min(1).max(20).optional(),
+    until: futureDate.optional(),
+  })
+  .nullish();
+
 const createMeetingSchema = z.object({
   title: title.optional(),
+  description: z.string().trim().max(2000).optional(),
+  duration: z.coerce.number().int().min(5).max(1440).optional(),
+  timeZone: z.string().trim().max(100).optional(),
+  recurrence: recurrenceSchema,
+  isPersonalRoom: z.boolean().optional(),
   scheduledAt: futureDate.nullish(),
   waitingRoom: z.boolean().optional(),
   passcode: passcode.nullish(),
@@ -45,6 +58,10 @@ const createMeetingSchema = z.object({
 const updateMeetingSchema = z
   .object({
     title: title.optional(),
+    description: z.string().trim().max(2000).optional(),
+    duration: z.coerce.number().int().min(5).max(1440).optional(),
+    timeZone: z.string().trim().max(100).optional(),
+    recurrence: recurrenceSchema,
     scheduledAt: futureDate.optional(),
     passcode: passcode.nullish(),
     settings: settingsSchema.optional(),
@@ -53,6 +70,10 @@ const updateMeetingSchema = z
   .refine(
     (data) =>
       data.title !== undefined ||
+      data.description !== undefined ||
+      data.duration !== undefined ||
+      data.timeZone !== undefined ||
+      data.recurrence !== undefined ||
       data.scheduledAt !== undefined ||
       data.passcode !== undefined ||
       data.settings !== undefined ||
@@ -61,6 +82,7 @@ const updateMeetingSchema = z
       message: 'Provide at least one field to update',
     }
   );
+
 
 const listQuerySchema = z.object({
   filter: z.enum(['upcoming', 'past', 'ongoing', 'all']).default('all'),

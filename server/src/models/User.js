@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { generateUserSlug } = require('../utils/slugify');
 
 const userSchema = new mongoose.Schema(
   {
@@ -23,12 +24,20 @@ const userSchema = new mongoose.Schema(
       required: true,
       select: false,
     },
+    personalRoomSlug: {
+      type: String,
+      unique: true,
+      sparse: true,
+      lowercase: true,
+      trim: true,
+    },
   },
   {
     timestamps: { createdAt: true, updatedAt: false },
     toJSON: {
       transform(doc, ret) {
         ret.id = ret._id.toString();
+        ret.personalRoomSlug = ret.personalRoomSlug || (doc.name ? generateUserSlug(doc.name) : undefined);
         delete ret._id;
         delete ret.__v;
         delete ret.passwordHash;
@@ -38,4 +47,10 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.models.User || mongoose.model('User', userSchema);
+userSchema.pre('save', function () {
+  if (!this.personalRoomSlug && this.name) {
+    this.personalRoomSlug = generateUserSlug(this.name);
+  }
+});
+
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);
