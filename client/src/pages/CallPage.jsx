@@ -788,6 +788,7 @@ export default function CallPage() {
           handRaised={handRaised}
           onToggleHandRaise={() => setHandRaised((prev) => !prev)}
           onSendReaction={(emoji) => setLocalReaction(emoji)}
+          onReplaceTrack={call.replaceTrack}
         />
       )}
 

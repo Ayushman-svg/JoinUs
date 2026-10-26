@@ -567,6 +567,31 @@ export class CallSession {
     return this.signaling.request('host:stop-share', {});
   }
 
+  // Replaces the outgoing track across all active peer connections without renegotiation
+  async replaceTrack(kind, newTrack) {
+    if (this.finished) return;
+    for (const entry of this.peers.values()) {
+      if (!entry.peer || entry.peer.closed) continue;
+      const senders = entry.peer.getSenders();
+      for (const sender of senders) {
+        if (sender.track && sender.track.kind === kind) {
+          // Do not replace screen share video track
+          if (
+            kind === 'video' &&
+            this.localScreenStream?.getVideoTracks()?.includes(sender.track)
+          ) {
+            continue;
+          }
+          try {
+            await sender.replaceTrack(newTrack);
+          } catch {
+            /* ignore sender error */
+          }
+        }
+      }
+    }
+  }
+
   // Tell the others that our microphone or camera was switched on or off
   updateLocalMedia() {
     if (this.state.status === CallStatus.ACTIVE && this.signaling?.connected) {

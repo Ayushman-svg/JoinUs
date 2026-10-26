@@ -101,6 +101,7 @@ export default function useCall({
   const startScreenShare = useCallback(() => sessionRef.current?.startScreenShare(), []);
   const stopScreenShare = useCallback(() => sessionRef.current?.stopScreenShare(), []);
   const stopHostScreenShare = useCallback(() => sessionRef.current?.stopHostScreenShare(), []);
+  const replaceTrack = useCallback((kind, newTrack) => sessionRef.current?.replaceTrack(kind, newTrack), []);
 
   return {
     ...state,
@@ -119,5 +120,6 @@ export default function useCall({
     startScreenShare,
     stopScreenShare,
     stopHostScreenShare,
+    replaceTrack,
   };
 }

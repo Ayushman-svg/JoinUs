@@ -44,7 +44,15 @@ export default function useLocalMedia({ audio = true, video = true, autoStart = 
     setState({ ...IDLE, status: 'requesting' });
 
     try {
-      const { stream, audioError, videoError } = await getLocalStreamWithFallback({ audio, video });
+      const preferredMic = typeof localStorage !== 'undefined' ? localStorage.getItem('joinus_preferred_mic') : null;
+      const preferredCam = typeof localStorage !== 'undefined' ? localStorage.getItem('joinus_preferred_cam') : null;
+
+      const { stream, audioError, videoError } = await getLocalStreamWithFallback({
+        audio,
+        video,
+        audioDeviceId: preferredMic,
+        videoDeviceId: preferredCam,
+      });
 
       // The component went away or a newer request started: give the devices back
       if (!mounted.current || id !== requestId.current) {
@@ -81,6 +89,63 @@ export default function useLocalMedia({ audio = true, video = true, autoStart = 
     }
   }, []);
 
+  const switchDevice = useCallback(
+    async (kind, deviceId) => {
+      if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return null;
+      try {
+        const constraints =
+          kind === 'audio'
+            ? {
+                audio: {
+                  echoCancellation: true,
+                  noiseSuppression: true,
+                  autoGainControl: true,
+                  deviceId: { exact: deviceId },
+                },
+              }
+            : {
+                video: {
+                  width: { ideal: 1280 },
+                  height: { ideal: 720 },
+                  frameRate: { ideal: 30, max: 30 },
+                  deviceId: { exact: deviceId },
+                },
+              };
+
+        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+        const newTrack = newStream.getTracks().find((t) => t.kind === kind);
+        if (!newTrack) return null;
+
+        const currentStream = streamRef.current;
+        if (currentStream) {
+          const oldTracks = currentStream.getTracks().filter((t) => t.kind === kind);
+          oldTracks.forEach((t) => {
+            currentStream.removeTrack(t);
+            t.stop();
+          });
+
+          newTrack.enabled = enabled[kind];
+          currentStream.addTrack(newTrack);
+
+          setState((prev) => ({ ...prev, stream: currentStream }));
+        }
+
+        try {
+          localStorage.setItem(
+            kind === 'audio' ? 'joinus_preferred_mic' : 'joinus_preferred_cam',
+            deviceId
+          );
+        } catch {}
+
+        return newTrack;
+      } catch (err) {
+        console.error(`Failed to switch ${kind} device:`, err);
+        return null;
+      }
+    },
+    [enabled]
+  );
+
   useEffect(() => {
     mounted.current = true;
     if (autoStart) start();
@@ -112,5 +177,6 @@ export default function useLocalMedia({ audio = true, video = true, autoStart = 
     stop,
     toggleAudio: () => toggle('audio'),
     toggleVideo: () => toggle('video'),
+    switchDevice,
   };
 }
