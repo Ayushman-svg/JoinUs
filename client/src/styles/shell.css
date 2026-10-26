@@ -367,3 +367,93 @@
     padding: var(--space-8) var(--space-6);
   }
 }
+
+.shell-header__brand {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  color: var(--color-text);
+  margin-right: var(--space-2);
+}
+
+@media (min-width: 768px) {
+  .shell-header__brand {
+    display: none;
+  }
+}
+
+.shell-header__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+
+.shell-header__icon-btn:hover,
+.shell-header__icon-btn.is-active {
+  background-color: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+.shell-dropdown-heading {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+}
+
+/* Keyboard Shortcuts & About Modals */
+.shell-shortcuts-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--space-2);
+}
+
+.shell-shortcuts-table th,
+.shell-shortcuts-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+}
+
+.shell-shortcuts-table kbd {
+  background-color: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.15rem 0.45rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+
+.shell-about-content {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--color-text);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.shell-about-content p {
+  margin: 0;
+}
+
+.shell-about-meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+}
