@@ -1,5 +1,5 @@
 import { Clock, LayoutGrid, Link2, Maximize2, Minimize2, MonitorUp, ShieldCheck, User, Users } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { getIceServers } from '../api/ice.js';
@@ -8,8 +8,10 @@ import CallControls from '../components/call/CallControls.jsx';
 import CallProblem from '../components/call/CallProblem.jsx';
 import CallStatusCard from '../components/call/CallStatusCard.jsx';
 import ChatPanel from '../components/call/ChatPanel.jsx';
+import MeetingHeader from '../components/call/MeetingHeader.jsx';
 import ParticipantsPanel from '../components/call/ParticipantsPanel.jsx';
 import ParticipantTile from '../components/call/ParticipantTile.jsx';
+import ViewMenu from '../components/call/ViewMenu.jsx';
 import VideoView from '../components/VideoView.jsx';
 import CopyLinkButton from '../components/CopyLinkButton.jsx';
 import Alert from '../components/ui/Alert.jsx';
@@ -24,7 +26,6 @@ import { useMeetingMedia } from '../context/MeetingMediaContext.jsx';
 import useCall from '../hooks/useCall.js';
 import { useFeature } from '../hooks/useFeature.js';
 import useSlowRequest from '../hooks/useSlowRequest.js';
-import MeetingHeader from '../components/call/MeetingHeader.jsx';
 import { DEFAULT_RTC_CONFIG } from '../webrtc/peer.js';
 
 function formatElapsed(totalSeconds) {
@@ -77,6 +78,8 @@ export default function CallPage() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [handRaised, setHandRaised] = useState(false);
   const [localReaction, setLocalReaction] = useState(null);
+  const [pinnedParticipantId, setPinnedParticipantId] = useState(null);
+  const [hideNonVideo, setHideNonVideo] = useState(false);
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -322,7 +325,58 @@ export default function CallPage() {
     return () => clearInterval(interval);
   }, [inCall]);
 
+  // Pinned participant resolution
+  const pinnedParticipant = useMemo(() => {
+    if (!pinnedParticipantId) return null;
+    if (pinnedParticipantId === 'local') return { id: 'local', name: `${localName} (You)` };
+    const peer = call.peers.find((p) => p.peerId === pinnedParticipantId);
+    return peer ? { id: peer.peerId, name: peer.user?.name ?? 'Guest' } : null;
+  }, [pinnedParticipantId, call.peers, localName]);
+
+  // If pinned peer leaves, clear pin
+  useEffect(() => {
+    if (pinnedParticipantId && pinnedParticipantId !== 'local') {
+      const stillHere = call.peers.some((p) => p.peerId === pinnedParticipantId);
+      if (!stillHere) setPinnedParticipantId(null);
+    }
+  }, [call.peers, pinnedParticipantId]);
+
+  // Filter peers based on hideNonVideo setting (pinned peers remain visible)
+  const visiblePeers = useMemo(() => {
+    if (!hideNonVideo || !roomViewsEnabled) return call.peers;
+    return call.peers.filter((p) => Boolean(p.video) || p.peerId === pinnedParticipantId);
+  }, [call.peers, hideNonVideo, roomViewsEnabled, pinnedParticipantId]);
+
+  const hiddenNonVideoCount =
+    hideNonVideo && roomViewsEnabled
+      ? call.peers.filter((p) => !p.video && p.peerId !== pinnedParticipantId).length
+      : 0;
+
+  // Speaker view featured participant selection
+  // Priority: pinned participant > active speaker peer > local
   const activePeer = call.peers.find((p) => p.peerId === call.activeSpeaker);
+  const featuredPeer = useMemo(() => {
+    if (pinnedParticipantId === 'local') return null;
+    if (pinnedParticipantId) {
+      const pinned = call.peers.find((p) => p.peerId === pinnedParticipantId);
+      if (pinned) return pinned;
+    }
+    return activePeer || null;
+  }, [pinnedParticipantId, call.peers, activePeer]);
+
+  const isLocalFeatured =
+    pinnedParticipantId === 'local' ||
+    (!featuredPeer && (call.activeSpeaker === 'local' || !call.peers.length));
+
+  // Gallery view: up to 4 participants when roomViewsEnabled
+  const galleryItems = useMemo(() => {
+    const list = [
+      { id: 'local', isLocal: true },
+      ...visiblePeers.map((p) => ({ id: p.peerId, isLocal: false, peer: p })),
+    ];
+    return roomViewsEnabled ? list.slice(0, 4) : list;
+  }, [visiblePeers, roomViewsEnabled]);
+
   const isLocalSpeaking = call.activeSpeaker === 'local' || (!activePeer && !call.peers.length);
 
   return (
@@ -342,6 +396,18 @@ export default function CallPage() {
           isOtherSharing={isOtherSharing}
           presenterName={presenterName}
           recordingActive={false}
+          viewMenuSlot={
+            <ViewMenu
+              viewMode={viewMode}
+              onSelectView={setViewMode}
+              pinnedParticipant={pinnedParticipant}
+              onUnpin={() => setPinnedParticipantId(null)}
+              hideNonVideo={hideNonVideo}
+              onToggleHideNonVideo={() => setHideNonVideo((prev) => !prev)}
+              isFullscreen={isFullscreen}
+              onToggleFullscreen={toggleFullscreen}
+            />
+          }
         />
       ) : (
         <header className="call__bar zoom-call-header">
@@ -497,49 +563,22 @@ export default function CallPage() {
                     ))}
                   </div>
                 </div>
-              ) : viewMode === 'speaker' && call.peers.length > 0 ? (
-                /* Speaker View: Active speaker prominent, others in sleek filmstrip */
+              ) : viewMode === 'speaker' && (visiblePeers.length > 0 || call.peers.length > 0) ? (
+                /* Speaker View: Active speaker or pinned participant prominent, others in sleek filmstrip */
                 <div className="call__stage-speaker">
+                  {hiddenNonVideoCount > 0 && (
+                    <div className="zoom-hidden-non-video-pill" role="status">
+                      <span>
+                        {hiddenNonVideoCount} non-video participant{hiddenNonVideoCount > 1 ? 's' : ''} hidden
+                      </span>
+                      <button type="button" onClick={() => setHideNonVideo(false)}>
+                        Show
+                      </button>
+                    </div>
+                  )}
+
                   <div className="call__speaker-filmstrip">
-                    <ParticipantTile
-                      local
-                      name={`${localName} (You)`}
-                      stream={media.stream}
-                      audioOn={media.audioEnabled}
-                      videoOn={media.videoEnabled}
-                      isSpeaking={call.activeSpeaker === 'local'}
-                      isHost={isHost}
-                      handRaised={handRaised}
-                      reaction={localReaction}
-                    />
-                    {call.peers
-                      .filter((p) => p.peerId !== activePeer?.peerId)
-                      .map((peer) => (
-                        <ParticipantTile
-                          key={peer.peerId}
-                          name={peer.user?.name ?? 'Guest'}
-                          stream={peer.stream}
-                          audioOn={peer.audio}
-                          videoOn={peer.video}
-                          connectionState={peer.connectionState}
-                          isSpeaking={call.activeSpeaker === peer.peerId}
-                          isHost={peer.isHost}
-                        />
-                      ))}
-                  </div>
-                  <div className="call__speaker-main">
-                    {activePeer ? (
-                      <ParticipantTile
-                        key={activePeer.peerId}
-                        name={activePeer.user?.name ?? 'Guest'}
-                        stream={activePeer.stream}
-                        audioOn={activePeer.audio}
-                        videoOn={activePeer.video}
-                        connectionState={activePeer.connectionState}
-                        isSpeaking={true}
-                        isHost={activePeer.isHost}
-                      />
-                    ) : (
+                    {!isLocalFeatured && (
                       <ParticipantTile
                         local
                         name={`${localName} (You)`}
@@ -550,36 +589,125 @@ export default function CallPage() {
                         isHost={isHost}
                         handRaised={handRaised}
                         reaction={localReaction}
+                        isPinned={pinnedParticipantId === 'local'}
+                        onPinToggle={() =>
+                          setPinnedParticipantId((curr) => (curr === 'local' ? null : 'local'))
+                        }
                       />
                     )}
+                    {visiblePeers
+                      .filter((p) => isLocalFeatured || p.peerId !== featuredPeer?.peerId)
+                      .map((peer) => (
+                        <ParticipantTile
+                          key={peer.peerId}
+                          name={peer.user?.name ?? 'Guest'}
+                          stream={peer.stream}
+                          audioOn={peer.audio}
+                          videoOn={peer.video}
+                          connectionState={peer.connectionState}
+                          isSpeaking={call.activeSpeaker === peer.peerId}
+                          isHost={peer.isHost}
+                          isPinned={pinnedParticipantId === peer.peerId}
+                          onPinToggle={() =>
+                            setPinnedParticipantId((curr) =>
+                              curr === peer.peerId ? null : peer.peerId
+                            )
+                          }
+                        />
+                      ))}
+                  </div>
+
+                  <div className="call__speaker-main">
+                    {isLocalFeatured ? (
+                      <ParticipantTile
+                        local
+                        name={`${localName} (You)`}
+                        stream={media.stream}
+                        audioOn={media.audioEnabled}
+                        videoOn={media.videoEnabled}
+                        isSpeaking={call.activeSpeaker === 'local'}
+                        isHost={isHost}
+                        handRaised={handRaised}
+                        reaction={localReaction}
+                        isPinned={pinnedParticipantId === 'local'}
+                        onPinToggle={() =>
+                          setPinnedParticipantId((curr) => (curr === 'local' ? null : 'local'))
+                        }
+                      />
+                    ) : featuredPeer ? (
+                      <ParticipantTile
+                        key={featuredPeer.peerId}
+                        name={featuredPeer.user?.name ?? 'Guest'}
+                        stream={featuredPeer.stream}
+                        audioOn={featuredPeer.audio}
+                        videoOn={featuredPeer.video}
+                        connectionState={featuredPeer.connectionState}
+                        isSpeaking={call.activeSpeaker === featuredPeer.peerId || pinnedParticipantId === featuredPeer.peerId}
+                        isHost={featuredPeer.isHost}
+                        isPinned={pinnedParticipantId === featuredPeer.peerId}
+                        onPinToggle={() =>
+                          setPinnedParticipantId((curr) =>
+                            curr === featuredPeer.peerId ? null : featuredPeer.peerId
+                          )
+                        }
+                      />
+                    ) : null}
                   </div>
                 </div>
               ) : (
-                /* Gallery View: Balanced Zoom grid */
-                <div className="call__grid zoom-grid" data-count={call.peers.length + 1}>
-                  <ParticipantTile
-                    local
-                    name={`${localName} (You)`}
-                    stream={media.stream}
-                    audioOn={media.audioEnabled}
-                    videoOn={media.videoEnabled}
-                    isSpeaking={call.activeSpeaker === 'local'}
-                    isHost={isHost}
-                    handRaised={handRaised}
-                    reaction={localReaction}
-                  />
-                  {call.peers.map((peer) => (
-                    <ParticipantTile
-                      key={peer.peerId}
-                      name={peer.user?.name ?? 'Guest'}
-                      stream={peer.stream}
-                      audioOn={peer.audio}
-                      videoOn={peer.video}
-                      connectionState={peer.connectionState}
-                      isSpeaking={call.activeSpeaker === peer.peerId}
-                      isHost={peer.isHost}
-                    />
-                  ))}
+                /* Gallery View: Balanced Zoom grid up to 4 */
+                <div
+                  className="call__grid zoom-grid"
+                  data-count={Math.min(galleryItems.length, 4)}
+                >
+                  {hiddenNonVideoCount > 0 && (
+                    <div className="zoom-hidden-non-video-pill" role="status">
+                      <span>
+                        {hiddenNonVideoCount} non-video participant{hiddenNonVideoCount > 1 ? 's' : ''} hidden
+                      </span>
+                      <button type="button" onClick={() => setHideNonVideo(false)}>
+                        Show
+                      </button>
+                    </div>
+                  )}
+
+                  {galleryItems.map((item) =>
+                    item.isLocal ? (
+                      <ParticipantTile
+                        key="local"
+                        local
+                        name={`${localName} (You)`}
+                        stream={media.stream}
+                        audioOn={media.audioEnabled}
+                        videoOn={media.videoEnabled}
+                        isSpeaking={call.activeSpeaker === 'local'}
+                        isHost={isHost}
+                        handRaised={handRaised}
+                        reaction={localReaction}
+                        isPinned={pinnedParticipantId === 'local'}
+                        onPinToggle={() =>
+                          setPinnedParticipantId((curr) => (curr === 'local' ? null : 'local'))
+                        }
+                      />
+                    ) : (
+                      <ParticipantTile
+                        key={item.peer.peerId}
+                        name={item.peer.user?.name ?? 'Guest'}
+                        stream={item.peer.stream}
+                        audioOn={item.peer.audio}
+                        videoOn={item.peer.video}
+                        connectionState={item.peer.connectionState}
+                        isSpeaking={call.activeSpeaker === item.peer.peerId}
+                        isHost={item.peer.isHost}
+                        isPinned={pinnedParticipantId === item.peer.peerId}
+                        onPinToggle={() =>
+                          setPinnedParticipantId((curr) =>
+                            curr === item.peer.peerId ? null : item.peer.peerId
+                          )
+                        }
+                      />
+                    )
+                  )}
                 </div>
               )}
             </>

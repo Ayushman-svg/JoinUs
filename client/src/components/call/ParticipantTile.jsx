@@ -1,4 +1,4 @@
-import { Hand, MicOff, MoreHorizontal } from 'lucide-react';
+import { Hand, MicOff, MoreHorizontal, Pin } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useFeature } from '../../hooks/useFeature.js';
 
@@ -24,6 +24,8 @@ export default function ParticipantTile({
   isHost = false,
   handRaised = false,
   reaction = null,
+  isPinned = false,
+  onPinToggle,
 }) {
   const reactionsEnabled = useFeature('REACTIONS');
   const [floatingReaction, setFloatingReaction] = useState(null);
@@ -79,14 +81,27 @@ export default function ParticipantTile({
         </div>
       )}
 
-      {/* Top Right: Hover 3-dots */}
-      <button
-        type="button"
-        className="zoom-tile__more-btn"
-        aria-label={`Options for ${name}`}
-      >
-        <MoreHorizontal size={16} aria-hidden="true" />
-      </button>
+      {/* Top Right: Pin button & More options */}
+      <div className="zoom-tile__top-actions">
+        {onPinToggle && (
+          <button
+            type="button"
+            className={`zoom-tile__pin-btn ${isPinned ? 'is-pinned' : ''}`}
+            onClick={onPinToggle}
+            aria-label={isPinned ? `Unpin ${name}` : `Pin ${name}`}
+            title={isPinned ? 'Unpin' : 'Pin to main view'}
+          >
+            <Pin size={13} aria-hidden="true" />
+          </button>
+        )}
+        <button
+          type="button"
+          className="zoom-tile__more-btn"
+          aria-label={`Options for ${name}`}
+        >
+          <MoreHorizontal size={16} aria-hidden="true" />
+        </button>
+      </div>
 
       {/* Floating Reaction Animation */}
       {reactionsEnabled && floatingReaction && (
