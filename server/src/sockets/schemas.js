@@ -54,7 +54,7 @@ const peerTargetSchema = z.object({
 // host:admit-all {}, host:end {}
 const emptySchema = z.record(z.string(), z.unknown()).optional().default({});
 
-// chat:send { text, to? }: 1 to 1000 characters trimmed, optional to (ObjectId)
+// chat:send { text, to?, replyTo? }: 1 to 1000 characters trimmed, optional to and replyTo (ObjectId)
 const chatSendSchema = z.object({
   text: z
     .string({ required_error: 'text is required' })
@@ -66,6 +66,13 @@ const chatSendSchema = z.object({
     .trim()
     .refine((val) => mongoose.Types.ObjectId.isValid(val), {
       message: 'to must be a valid ObjectId',
+    })
+    .optional(),
+  replyTo: z
+    .string()
+    .trim()
+    .refine((val) => mongoose.Types.ObjectId.isValid(val), {
+      message: 'replyTo must be a valid ObjectId',
     })
     .optional(),
 });

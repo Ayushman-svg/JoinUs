@@ -35,12 +35,34 @@ const messageSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    replyTo: {
+      id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Message',
+        default: null,
+      },
+      text: {
+        type: String,
+        maxlength: 1000,
+        default: null,
+      },
+      fromName: {
+        type: String,
+        trim: true,
+        default: null,
+      },
+    },
   },
   {
     timestamps: { createdAt: true, updatedAt: false },
     toJSON: {
       transform(doc, ret) {
         ret.id = ret._id.toString();
+        if (ret.replyTo?.id) {
+          ret.replyTo.id = ret.replyTo.id.toString();
+        } else if (!ret.replyTo?.id) {
+          delete ret.replyTo;
+        }
         delete ret._id;
         delete ret.__v;
         return ret;

@@ -133,6 +133,13 @@ async function getMeetingMessages(req, res) {
           name: msg.toName,
         };
       }
+      if (msg.replyTo && msg.replyTo.id) {
+        formatted.replyTo = {
+          id: msg.replyTo.id.toString(),
+          text: msg.replyTo.text,
+          fromName: msg.replyTo.fromName,
+        };
+      }
       return formatted;
     }),
   });
