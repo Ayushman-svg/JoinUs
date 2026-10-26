@@ -1,7 +1,9 @@
 import {
   BarChart2,
+  Captions,
   Check,
   ChevronUp,
+  FileText,
   Hand,
   Lock,
   LogOut,
@@ -20,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useFeature } from '../../hooks/useFeature.js';
+import { isSpeechRecognitionSupported } from '../../utils/speechRecognition.js';
 import MicTestModal from './MicTestModal.jsx';
 import ReactionsPopover from './ReactionsPopover.jsx';
 
@@ -31,6 +34,7 @@ export default function CallControls({
   isPanelOpen = false,
   isChatOpen = false,
   isPollsOpen = false,
+  isTranscriptOpen = false,
   unreadCount = 0,
   isSharing = false,
   someoneElseSharing = false,
@@ -39,6 +43,9 @@ export default function CallControls({
   onToggleParticipants,
   onToggleChat,
   onTogglePolls,
+  onToggleTranscript,
+  captionsActive = false,
+  onToggleCaptions,
   isHost = false,
   canModerate = false,
   isLocked = false,
@@ -56,6 +63,8 @@ export default function CallControls({
   const reactionsEnabled = useFeature('REACTIONS');
   const hostSecurityEnabled = useFeature('HOST_SECURITY');
   const pollsEnabled = useFeature('POLLS');
+  const captionsEnabled = useFeature('CAPTIONS');
+  const speechSupported = isSpeechRecognitionSupported();
   const [showAudioMenu, setShowAudioMenu] = useState(false);
   const [showVideoMenu, setShowVideoMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -581,6 +590,22 @@ export default function CallControls({
             </button>
           )}
 
+          {/* Captions button */}
+          {captionsEnabled && speechSupported && (
+            <button
+              type="button"
+              className={`zoom-btn ${captionsActive ? 'is-active' : ''}`}
+              onClick={onToggleCaptions}
+              aria-label={captionsActive ? 'Turn off Captions' : 'Turn on Captions'}
+              aria-pressed={captionsActive}
+            >
+              <span className="zoom-btn__icon">
+                <Captions size={20} aria-hidden="true" />
+              </span>
+              <span className="zoom-btn__label">Captions</span>
+            </button>
+          )}
+
           {/* Reactions button & Popover */}
           {reactionsEnabled && (
             <div className="zoom-control-relative">
@@ -669,6 +694,19 @@ export default function CallControls({
                   <Mic size={16} aria-hidden="true" />
                   <span>Test Audio…</span>
                 </button>
+                {captionsEnabled && (
+                  <button
+                    type="button"
+                    className="zoom-menu__item"
+                    onClick={() => {
+                      setShowMoreMenu(false);
+                      onToggleTranscript?.();
+                    }}
+                  >
+                    <FileText size={16} aria-hidden="true" />
+                    <span>Transcript</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -744,6 +782,42 @@ export default function CallControls({
                     <BarChart2 size={20} aria-hidden="true" />
                   </span>
                   <span className="zoom-sheet-item__label">Polls</span>
+                </button>
+              )}
+
+              {/* Captions (if enabled & speech supported) */}
+              {captionsEnabled && speechSupported && (
+                <button
+                  type="button"
+                  className={`zoom-sheet-item ${captionsActive ? 'is-active' : ''}`}
+                  onClick={() => {
+                    setShowMoreMenu(false);
+                    onToggleCaptions?.();
+                  }}
+                >
+                  <span className="zoom-sheet-item__icon">
+                    <Captions size={20} aria-hidden="true" />
+                  </span>
+                  <span className="zoom-sheet-item__label">
+                    {captionsActive ? 'Turn off Captions' : 'Turn on Captions'}
+                  </span>
+                </button>
+              )}
+
+              {/* Transcript (if enabled) */}
+              {captionsEnabled && (
+                <button
+                  type="button"
+                  className="zoom-sheet-item"
+                  onClick={() => {
+                    setShowMoreMenu(false);
+                    onToggleTranscript?.();
+                  }}
+                >
+                  <span className="zoom-sheet-item__icon">
+                    <FileText size={20} aria-hidden="true" />
+                  </span>
+                  <span className="zoom-sheet-item__label">Transcript</span>
                 </button>
               )}
 

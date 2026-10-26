@@ -518,3 +518,43 @@
   font-size: var(--text-xs);
   color: var(--color-text-secondary);
 }
+
+/* ==========================================================================
+   History Detail Spoken Transcript Tab
+   ========================================================================== */
+
+.history-detail__saved-transcript-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: var(--radius-md, 8px);
+  padding: 10px 14px;
+  margin-bottom: var(--space-4, 16px);
+}
+
+.history-detail__saved-transcript-pill {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: #0284C7;
+  color: #FFFFFF;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.history-detail__saved-transcript-text {
+  font-size: var(--text-xs, 12px);
+  color: var(--color-text-secondary, #94A3B8);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.history-bubble--transcript {
+  background: var(--color-surface, #1E293B);
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+}
+

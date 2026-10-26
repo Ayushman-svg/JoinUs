@@ -7,6 +7,8 @@ import { getMeeting } from '../api/meetings.js';
 import CallControls from '../components/call/CallControls.jsx';
 import CallProblem from '../components/call/CallProblem.jsx';
 import CallStatusCard from '../components/call/CallStatusCard.jsx';
+import CaptionBar from '../components/call/CaptionBar.jsx';
+import CaptionsOptInModal from '../components/call/CaptionsOptInModal.jsx';
 import ChatPanel from '../components/call/ChatPanel.jsx';
 import FloatingReactions from '../components/call/FloatingReactions.jsx';
 import MeetingHeader from '../components/call/MeetingHeader.jsx';
@@ -14,6 +16,7 @@ import ParticipantPollCard from '../components/call/ParticipantPollCard.jsx';
 import ParticipantsPanel from '../components/call/ParticipantsPanel.jsx';
 import ParticipantTile from '../components/call/ParticipantTile.jsx';
 import PollsPanel from '../components/call/PollsPanel.jsx';
+import TranscriptPanel from '../components/call/TranscriptPanel.jsx';
 import ViewMenu from '../components/call/ViewMenu.jsx';
 import VideoView from '../components/VideoView.jsx';
 import CopyLinkButton from '../components/CopyLinkButton.jsx';
@@ -31,6 +34,12 @@ import useCall from '../hooks/useCall.js';
 import { useFeature } from '../hooks/useFeature.js';
 import useSlowRequest from '../hooks/useSlowRequest.js';
 import { DEFAULT_RTC_CONFIG } from '../webrtc/peer.js';
+import {
+  isSpeechRecognitionSupported,
+  getCaptionsOptIn,
+  setCaptionsOptIn,
+  SpeechTranscriber,
+} from '../utils/speechRecognition.js';
 
 import {
   calculateGalleryItems,
@@ -98,6 +107,7 @@ export default function CallPage() {
   const roomViewsEnabled = useFeature('ROOM_VIEWS');
   const reactionsEnabled = useFeature('REACTIONS');
   const pollsEnabled = useFeature('POLLS');
+  const captionsEnabled = useFeature('CAPTIONS');
 
   const location = useLocation();
   const [meeting, setMeeting] = useState(null);
@@ -106,6 +116,21 @@ export default function CallPage() {
   const [peerToRemove, setPeerToRemove] = useState(null);
   const [renamePeerTarget, setRenamePeerTarget] = useState(null);
   const [renameValue, setRenameValue] = useState('');
+  const [captionsActive, setCaptionsActive] = useState(false);
+  const [showCaptionsOptIn, setShowCaptionsOptIn] = useState(false);
+  const [captionSettings, setCaptionSettings] = useState(() => {
+    try {
+      return (
+        JSON.parse(localStorage.getItem('joinus_caption_settings')) || {
+          size: 'M',
+          position: 'bottom',
+        }
+      );
+    } catch {
+      return { size: 'M', position: 'bottom' };
+    }
+  });
+  const transcriberRef = useRef(null);
   const [passcode, setPasscode] = useState(() => {
     try {
       return location.state?.passcode || sessionStorage.getItem(`passcode_${code}`) || '';
@@ -367,6 +392,46 @@ export default function CallPage() {
   const gettingReady = !mediaSettled && !isStatusScreen && !problemCode;
   const inCall = !gettingReady && !problemCode && !isStatusScreen;
   const people = call.status === 'active' ? call.peers.length + 1 : null;
+
+  useEffect(() => {
+    const shouldTranscribe =
+      captionsEnabled &&
+      captionsActive &&
+      inCall &&
+      media.audioEnabled &&
+      isSpeechRecognitionSupported();
+
+    if (shouldTranscribe) {
+      if (!transcriberRef.current) {
+        try {
+          const transcriber = new SpeechTranscriber({
+            onSegment: ({ text, final }) => {
+              call.sendCaptionSegment(text, final);
+            },
+            onError: (err) => {
+              console.warn('Speech recognition warning:', err);
+            },
+          });
+          transcriberRef.current = transcriber;
+          transcriber.start();
+        } catch (err) {
+          console.error('Failed to start speech recognition:', err);
+        }
+      }
+    } else {
+      if (transcriberRef.current) {
+        transcriberRef.current.stop();
+        transcriberRef.current = null;
+      }
+    }
+
+    return () => {
+      if (transcriberRef.current) {
+        transcriberRef.current.stop();
+        transcriberRef.current = null;
+      }
+    };
+  }, [captionsEnabled, captionsActive, inCall, media.audioEnabled]);
 
   let notice = null;
   if (inCall) {
@@ -811,6 +876,23 @@ export default function CallPage() {
               onDismiss={call.dismissActivePoll}
             />
           )}
+          {captionsEnabled && inCall && captionsActive && call.liveCaption && (
+            <CaptionBar
+              caption={call.liveCaption}
+              size={captionSettings.size}
+              position={captionSettings.position}
+              onUpdateSettings={(patch) => {
+                setCaptionSettings((prev) => {
+                  const next = { ...prev, ...patch };
+                  try {
+                    localStorage.setItem('joinus_caption_settings', JSON.stringify(next));
+                  } catch {}
+                  return next;
+                });
+              }}
+              onOpenTranscript={() => setActivePanel('transcript')}
+            />
+          )}
         </main>
 
         {inCall && activePanel && (
@@ -908,6 +990,35 @@ export default function CallPage() {
                 />
               </FeatureBoundary>
             )}
+            {activePanel === 'transcript' && captionsEnabled && (
+              <FeatureBoundary title="Transcript panel is unavailable">
+                <TranscriptPanel
+                  isOpen={activePanel === 'transcript'}
+                  onClose={() => setActivePanel(null)}
+                  onSwitchToParticipants={() => setActivePanel('participants')}
+                  onSwitchToChat={() => setActivePanel('chat')}
+                  onSwitchToPolls={pollsEnabled ? () => setActivePanel('polls') : null}
+                  participantCount={call.peers.length + 1}
+                  waitingCount={call.canModerate ? call.waitingList.length : 0}
+                  unreadCount={call.unreadCount}
+                  transcript={call.transcript}
+                  liveCaption={call.liveCaption}
+                  captionsActive={captionsActive}
+                  onToggleCaptions={() => {
+                    if (!captionsActive) {
+                      if (!getCaptionsOptIn()) {
+                        setShowCaptionsOptIn(true);
+                      } else {
+                        setCaptionsActive(true);
+                      }
+                    } else {
+                      setCaptionsActive(false);
+                    }
+                  }}
+                  meetingCode={code}
+                />
+              </FeatureBoundary>
+            )}
           </div>
         )}
       </div>
@@ -921,6 +1032,22 @@ export default function CallPage() {
           isPanelOpen={activePanel === 'participants'}
           isChatOpen={activePanel === 'chat'}
           isPollsOpen={activePanel === 'polls'}
+          isTranscriptOpen={activePanel === 'transcript'}
+          captionsActive={captionsActive}
+          onToggleCaptions={() => {
+            if (!captionsActive) {
+              if (!getCaptionsOptIn()) {
+                setShowCaptionsOptIn(true);
+              } else {
+                setCaptionsActive(true);
+              }
+            } else {
+              setCaptionsActive(false);
+            }
+          }}
+          onToggleTranscript={() =>
+            setActivePanel((curr) => (curr === 'transcript' ? null : 'transcript'))
+          }
           unreadCount={call.unreadCount}
           isSharing={isSelfSharing}
           someoneElseSharing={isOtherSharing}
@@ -1331,6 +1458,17 @@ export default function CallPage() {
             </>
           )
         }
+      />
+
+      {/* Captions Opt-In Consent Modal */}
+      <CaptionsOptInModal
+        open={showCaptionsOptIn}
+        onConfirm={() => {
+          setCaptionsOptIn(true);
+          setShowCaptionsOptIn(false);
+          setCaptionsActive(true);
+        }}
+        onCancel={() => setShowCaptionsOptIn(false)}
       />
 
       {screenToast && (
