@@ -4,6 +4,9 @@ const { sanitizeError } = require('../utils/sanitizeLog');
 const { MEETING_STATUS } = require('../config/constants');
 const Meeting = require('../models/Meeting');
 const Message = require('../models/Message');
+const Poll = require('../models/Poll');
+const Vote = require('../models/Vote');
+const { isFeatureEnabled } = require('../config/features');
 const RateLimiter = require('./rateLimit');
 const { passcodeLimiter } = require('../utils/passcodeLimiter');
 const {
@@ -21,6 +24,10 @@ const {
   hostSettingsSchema,
   hostRenameSchema,
   hostRemoveSchema,
+  pollCreateSchema,
+  pollLaunchSchema,
+  pollCloseSchema,
+  pollVoteSchema,
   codeSchema,
 } = require('./schemas');
 
@@ -269,6 +276,27 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     limiters.reaction = new RateLimiter({ max: 1, windowMs: 1000 });
   }
 
+  async function ensureActivePollLoaded(code, meetingId) {
+    if (registry.getActivePoll(code)) return;
+    try {
+      let mId = meetingId;
+      if (!mId) {
+        const meeting = await Meeting.findOne({ code }).select('_id').lean();
+        if (!meeting) return;
+        mId = meeting._id;
+      }
+      const openPoll = await Poll.findOne({ meeting: mId, status: 'open' }).lean();
+      if (!openPoll) return;
+      const poll = registry.setActivePoll(code, openPoll);
+      const votes = await Vote.find({ poll: openPoll._id }).lean();
+      for (const v of votes) {
+        poll.votes.set(String(v.user), v.optionIds);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
   on(socket, 'room:join', async (payload) => {
     if (limiters.join && !limiters.join.check(socket.id)) {
       throw new AppError(429, 'RATE_LIMITED', 'Too many join attempts, please slow down');
@@ -359,6 +387,8 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     const initialAudio = roomSettings.muteOnEntry && !isHost && !isCoHost ? false : audio;
     const { user } = socket.data;
 
+    await ensureActivePollLoaded(code, meeting._id);
+
     const joinResult = registry.join(code, {
       peerId: socket.id,
       userId: user.id,
@@ -438,6 +468,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       handRaised: Boolean(joinResult.peer.handRaised),
       raisedAt: joinResult.peer.raisedAt || null,
       feedback: joinResult.peer.feedback || null,
+      activePoll: joinResult.activePoll || null,
     };
   });
 
@@ -466,6 +497,8 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       registry.isCoHost(code, userId);
     const myRole = isHostUser ? 'host' : (isCoHostUser ? 'co-host' : registry.getRole(code, userId));
 
+    await ensureActivePollLoaded(code, meeting._id);
+
     // 2. Host
     if (isHostUser) {
       return {
@@ -480,6 +513,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
         isCoHost: false,
         settings: registry.getSettings(code),
         locked: registry.isLocked(code),
+        activePoll: registry.formatPollForUser(code, userId) || null,
       };
     }
 
@@ -524,6 +558,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
         isCoHost: isCoHostUser,
         settings: registry.getSettings(code),
         locked: registry.isLocked(code),
+        activePoll: registry.formatPollForUser(code, userId) || null,
       };
     }
 
@@ -1220,6 +1255,209 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     }
 
     return { message };
+  });
+
+  // Poll events (flag FEATURE_POLLS)
+  on(socket, 'poll:create', async (payload) => {
+    if (!isFeatureEnabled('POLLS')) {
+      throw new AppError(403, 'FEATURE_DISABLED', 'Polls feature is disabled');
+    }
+    const code = registry.getRoomCode(socket.id);
+    if (!code) {
+      throw new AppError(403, 'NOT_IN_ROOM', 'Join a meeting first');
+    }
+
+    const userId = socket.data.user.id.toString();
+    const canModerate = registry.canModerate(code, socket.id) || registry.canModerate(code, userId);
+    if (!canModerate) {
+      throw new AppError(403, 'FORBIDDEN', 'Only hosts and co-hosts can create polls');
+    }
+
+    const data = parse(pollCreateSchema, payload);
+    const meeting = await Meeting.findOne({ code }).select('_id').lean();
+    if (!meeting) {
+      throw new AppError(404, 'MEETING_NOT_FOUND', 'Meeting not found');
+    }
+
+    const options = data.options.map((opt, idx) => ({
+      id: opt.id || `opt_${idx + 1}_${Math.random().toString(36).substring(2, 7)}`,
+      text: opt.text,
+    }));
+
+    const pollDoc = await Poll.create({
+      meeting: meeting._id,
+      createdBy: userId,
+      question: data.question,
+      options,
+      multiple: Boolean(data.multiple),
+      anonymous: Boolean(data.anonymous),
+      shareResults: Boolean(data.shareResults),
+      status: data.launchNow ? 'open' : 'draft',
+    });
+
+    if (data.launchNow) {
+      registry.setActivePoll(code, pollDoc);
+      // Broadcast to admitted peers (waiting guests receive nothing)
+      for (const peer of registry.getPeers(code)) {
+        const peerSocket = io.sockets.sockets.get(peer.peerId);
+        if (peerSocket) {
+          peerSocket.emit('poll:launched', { poll: registry.formatPollForUser(code, peer.userId) });
+        }
+      }
+    }
+
+    return {
+      success: true,
+      poll: registry.formatPollForUser(code, userId, pollDoc) || pollDoc.toJSON(),
+    };
+  });
+
+  on(socket, 'poll:launch', async (payload) => {
+    if (!isFeatureEnabled('POLLS')) {
+      throw new AppError(403, 'FEATURE_DISABLED', 'Polls feature is disabled');
+    }
+    const code = registry.getRoomCode(socket.id);
+    if (!code) {
+      throw new AppError(403, 'NOT_IN_ROOM', 'Join a meeting first');
+    }
+
+    const userId = socket.data.user.id.toString();
+    const canModerate = registry.canModerate(code, socket.id) || registry.canModerate(code, userId);
+    if (!canModerate) {
+      throw new AppError(403, 'FORBIDDEN', 'Only hosts and co-hosts can launch polls');
+    }
+
+    const { pollId } = parse(pollLaunchSchema, payload);
+    const meeting = await Meeting.findOne({ code }).select('_id').lean();
+    if (!meeting) {
+      throw new AppError(404, 'MEETING_NOT_FOUND', 'Meeting not found');
+    }
+
+    const pollDoc = await Poll.findOne({ _id: pollId, meeting: meeting._id });
+    if (!pollDoc) {
+      throw new AppError(404, 'POLL_NOT_FOUND', 'Poll not found');
+    }
+
+    pollDoc.status = 'open';
+    await pollDoc.save();
+
+    registry.setActivePoll(code, pollDoc);
+
+    // Broadcast to admitted peers (waiting guests receive nothing)
+    for (const peer of registry.getPeers(code)) {
+      const peerSocket = io.sockets.sockets.get(peer.peerId);
+      if (peerSocket) {
+        peerSocket.emit('poll:launched', { poll: registry.formatPollForUser(code, peer.userId) });
+      }
+    }
+
+    return {
+      success: true,
+      poll: registry.formatPollForUser(code, userId),
+    };
+  });
+
+  on(socket, 'poll:close', async (payload) => {
+    if (!isFeatureEnabled('POLLS')) {
+      throw new AppError(403, 'FEATURE_DISABLED', 'Polls feature is disabled');
+    }
+    const code = registry.getRoomCode(socket.id);
+    if (!code) {
+      throw new AppError(403, 'NOT_IN_ROOM', 'Join a meeting first');
+    }
+
+    const userId = socket.data.user.id.toString();
+    const canModerate = registry.canModerate(code, socket.id) || registry.canModerate(code, userId);
+    if (!canModerate) {
+      throw new AppError(403, 'FORBIDDEN', 'Only hosts and co-hosts can close polls');
+    }
+
+    const { pollId } = parse(pollCloseSchema, payload || {});
+    const active = registry.getActivePoll(code);
+    const targetId = pollId || active?.id;
+    if (!targetId) {
+      throw new AppError(404, 'POLL_NOT_FOUND', 'No active poll to close');
+    }
+
+    const pollDoc = await Poll.findById(targetId);
+    if (pollDoc) {
+      pollDoc.status = 'closed';
+      await pollDoc.save();
+    }
+
+    registry.closeActivePoll(code);
+
+    // Broadcast poll:closed to admitted peers (participants see results only after poll closes when shareResults is true)
+    for (const peer of registry.getPeers(code)) {
+      const peerSocket = io.sockets.sockets.get(peer.peerId);
+      if (peerSocket) {
+        peerSocket.emit('poll:closed', { poll: registry.formatPollForUser(code, peer.userId) });
+      }
+    }
+
+    return {
+      success: true,
+      poll: registry.formatPollForUser(code, userId),
+    };
+  });
+
+  on(socket, 'poll:vote', async (payload) => {
+    if (!isFeatureEnabled('POLLS')) {
+      throw new AppError(403, 'FEATURE_DISABLED', 'Polls feature is disabled');
+    }
+    const code = registry.getRoomCode(socket.id);
+    if (!code) {
+      throw new AppError(403, 'NOT_IN_ROOM', 'Join a meeting first');
+    }
+
+    const peer = registry.getPeer(socket.id);
+    if (!peer) {
+      throw new AppError(403, 'FORBIDDEN', 'Only admitted participants can vote');
+    }
+
+    const { pollId, optionIds } = parse(pollVoteSchema, payload);
+    const userId = socket.data.user.id.toString();
+
+    // Check active poll
+    const active = registry.getActivePoll(code);
+    if (!active || active.id !== String(pollId)) {
+      throw new AppError(404, 'POLL_NOT_FOUND', 'Active poll not found');
+    }
+    if (active.status !== 'open') {
+      throw new AppError(400, 'POLL_NOT_OPEN', 'Poll is closed for voting');
+    }
+
+    // Persist to Vote model (unique index prevents double vote)
+    try {
+      await Vote.create({
+        poll: active.id,
+        user: userId,
+        optionIds,
+      });
+    } catch (err) {
+      if (err.code === 11000) {
+        throw new AppError(409, 'ALREADY_VOTED', 'You have already voted in this poll');
+      }
+      throw err;
+    }
+
+    // Record in registry
+    registry.recordVote(code, active.id, userId, optionIds);
+
+    // Broadcast live counts to hosts and co-hosts only
+    for (const p of registry.getPeers(code)) {
+      if (registry.canModerate(code, p.userId)) {
+        const hostSocket = io.sockets.sockets.get(p.peerId);
+        if (hostSocket) {
+          hostSocket.emit('poll:updated', { poll: registry.formatPollForUser(code, p.userId) });
+        }
+      }
+    }
+
+    return {
+      success: true,
+      poll: registry.formatPollForUser(code, userId),
+    };
   });
 
   on(socket, 'room:leave', () => {

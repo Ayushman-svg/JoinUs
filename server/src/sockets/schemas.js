@@ -126,6 +126,50 @@ const hostRemoveSchema = z.object({
   block: z.boolean().optional(),
 });
 
+// poll:create { question, options, multiple?, anonymous?, shareResults?, launchNow? }
+const pollOptionSchema = z.object({
+  id: z.string().optional(),
+  text: z
+    .string({ required_error: 'Option text is required' })
+    .trim()
+    .min(1, 'Option text cannot be empty')
+    .max(200, 'Option text must be at most 200 characters'),
+});
+
+const pollCreateSchema = z.object({
+  question: z
+    .string({ required_error: 'Question is required' })
+    .trim()
+    .min(1, 'Question cannot be empty')
+    .max(200, 'Question must be at most 200 characters'),
+  options: z
+    .array(pollOptionSchema)
+    .min(2, 'At least 2 options are required')
+    .max(6, 'At most 6 options are allowed'),
+  multiple: z.boolean().optional().default(false),
+  anonymous: z.boolean().optional().default(false),
+  shareResults: z.boolean().optional().default(false),
+  launchNow: z.boolean().optional().default(false),
+});
+
+// poll:launch { pollId }
+const pollLaunchSchema = z.object({
+  pollId: z.string().min(1, 'pollId is required'),
+});
+
+// poll:close { pollId? }
+const pollCloseSchema = z.object({
+  pollId: z.string().optional(),
+});
+
+// poll:vote { pollId, optionIds }
+const pollVoteSchema = z.object({
+  pollId: z.string().min(1, 'pollId is required'),
+  optionIds: z
+    .array(z.string().min(1, 'Option id cannot be empty'))
+    .min(1, 'At least one option must be selected'),
+});
+
 module.exports = {
   joinSchema,
   mediaSchema,
@@ -141,6 +185,10 @@ module.exports = {
   hostSettingsSchema,
   hostRenameSchema,
   hostRemoveSchema,
+  pollCreateSchema,
+  pollLaunchSchema,
+  pollCloseSchema,
+  pollVoteSchema,
   codeSchema: codeParamsSchema,
 };
 
