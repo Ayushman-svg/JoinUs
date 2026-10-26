@@ -2,6 +2,7 @@ import { Mic, Volume2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import Button from '../ui/Button.jsx';
 import Modal from '../ui/Modal.jsx';
+import { calculateAudioLevelPercent } from '../../utils/roomLayout.js';
 
 export default function MicTestModal({ open, onClose, stream, speakerName = 'Default Speaker' }) {
   const [level, setLevel] = useState(0); // 0 to 100
@@ -46,15 +47,7 @@ export default function MicTestModal({ open, onClose, stream, speakerName = 'Def
       const updateMeter = () => {
         if (!analyser) return;
         analyser.getByteFrequencyData(dataArray);
-
-        // Compute average volume level
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i];
-        }
-        const avg = sum / dataArray.length;
-        // Scale to 0 - 100% with slight boost for readability
-        const scaledLevel = Math.min(100, Math.round((avg / 128) * 100));
+        const scaledLevel = calculateAudioLevelPercent(dataArray);
         setLevel(scaledLevel);
 
         animFrameRef.current = requestAnimationFrame(updateMeter);

@@ -28,16 +28,13 @@ import { useFeature } from '../hooks/useFeature.js';
 import useSlowRequest from '../hooks/useSlowRequest.js';
 import { DEFAULT_RTC_CONFIG } from '../webrtc/peer.js';
 
-function formatElapsed(totalSeconds) {
-  const mins = Math.floor(totalSeconds / 60);
-  const secs = totalSeconds % 60;
-  const hours = Math.floor(mins / 60);
-  const remMins = mins % 60;
-  if (hours > 0) {
-    return `${String(hours).padStart(2, '0')}:${String(remMins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  }
-  return `${String(remMins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-}
+import {
+  calculateGalleryItems,
+  countHiddenNonVideoPeers,
+  filterVisiblePeers,
+  formatDuration as formatElapsed,
+  selectFeaturedParticipant,
+} from '../utils/roomLayout.js';
 
 // Polite text for screen readers when someone joins or leaves
 function useAnnouncement(peers) {
@@ -343,40 +340,31 @@ export default function CallPage() {
 
   // Filter peers based on hideNonVideo setting (pinned peers remain visible)
   const visiblePeers = useMemo(() => {
-    if (!hideNonVideo || !roomViewsEnabled) return call.peers;
-    return call.peers.filter((p) => Boolean(p.video) || p.peerId === pinnedParticipantId);
+    if (!roomViewsEnabled) return call.peers;
+    return filterVisiblePeers(call.peers, hideNonVideo, pinnedParticipantId);
   }, [call.peers, hideNonVideo, roomViewsEnabled, pinnedParticipantId]);
 
   const hiddenNonVideoCount =
     hideNonVideo && roomViewsEnabled
-      ? call.peers.filter((p) => !p.video && p.peerId !== pinnedParticipantId).length
+      ? countHiddenNonVideoPeers(call.peers, hideNonVideo, pinnedParticipantId)
       : 0;
 
   // Speaker view featured participant selection
   // Priority: pinned participant > active speaker peer > local
-  const activePeer = call.peers.find((p) => p.peerId === call.activeSpeaker);
-  const featuredPeer = useMemo(() => {
-    if (pinnedParticipantId === 'local') return null;
-    if (pinnedParticipantId) {
-      const pinned = call.peers.find((p) => p.peerId === pinnedParticipantId);
-      if (pinned) return pinned;
-    }
-    return activePeer || null;
-  }, [pinnedParticipantId, call.peers, activePeer]);
-
-  const isLocalFeatured =
-    pinnedParticipantId === 'local' ||
-    (!featuredPeer && (call.activeSpeaker === 'local' || !call.peers.length));
+  const { isLocal: isLocalFeatured, featuredPeer } = useMemo(() => {
+    return selectFeaturedParticipant({
+      pinnedId: pinnedParticipantId,
+      activeSpeakerId: call.activeSpeaker,
+      peers: call.peers,
+    });
+  }, [pinnedParticipantId, call.activeSpeaker, call.peers]);
 
   // Gallery view: up to 4 participants when roomViewsEnabled
   const galleryItems = useMemo(() => {
-    const list = [
-      { id: 'local', isLocal: true },
-      ...visiblePeers.map((p) => ({ id: p.peerId, isLocal: false, peer: p })),
-    ];
-    return roomViewsEnabled ? list.slice(0, 4) : list;
+    return calculateGalleryItems(visiblePeers, roomViewsEnabled, 4);
   }, [visiblePeers, roomViewsEnabled]);
 
+  const activePeer = call.peers.find((p) => p.peerId === call.activeSpeaker);
   const isLocalSpeaking = call.activeSpeaker === 'local' || (!activePeer && !call.peers.length);
 
   return (

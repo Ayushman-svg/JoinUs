@@ -9,17 +9,7 @@ import {
   Unlock,
 } from 'lucide-react';
 import Tooltip from '../ui/Tooltip.jsx';
-
-function formatElapsed(totalSeconds) {
-  const mins = Math.floor(totalSeconds / 60);
-  const secs = totalSeconds % 60;
-  const hours = Math.floor(mins / 60);
-  const remMins = mins % 60;
-  if (hours > 0) {
-    return `${String(hours).padStart(2, '0')}:${String(remMins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  }
-  return `${String(remMins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-}
+import { formatDuration as formatElapsed } from '../../utils/roomLayout.js';
 
 export default function MeetingHeader({
   title = 'Meeting',
