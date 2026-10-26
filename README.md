@@ -321,7 +321,9 @@ All new features ship dark behind flags that default to `false` (OFF).
 
 #### Supported Flags
 
-| Flag | Default | Description |
+Flags are off by default and none of these features is live yet.
+
+| Flag | Default | Planned feature |
 | :--- | :--- | :--- |
 | `FEATURE_LANDING` | `false` | Redesigned public landing page |
 | `FEATURE_NEW_HOME` | `false` | New home dashboard layout |
@@ -330,22 +332,22 @@ All new features ship dark behind flags that default to `false` (OFF).
 | `FEATURE_HOST_SECURITY` | `false` | Host security panel (lock room, mute all, disable share) |
 | `FEATURE_POLLS` | `false` | In-meeting interactive polling |
 | `FEATURE_CAPTIONS` | `false` | Live speech-to-text automated captions |
-| `FEATURE_CHAT_PLUS` | `false` | Enhanced chat (file attachments, markdown, reactions) |
+| `FEATURE_CHAT_PLUS` | `false` | Private messages, replies, search, emoji picker (no file attachments) |
 | `FEATURE_SCHEDULING` | `false` | Advanced meeting recurrence and invite scheduling |
 | `FEATURE_SETTINGS` | `false` | User preferences and device management |
-| `FEATURE_RECORDING` | `false` | Local or cloud meeting recording |
+| `FEATURE_RECORDING` | `false` | Local recording on the host's device only (no cloud) |
 | `FEATURE_CALENDAR` | `false` | Built-in calendar agenda view |
 | `FEATURE_SEARCH` | `false` | Global meeting and chat transcript search |
 | `FEATURE_WHITEBOARD` | `false` | Interactive collaborative whiteboard |
 | `FEATURE_CONTACTS` | `false` | Team contacts and address book |
 | `FEATURE_TEAM_CHAT` | `false` | Out-of-meeting team messaging |
 | `FEATURE_ACCOUNT_RECOVERY`| `false` | Self-service password reset and account recovery |
-| `FEATURE_TWO_FACTOR` | `false` | Two-factor authentication (TOTP/SMS) |
+| `FEATURE_TWO_FACTOR` | `false` | Authenticator-app TOTP only (no SMS) |
 | `FEATURE_SOCIAL_LOGIN` | `false` | Third-party OAuth authentication |
-| `FEATURE_TRANSLATION` | `false` | Real-time multilingual chat and caption translation |
-| `FEATURE_AI_RECAP` | `false` | Automated meeting summary and action item generation |
-| `FEATURE_AI_COMPANION` | `false` | Real-time AI in-meeting assistant |
-| `FEATURE_CALENDAR_SYNC` | `false` | Google Calendar / Outlook two-way calendar sync |
+| `FEATURE_TRANSLATION` | `false` | Captions translated on the viewer's device (not chat) |
+| `FEATURE_AI_RECAP` | `false` | Host-triggered recap of public chat and captions |
+| `FEATURE_AI_COMPANION` | `false` | Ask questions about one past meeting from History (not real-time) |
+| `FEATURE_CALENDAR_SYNC` | `false` | Google and Microsoft one-way event creation plus read-only busy times (not two-way) |
 
 ### 2. How to Turn a Feature On or Off
 
