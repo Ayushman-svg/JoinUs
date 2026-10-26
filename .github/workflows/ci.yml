@@ -28,22 +28,13 @@ jobs:
         working-directory: server
         run: npm ci
 
-      - name: Run server tests
-        working-directory: server
-        run: npm test
-        env:
-          NODE_ENV: test
-          PORT: 5001
-          JWT_SECRET: ci_super_secret_jwt_key_at_least_32_chars_long!
-
       - name: Install client dependencies
         working-directory: client
         run: npm ci
 
-      - name: Run client tests
-        working-directory: client
-        run: npm test
-
-      - name: Build client
-        working-directory: client
-        run: npm run build
+      - name: Run verification script (scripts/verify.sh)
+        run: bash scripts/verify.sh
+        env:
+          NODE_ENV: test
+          PORT: 5001
+          JWT_SECRET: ci_super_secret_jwt_key_at_least_32_chars_long!
