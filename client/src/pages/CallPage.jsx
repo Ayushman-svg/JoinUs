@@ -22,7 +22,9 @@ import Tooltip from '../components/ui/Tooltip.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useMeetingMedia } from '../context/MeetingMediaContext.jsx';
 import useCall from '../hooks/useCall.js';
+import { useFeature } from '../hooks/useFeature.js';
 import useSlowRequest from '../hooks/useSlowRequest.js';
+import MeetingHeader from '../components/call/MeetingHeader.jsx';
 import { DEFAULT_RTC_CONFIG } from '../webrtc/peer.js';
 
 function formatElapsed(totalSeconds) {
@@ -58,6 +60,7 @@ export default function CallPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const media = useMeetingMedia();
+  const roomViewsEnabled = useFeature('ROOM_VIEWS');
 
   const [meeting, setMeeting] = useState(null);
   const [confirmingLeave, setConfirmingLeave] = useState(false);
@@ -324,57 +327,75 @@ export default function CallPage() {
 
   return (
     <div className="call theme-meeting">
-      <header className="call__bar zoom-call-header">
-        <div className="zoom-call-header__left">
-          <Tooltip label="Meeting Information & Security" side="bottom">
+      {roomViewsEnabled ? (
+        <MeetingHeader
+          title={meeting?.title}
+          code={code}
+          waitingRoom={meeting?.waitingRoom ?? true}
+          onOpenSecurity={() => setSecurityModalOpen(true)}
+          elapsedSeconds={elapsedSeconds}
+          isReconnecting={Boolean(call.isReconnecting || call.status === 'reconnecting')}
+          viewMode={viewMode}
+          onToggleView={() => setViewMode((curr) => (curr === 'gallery' ? 'speaker' : 'gallery'))}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
+          isOtherSharing={isOtherSharing}
+          presenterName={presenterName}
+          recordingActive={false}
+        />
+      ) : (
+        <header className="call__bar zoom-call-header">
+          <div className="zoom-call-header__left">
+            <Tooltip label="Meeting Information & Security" side="bottom">
+              <button
+                type="button"
+                className="zoom-security-shield-btn"
+                onClick={() => setSecurityModalOpen(true)}
+                aria-label="Meeting information and encryption status"
+              >
+                <ShieldCheck size={18} className="zoom-shield-icon" aria-hidden="true" />
+              </button>
+            </Tooltip>
+            <div className="zoom-call-header__info">
+              <h1 className="call__title zoom-call-header__title">{meeting?.title ?? 'Meeting'}</h1>
+              <span className="zoom-call-header__divider" aria-hidden="true">|</span>
+              <span className="zoom-call-header__timer" title="Elapsed meeting time">
+                <Clock size={13} aria-hidden="true" />
+                <span>{formatElapsed(elapsedSeconds)}</span>
+              </span>
+            </div>
+          </div>
+
+          {isOtherSharing && (
+            <aside className="zoom-screen-share-bar zoom-screen-share-bar--remote" role="status">
+              <span className="zoom-screen-share-badge zoom-screen-share-badge--remote">
+                <MonitorUp size={14} aria-hidden="true" />
+                <span>{presenterName} is sharing screen</span>
+              </span>
+            </aside>
+          )}
+
+          <div className="zoom-call-header__right">
             <button
               type="button"
-              className="zoom-security-shield-btn"
-              onClick={() => setSecurityModalOpen(true)}
-              aria-label="Meeting information and encryption status"
+              className="zoom-view-btn"
+              onClick={() => setViewMode((curr) => (curr === 'gallery' ? 'speaker' : 'gallery'))}
+              aria-label={`Switch to ${viewMode === 'gallery' ? 'Speaker View' : 'Gallery View'}`}
             >
-              <ShieldCheck size={18} className="zoom-shield-icon" aria-hidden="true" />
+              <LayoutGrid size={15} aria-hidden="true" />
+              <span>{viewMode === 'gallery' ? 'Speaker View' : 'Gallery View'}</span>
             </button>
-          </Tooltip>
-          <div className="zoom-call-header__info">
-            <h1 className="call__title zoom-call-header__title">{meeting?.title ?? 'Meeting'}</h1>
-            <span className="zoom-call-header__divider" aria-hidden="true">|</span>
-            <span className="zoom-call-header__timer" title="Elapsed meeting time">
-              <Clock size={13} aria-hidden="true" />
-              <span>{formatElapsed(elapsedSeconds)}</span>
-            </span>
+            <button
+              type="button"
+              className="zoom-fullscreen-btn"
+              onClick={toggleFullscreen}
+              aria-label={isFullscreen ? 'Exit Full Screen' : 'Enter Full Screen'}
+            >
+              {isFullscreen ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
+            </button>
           </div>
-        </div>
-
-        {isOtherSharing && (
-          <aside className="zoom-screen-share-bar zoom-screen-share-bar--remote" role="status">
-            <span className="zoom-screen-share-badge zoom-screen-share-badge--remote">
-              <MonitorUp size={14} aria-hidden="true" />
-              <span>{presenterName} is sharing screen</span>
-            </span>
-          </aside>
-        )}
-
-        <div className="zoom-call-header__right">
-          <button
-            type="button"
-            className="zoom-view-btn"
-            onClick={() => setViewMode((curr) => (curr === 'gallery' ? 'speaker' : 'gallery'))}
-            aria-label={`Switch to ${viewMode === 'gallery' ? 'Speaker View' : 'Gallery View'}`}
-          >
-            <LayoutGrid size={15} aria-hidden="true" />
-            <span>{viewMode === 'gallery' ? 'Speaker View' : 'Gallery View'}</span>
-          </button>
-          <button
-            type="button"
-            className="zoom-fullscreen-btn"
-            onClick={toggleFullscreen}
-            aria-label={isFullscreen ? 'Exit Full Screen' : 'Enter Full Screen'}
-          >
-            {isFullscreen ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
-          </button>
-        </div>
-      </header>
+        </header>
+      )}
 
       <div className="call__main-layout">
         <main className="call__stage">
