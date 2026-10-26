@@ -1422,7 +1422,7 @@ export class CallSession {
     this.#update({ status, error: null, selfId: null, screenShare: null, ...extra });
   }
 
-  async sendMessage(rawText, to = null) {
+  async sendMessage(rawText, to = null, replyTo = null) {
     if (!rawText || !rawText.trim()) return;
     const text = rawText.trim();
     if (text.length > 1000) return;
@@ -1445,6 +1445,13 @@ export class CallSession {
         name: to.name,
       };
     }
+    if (replyTo && replyTo.id) {
+      optimistic.replyTo = {
+        id: replyTo.id,
+        text: replyTo.text,
+        fromName: replyTo.fromName,
+      };
+    }
 
     this.messages = [...this.messages, optimistic];
     this.rateLimitHint = null;
@@ -1454,6 +1461,9 @@ export class CallSession {
       const payload = { text };
       if (to && to.id) {
         payload.to = to.id;
+      }
+      if (replyTo && replyTo.id) {
+        payload.replyTo = replyTo.id;
       }
       const res = await this.signaling.request('chat:send', payload);
       const confirmed = res?.message || res;
@@ -1465,7 +1475,7 @@ export class CallSession {
           ? {
               ...m,
               status: 'failed',
-              error: isRateLimit ? "You're sending messages too fast" : 'Message not sent',
+              error: isRateLimit ? "You're sending messages too fast" : (err?.message || 'Message not sent'),
             }
           : m
       );
@@ -1512,6 +1522,9 @@ export class CallSession {
       const payload = { text: target.text };
       if (target.to?.id) {
         payload.to = target.to.id;
+      }
+      if (target.replyTo?.id) {
+        payload.replyTo = target.replyTo.id;
       }
       const res = await this.signaling.request('chat:send', payload);
       const confirmed = res?.message || res;

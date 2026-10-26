@@ -147,7 +147,10 @@ export default function useCall({
   );
   const clearSecurityToast = useCallback(() => sessionRef.current?.clearSecurityToast(), []);
 
-  const sendMessage = useCallback((text, to) => sessionRef.current?.sendMessage(text, to), []);
+  const sendMessage = useCallback(
+    (text, to, replyTo) => sessionRef.current?.sendMessage(text, to, replyTo),
+    []
+  );
   const retryMessage = useCallback((id) => sessionRef.current?.retryMessage(id), []);
   const clearUnread = useCallback(() => sessionRef.current?.clearUnread(), []);
   const setChatOpen = useCallback((isOpen) => sessionRef.current?.setChatOpen(isOpen), []);
