@@ -56,8 +56,22 @@ const loginLimiter = rateLimit({
   handler: createRateLimitHandler('Too many login attempts, please try again later'),
 });
 
+// Change password: 5 attempts per 15 min per IP and user
+const changePasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: true,
+  skip: shouldSkip,
+  validate: { keyGeneratorIpFallback: false },
+  keyGenerator: (req) => `${req.ip}_${req.user?.id || ''}`,
+  message: 'Too many password change attempts, please try again later',
+  handler: createRateLimitHandler('Too many password change attempts, please try again in 15 minutes'),
+});
+
 module.exports = {
   apiLimiter,
   registerLimiter,
   loginLimiter,
+  changePasswordLimiter,
 };

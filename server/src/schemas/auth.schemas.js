@@ -47,4 +47,20 @@ const updateProfileSchema = z.object({
   defaultMuteOnEntry: z.boolean().optional(),
 });
 
-module.exports = { registerSchema, loginSchema, updateProfileSchema };
+const changePasswordSchema = z.object({
+  currentPassword: z
+    .string({ error: 'Current password is required' })
+    .min(1, 'Current password is required')
+    .max(72, 'Password is too long'),
+  newPassword: z
+    .string({ error: 'New password is required' })
+    .min(8, 'New password must be at least 8 characters')
+    .max(72, 'Password must be at most 72 characters'),
+});
+
+module.exports = {
+  registerSchema,
+  loginSchema,
+  updateProfileSchema,
+  changePasswordSchema,
+};

@@ -74,4 +74,22 @@ async function updateMe(req, res) {
   res.json({ user });
 }
 
-module.exports = { register, login, me, updateMe };
+async function changePassword(req, res) {
+  const { currentPassword, newPassword } = req.body;
+  const user = await User.findById(req.user.id).select('+passwordHash');
+  if (!user) {
+    throw new AppError(404, 'USER_NOT_FOUND', 'User not found');
+  }
+
+  const passwordOk = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!passwordOk) {
+    throw new AppError(400, 'INVALID_CURRENT_PASSWORD', 'Current password is incorrect');
+  }
+
+  user.passwordHash = await bcrypt.hash(newPassword, env.bcryptRounds);
+  await user.save();
+
+  res.json({ ok: true, message: 'Password updated successfully' });
+}
+
+module.exports = { register, login, me, updateMe, changePassword };
