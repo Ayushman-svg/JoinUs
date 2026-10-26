@@ -34,6 +34,7 @@ export const FEEDBACK_OPTIONS = [
 
 export default function ReactionsPopover({
   open,
+  isOpen,
   onClose,
   onSendReaction,
   handRaised = false,
@@ -41,13 +42,14 @@ export default function ReactionsPopover({
   currentFeedback = null,
   onSetFeedback,
 }) {
+  const isPopoverOpen = Boolean(open ?? isOpen);
   const popoverRef = useRef(null);
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!isPopoverOpen) return undefined;
     function handleClickOutside(e) {
       if (popoverRef.current && !popoverRef.current.contains(e.target)) {
-        onClose();
+        onClose?.();
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -56,9 +58,9 @@ export default function ReactionsPopover({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
     };
-  }, [open, onClose]);
+  }, [isPopoverOpen, onClose]);
 
-  if (!open) return null;
+  if (!isPopoverOpen) return null;
 
   return (
     <div

@@ -14,7 +14,9 @@ export default function FloatingReactions({ reactions = [] }) {
             style={{ left: `${r.leftPercent ?? 50}%` }}
           >
             <span className="zoom-floating-reaction-emoji">{emoji}</span>
-            {r.name && <span className="zoom-floating-reaction-name">{r.name}</span>}
+            {(r.name || r.senderName) && (
+              <span className="zoom-floating-reaction-name">{r.name || r.senderName}</span>
+            )}
           </div>
         );
       })}
