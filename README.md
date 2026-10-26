@@ -44,6 +44,7 @@ JoinUs decouples signaling and coordination from real-time media exchange:
 - **One-at-a-Time Screen Sharing:** Server-enforced single active sharer (`SCREEN_SHARE_BUSY`). Features stage-and-filmstrip layouts, presenter status banners, toasts, and host controls to stop presentations remotely.
 - **Active Speaker Detection:** Real-time Web Audio API frequency and volume analysis highlighting the current speaker with glowing borders and animated audio meters.
 - **In-Call Real-Time Chat & Persistence:** Admitted users exchange messages in real-time. Messages are validated (1–1000 characters), rate-limited (5 msgs / 5s), stored in MongoDB, and automatically reloaded upon reconnection.
+- **Chat Plus (`FEATURE_CHAT_PLUS`):** Advanced chat features including 1:1 private messaging, message replies with quoted preview chips, copy message action, real-time in-chat search, a built-in lightweight emoji picker (zero external libraries), and automatic link detection (rendered with `rel="noopener noreferrer" target="_blank"` and safe plain text, never `innerHTML`).
 - **Live Captions & Transcripts (`FEATURE_CAPTIONS`):** Real-time client-side speech-to-text using the Web Speech API with floating stage captions (configurable size S/M/L, top/bottom positioning, and 5-second auto-fade) and a dedicated Transcript side panel with live auto-scrolling, search filtering, and `.txt` export.
   - **Browser Vendor Speech Service Notice & Explicit Opt-In:** Each user's browser transcribes only their own microphone audio. The Web Speech API forwards audio to the browser vendor's speech recognition service (e.g., Google or Microsoft). JoinUs requires an explicit user consent opt-in modal before any microphone transcription starts and never stores raw audio.
   - **Browser Compatibility:** Feature-detected on supported browsers (primarily Chromium browsers like Google Chrome and Microsoft Edge); the controls are hidden automatically on unsupported browsers.
@@ -271,8 +272,13 @@ The client will start at `http://localhost:5173` and proxy/communicate with the 
 - **Safe Logging & Error Handling:** Stack traces are never exposed in production. Metered API URLs and credentials are sanitized from log outputs to prevent secret leaks.
 
 ### Privacy Notes
-- **Private Chat Messages:** In-meeting private messages between two participants are private to the sender and recipient. They are never broadcast to the room, never delivered to the host (unless the host is one of the two parties), and never viewable by any third party.
-- **REST & History Authorization:** `GET /api/meetings/:code/messages` and History transcript views filter messages strictly on the server: attendees and hosts can only read public messages plus private messages where they are the sender or the recipient.
+- **Private Chat Messaging Privacy Rules (`FEATURE_CHAT_PLUS`):**
+  - **Addressing & Delivery:** `chat:send` accepts `{ text, to?, replyTo? }`. The `'to'` field must specify an admitted user currently present in the room; self-messaging is rejected with `CANNOT_MESSAGE_SELF`, and messaging non-admitted or absent users is rejected with `RECIPIENT_NOT_IN_ROOM`.
+  - **Zero Public Fallback:** A private message is routed strictly to the sender and recipient (targeted across their socket IDs and user channel in a single emit). It never falls back to a public broadcast.
+  - **Host & Outsider Privacy:** Meeting hosts have **no access** to private messages exchanged between other participants.
+  - **REST & History Authorization:** `GET /api/meetings/:code/messages` and History detail views return public messages plus private messages where the viewer is the sender or the recipient. Outsiders and waiting guests are rejected with `FORBIDDEN`.
+  - **Waiting Room Isolation:** Waiting guests receive nothing (no chat events, no history, no private messages).
+  - **Recipient Left Handling:** If a selected private recipient leaves the call, the client immediately disables sending and displays a status banner until the user selects another participant.
 
 ### Host Security & Permission Matrix (`FEATURE_HOST_SECURITY`)
 
@@ -315,7 +321,7 @@ npm test
 - `ice.test.js`: ICE / STUN endpoints and sanitized Metered TURN fallback.
 - `rateLimitRest.test.js` & `rateLimitSocket.test.js`: REST 429 responses and socket sliding-window limits.
 - `roomRegistry.test.js` & `waitingRoomSocket.test.js`: Room admission, capacity capping, host moderation, reconnection bypass.
-- `chatSocket.test.js` & `chatPrivate.test.js`: Chat authorization, persistence, private messaging, and waiting room isolation.
+- `chatSocket.test.js`, `chatPrivate.test.js` & `chatPlus.test.js`: Chat authorization, persistence, private messaging isolation, host/outsider privacy, and thread reply validation.
 - `screenShareSocket.test.js`: Single-presenter enforcement and room capacity boundaries.
 - `features.test.js`: Feature flag resolution, fallback defaults, and `requireFeature` route middleware.
 - `sanitizeLog.test.js`: Secret masking and log sanitation for uncaught exceptions and fatal errors.
@@ -325,8 +331,9 @@ npm test
 cd client
 npm test
 ```
-*Covers 26 unit tests using Node.js test runner (`node:test`):*
+*Covers 80 unit tests using Node.js test runner (`node:test`):*
 - `call.test.js`: Multi-party mesh offer generation, polite/impolite polarity derivation, peer cleanup, screen sharing lifecycle, active speaker audio tracking, network reconnection recovery without duplicate tiles, and room-full/ended meeting transitions.
+- `chatPlusSession.test.js` & `chatPlusUi.test.js`: CallSession private and replyTo sending, optimistic updates, unread count tracking, auto link detection, in-chat search filtering, message actions, emoji popover, and recipient left status.
 - `helpers.test.js`: Duration formatting, local input string parsing, and meeting code extraction.
 - `useFeature.test.js`: Feature flag fetching, cache storage, focus refetching, and fail-closed behavior on network failures.
 
