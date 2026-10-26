@@ -53,4 +53,7 @@
   --shadow-lg: 0 14px 36px rgb(0 0 0 / 0.5);
   --shadow-primary: 0 1px 2px rgb(0 0 0 / 0.5);
   --shadow-glow: 0 8px 26px rgb(37 99 235 / 0.5);
+
+  --color-widget-card-bg: linear-gradient(135deg, rgb(24 25 29 / 0.95) 0%, rgb(31 34 42 / 0.95) 100%);
+  --color-widget-card-shadow: 0 10px 30px rgb(0 0 0 / 0.35);
 }

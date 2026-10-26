@@ -371,7 +371,7 @@
 
 .history-bubble--self {
   background: var(--color-primary);
-  color: #FFFFFF;
+  color: var(--color-on-primary);
 }
 
 .history-bubble--other {
@@ -415,14 +415,14 @@
 }
 
 .history-bubble--private-self .history-bubble__private-tag {
-  color: #DBEAFE;
+  color: var(--color-on-brand-muted);
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .history-bubble--private-other .history-bubble__private-tag {
   color: var(--color-primary);
-  background: rgba(37, 99, 235, 0.08);
+  background: var(--color-primary-light);
   border: 1px solid rgba(37, 99, 235, 0.2);
 }
 

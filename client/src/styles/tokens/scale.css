@@ -68,6 +68,27 @@
   --avatar-4: #b45309;
   --avatar-5: #be185d;
   --avatar-6: #475569;
+
+  /* Action Tiles Palette (Zoom Workplace reference) */
+  --tile-orange-bg: #f26d21;
+  --tile-orange-hover: #ea580c;
+  --tile-orange-gradient: linear-gradient(135deg, #ff7426 0%, #f26d21 100%);
+  --tile-orange-shadow: 0 8px 24px rgb(242 109 33 / 0.35);
+
+  --tile-blue-bg: #0e72ed;
+  --tile-blue-hover: #0b5ed7;
+  --tile-blue-gradient: linear-gradient(135deg, #2d8cff 0%, #0e72ed 100%);
+  --tile-blue-shadow: 0 8px 24px rgb(14 114 237 / 0.35);
+
+  --tile-teal-bg: #059669;
+  --tile-teal-hover: #047857;
+  --tile-teal-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --tile-teal-shadow: 0 8px 24px rgb(16 185 129 / 0.35);
+
+  --tile-on-tile: #ffffff;
+  --tile-icon-box-bg: rgb(255 255 255 / 0.16);
+  --tile-icon-box-border: rgb(255 255 255 / 0.25);
+  --tile-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
 }
 
 @media (pointer: coarse) {
