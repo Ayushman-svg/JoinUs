@@ -22,6 +22,9 @@ class RoomRegistry {
     this.deniedUsers = new Map(); // meeting code -> Set(userId)
     this.removedUsers = new Map(); // meeting code -> Set(userId)
     this.hosts = new Map(); // meeting code -> hostUserId
+    this.coHosts = new Map(); // meeting code -> Set(userId)
+    this.blockedUsers = new Map(); // meeting code -> Set(userId)
+    this.roomSettings = new Map(); // meeting code -> { muteOnEntry, chatAllowed, shareAllowed, locked }
     this.screenSharers = new Map(); // meeting code -> { peerId, streamId }
   }
 
@@ -44,6 +47,90 @@ class RoomRegistry {
   isHost(code, userId) {
     const hostId = this.hosts.get(code);
     return hostId !== undefined && hostId === String(userId);
+  }
+
+  setCoHosts(code, userIds = []) {
+    const set = new Set(userIds.map(String));
+    this.coHosts.set(code, set);
+  }
+
+  isCoHost(code, userId) {
+    return Boolean(this.coHosts.get(code)?.has(String(userId)));
+  }
+
+  getRole(code, peerIdOrUserId) {
+    let userId = String(peerIdOrUserId);
+    const peer = this.getPeer(peerIdOrUserId);
+    if (peer) {
+      userId = String(peer.userId);
+    }
+    if (this.isHost(code, userId)) return 'host';
+    if (this.isCoHost(code, userId)) return 'co-host';
+    return 'participant';
+  }
+
+  canModerate(code, peerIdOrUserId) {
+    const role = this.getRole(code, peerIdOrUserId);
+    return role === 'host' || role === 'co-host';
+  }
+
+  canActOn(code, actorPeerId, targetPeerId) {
+    const actorRole = this.getRole(code, actorPeerId);
+    if (actorRole !== 'host' && actorRole !== 'co-host') return false;
+
+    const targetRole = this.getRole(code, targetPeerId);
+    // Co-hosts can NEVER act on the host!
+    if (actorRole === 'co-host' && targetRole === 'host') return false;
+
+    return true;
+  }
+
+  setSettings(code, settings = {}) {
+    const current = this.getSettings(code);
+    const updated = Object.freeze({
+      muteOnEntry: settings.muteOnEntry !== undefined ? Boolean(settings.muteOnEntry) : current.muteOnEntry,
+      chatAllowed: settings.chatAllowed !== undefined ? Boolean(settings.chatAllowed) : current.chatAllowed,
+      shareAllowed: settings.shareAllowed !== undefined ? settings.shareAllowed : current.shareAllowed,
+      locked: settings.locked !== undefined ? Boolean(settings.locked) : current.locked,
+    });
+    this.roomSettings.set(code, updated);
+    return updated;
+  }
+
+  getSettings(code) {
+    return (
+      this.roomSettings.get(code) ??
+      Object.freeze({
+        muteOnEntry: false,
+        chatAllowed: true,
+        shareAllowed: 'all',
+        locked: false,
+      })
+    );
+  }
+
+  setLocked(code, locked) {
+    return this.setSettings(code, { locked: Boolean(locked) });
+  }
+
+  isLocked(code) {
+    return Boolean(this.getSettings(code).locked);
+  }
+
+  addBlocked(code, userId) {
+    if (!this.blockedUsers.has(code)) {
+      this.blockedUsers.set(code, new Set());
+    }
+    this.blockedUsers.get(code).add(String(userId));
+  }
+
+  isBlocked(code, userId) {
+    return Boolean(this.blockedUsers.get(code)?.has(String(userId)));
+  }
+
+  setBlockedUsers(code, userIds = []) {
+    const set = new Set(userIds.map(String));
+    this.blockedUsers.set(code, set);
   }
 
   isHostInRoom(code) {
@@ -76,6 +163,7 @@ class RoomRegistry {
       audio = true,
       video = true,
       isHost = false,
+      isCoHost = false,
       waitingRoom = true,
     }
   ) {
@@ -91,8 +179,19 @@ class RoomRegistry {
     if (isHost) {
       this.hosts.set(code, userId);
     }
+    if (isCoHost) {
+      if (!this.coHosts.has(code)) {
+        this.coHosts.set(code, new Set());
+      }
+      this.coHosts.get(code).add(userId);
+    }
 
-    const shouldBypass = isHost || !waitingRoom || this.isAdmitted(code, userId);
+    const shouldBypass =
+      isHost ||
+      isCoHost ||
+      this.isCoHost(code, userId) ||
+      !waitingRoom ||
+      this.isAdmitted(code, userId);
 
     if (shouldBypass) {
       this.#removeFromWaiting(code, peerId);
@@ -110,6 +209,8 @@ class RoomRegistry {
         peers: res.peers,
         replaced: res.replaced,
         screenSharer: this.getScreenSharer(code),
+        settings: this.getSettings(code),
+        role: res.peer.role,
       };
     }
 
@@ -195,6 +296,8 @@ class RoomRegistry {
       waitingUser,
       replaced: res.replaced,
       screenSharer: this.getScreenSharer(code),
+      settings: this.getSettings(code),
+      role: res.peer.role,
     };
   }
 
@@ -246,8 +349,8 @@ class RoomRegistry {
 
   // Host removes an active participant from the meeting.
   // Revokes remembered admission so they must wait again if they try to return.
-  // Returns { code, peer, remaining, screenShareEnded }. Throws PEER_NOT_FOUND.
-  remove(code, peerId) {
+  // Returns { code, peer, remaining, screenShareEnded, blocked }. Throws PEER_NOT_FOUND.
+  remove(code, peerId, { block = false } = {}) {
     const room = this.rooms.get(code);
     const peer = room?.get(peerId);
     if (!peer) {
@@ -268,6 +371,11 @@ class RoomRegistry {
     }
 
     this.admittedUsers.get(code)?.delete(peer.userId);
+    this.coHosts.get(code)?.delete(String(peer.userId));
+
+    if (block) {
+      this.addBlocked(code, peer.userId);
+    }
 
     if (!this.removedUsers.has(code)) {
       this.removedUsers.set(code, new Set());
@@ -279,7 +387,67 @@ class RoomRegistry {
       peer,
       remaining: [...(this.rooms.get(code)?.values() ?? [])],
       screenShareEnded,
+      blocked: Boolean(block),
     };
+  }
+
+  promoteCoHost(code, peerId) {
+    const room = this.rooms.get(code);
+    const peer = room?.get(peerId);
+    if (!peer) {
+      throw new AppError(404, 'PEER_NOT_FOUND', 'Participant is not in this meeting');
+    }
+
+    if (!this.coHosts.has(code)) {
+      this.coHosts.set(code, new Set());
+    }
+    this.coHosts.get(code).add(String(peer.userId));
+
+    const updated = Object.freeze({
+      ...peer,
+      role: 'co-host',
+      isCoHost: true,
+    });
+    room.set(peerId, updated);
+    return { code, peer: updated, role: 'co-host' };
+  }
+
+  demoteCoHost(code, peerId) {
+    const room = this.rooms.get(code);
+    const peer = room?.get(peerId);
+    if (!peer) {
+      throw new AppError(404, 'PEER_NOT_FOUND', 'Participant is not in this meeting');
+    }
+
+    this.coHosts.get(code)?.delete(String(peer.userId));
+
+    const updated = Object.freeze({
+      ...peer,
+      role: 'participant',
+      isCoHost: false,
+    });
+    room.set(peerId, updated);
+    return { code, peer: updated, role: 'participant' };
+  }
+
+  renamePeer(code, peerId, newName) {
+    const room = this.rooms.get(code);
+    const peer = room?.get(peerId);
+    if (!peer) {
+      throw new AppError(404, 'PEER_NOT_FOUND', 'Participant is not in this meeting');
+    }
+    const trimmed = (newName || '').trim();
+    if (!trimmed) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'Name cannot be empty');
+    }
+
+    const previousName = peer.name;
+    const updated = Object.freeze({
+      ...peer,
+      name: trimmed,
+    });
+    room.set(peerId, updated);
+    return { code, peer: updated, previousName };
   }
 
   // Records a peer's microphone and camera state. Returns { code, peer } or null if not in a room.
@@ -395,6 +563,9 @@ class RoomRegistry {
     this.deniedUsers.delete(code);
     this.removedUsers.delete(code);
     this.hosts.delete(code);
+    this.coHosts.delete(code);
+    this.blockedUsers.delete(code);
+    this.roomSettings.delete(code);
 
     return { code, peers, waiting: waitingUsers };
   }
@@ -500,12 +671,19 @@ class RoomRegistry {
       this.peerRooms.delete(old.peerId);
     }
 
+    const isHost = this.isHost(code, userId);
+    const isCoHost = this.isCoHost(code, userId);
+    const role = isHost ? 'host' : isCoHost ? 'co-host' : 'participant';
+
     const peer = Object.freeze({
       peerId,
       userId,
       name,
       audio,
       video,
+      role,
+      isHost,
+      isCoHost,
       handRaised: false,
       raisedAt: null,
       feedback: null,

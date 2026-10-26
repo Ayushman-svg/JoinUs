@@ -454,5 +454,95 @@ describe('RoomRegistry', () => {
       expect(admitRes.screenSharer).toEqual({ peerId: 'p1', streamId: 'screen-stream-1' });
     });
   });
+
+  describe('host security, roles, and settings', () => {
+    it('derives roles: host, co-host, and participant', () => {
+      const reg = new RoomRegistry({ maxParticipants: 4 });
+      const h = reg.join('room-sec', { peerId: 's-host', userId: 'u-host', name: 'Host', isHost: true });
+      expect(h.peer.role).toBe('host');
+      expect(h.peer.isHost).toBe(true);
+      expect(h.peer.isCoHost).toBe(false);
+
+      const p = reg.join('room-sec', { peerId: 's-p1', userId: 'u-p1', name: 'Peer 1', waitingRoom: false });
+      expect(p.peer.role).toBe('participant');
+      expect(p.peer.isHost).toBe(false);
+      expect(p.peer.isCoHost).toBe(false);
+
+      // Promote to co-host
+      const promoted = reg.promoteCoHost('room-sec', 's-p1');
+      expect(promoted.role).toBe('co-host');
+      expect(promoted.peer.role).toBe('co-host');
+      expect(promoted.peer.isCoHost).toBe(true);
+
+      // Verify getRole and canModerate
+      expect(reg.getRole('room-sec', 's-host')).toBe('host');
+      expect(reg.getRole('room-sec', 's-p1')).toBe('co-host');
+      expect(reg.canModerate('room-sec', 's-host')).toBe(true);
+      expect(reg.canModerate('room-sec', 's-p1')).toBe(true);
+
+      // Demote back to participant
+      const demoted = reg.demoteCoHost('room-sec', 's-p1');
+      expect(demoted.role).toBe('participant');
+      expect(demoted.peer.isCoHost).toBe(false);
+      expect(reg.canModerate('room-sec', 's-p1')).toBe(false);
+    });
+
+    it('enforces that co-hosts can never act on the host', () => {
+      const reg = new RoomRegistry({ maxParticipants: 4 });
+      reg.join('room-sec', { peerId: 's-host', userId: 'u-host', name: 'Host', isHost: true });
+      reg.join('room-sec', { peerId: 's-cohost', userId: 'u-cohost', name: 'CoHost', waitingRoom: false });
+      reg.promoteCoHost('room-sec', 's-cohost');
+      reg.join('room-sec', { peerId: 's-guest', userId: 'u-guest', name: 'Guest', waitingRoom: false });
+
+      // Host can act on co-host and guest
+      expect(reg.canActOn('room-sec', 's-host', 's-cohost')).toBe(true);
+      expect(reg.canActOn('room-sec', 's-host', 's-guest')).toBe(true);
+
+      // Co-host can act on guest
+      expect(reg.canActOn('room-sec', 's-cohost', 's-guest')).toBe(true);
+
+      // Co-host can NEVER act on host
+      expect(reg.canActOn('room-sec', 's-cohost', 's-host')).toBe(false);
+
+      // Participant cannot act on anyone
+      expect(reg.canActOn('room-sec', 's-guest', 's-cohost')).toBe(false);
+      expect(reg.canActOn('room-sec', 's-guest', 's-host')).toBe(false);
+    });
+
+    it('updates and remembers room settings and lock state', () => {
+      const reg = new RoomRegistry({ maxParticipants: 4 });
+      expect(reg.isLocked('room-sec')).toBe(false);
+
+      reg.setLocked('room-sec', true);
+      expect(reg.isLocked('room-sec')).toBe(true);
+
+      reg.setSettings('room-sec', { muteOnEntry: true, shareAllowed: 'host-only' });
+      const settings = reg.getSettings('room-sec');
+      expect(settings.locked).toBe(true);
+      expect(settings.muteOnEntry).toBe(true);
+      expect(settings.shareAllowed).toBe('host-only');
+      expect(settings.chatAllowed).toBe(true);
+    });
+
+    it('renames peers for the active room only', () => {
+      const reg = new RoomRegistry({ maxParticipants: 4 });
+      reg.join('room-sec', { peerId: 's1', userId: 'u1', name: 'OldName', waitingRoom: false });
+
+      const renamed = reg.renamePeer('room-sec', 's1', 'NewName');
+      expect(renamed.peer.name).toBe('NewName');
+      expect(renamed.previousName).toBe('OldName');
+      expect(reg.getPeer('s1').name).toBe('NewName');
+    });
+
+    it('tracks blocked users and supports remove with block flag', () => {
+      const reg = new RoomRegistry({ maxParticipants: 4 });
+      reg.join('room-sec', { peerId: 's1', userId: 'u1', name: 'Troublemaker', waitingRoom: false });
+
+      const removeRes = reg.remove('room-sec', 's1', { block: true });
+      expect(removeRes.blocked).toBe(true);
+      expect(reg.isBlocked('room-sec', 'u1')).toBe(true);
+      expect(reg.isBlocked('room-sec', 'u2')).toBe(false);
+    });
+  });
 });
 
