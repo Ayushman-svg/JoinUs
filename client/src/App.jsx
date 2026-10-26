@@ -23,6 +23,8 @@ import SecurityPage from './pages/public/SecurityPage.jsx';
 import TermsPage from './pages/public/TermsPage.jsx';
 import Register from './pages/Register.jsx';
 import SchedulePage from './pages/SchedulePage.jsx';
+import MeetingDetailsPage from './pages/MeetingDetailsPage.jsx';
+
 
 
 export default function App() {
@@ -57,7 +59,9 @@ export default function App() {
           <Route element={<AppShell />}>
             {!isGuestLanding && <Route path="/" element={<Dashboard />} />}
             <Route path="/schedule" element={<SchedulePage />} />
+            <Route path="/meetings/:code" element={<MeetingDetailsPage />} />
             <Route path="/history" element={<HistoryPage />} />
+
             <Route path="/history/:code" element={<HistoryDetailPage />} />
 
           </Route>
