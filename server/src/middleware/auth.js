@@ -22,4 +22,23 @@ const requireAuth = asyncHandler(async (req, res, next) => {
   next();
 });
 
-module.exports = { requireAuth };
+// Optionally extracts Bearer token and attaches user if valid, continues without error if absent
+const optionalAuth = asyncHandler(async (req, res, next) => {
+  const [scheme, token] = (req.headers.authorization || '').split(' ');
+
+  if (scheme && scheme.toLowerCase() === 'bearer' && token) {
+    try {
+      const userId = verifyToken(token);
+      const user = await User.findById(userId);
+      if (user) {
+        req.user = user;
+      }
+    } catch {
+      // Ignore token verification errors for optional auth
+    }
+  }
+
+  next();
+});
+
+module.exports = { requireAuth, optionalAuth };

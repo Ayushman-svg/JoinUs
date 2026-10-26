@@ -12,7 +12,9 @@ const meetingRoutes = require('./routes/meeting.routes');
 const historyRoutes = require('./routes/history.routes');
 const iceRoutes = require('./routes/ice.routes');
 const configRoutes = require('./routes/config.routes');
+const roomRoutes = require('./routes/room.routes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
+
 
 const app = express();
 
@@ -50,8 +52,10 @@ app.use('/api/meetings', meetingRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/ice-servers', iceRoutes);
 app.use('/api/config', configRoutes);
+app.use('/api/rooms', roomRoutes);
 
 app.use(notFound);
+
 app.use(errorHandler);
 
 module.exports = app;
