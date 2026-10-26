@@ -44,7 +44,7 @@ export default function PublicFooter() {
               className="public-footer__github-link"
               aria-label="JoinUs source code on GitHub"
             >
-              <Github size={18} aria-hidden="true" />
+              <GitHubIcon size={18} aria-hidden="true" />
               <span>View on GitHub</span>
             </a>
           </div>
