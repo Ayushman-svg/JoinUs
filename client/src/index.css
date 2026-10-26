@@ -11,4 +11,5 @@
 @import './styles/shell.css';
 @import './styles/dashboard.css';
 @import './styles/history.css';
+@import './styles/public.css';
 @import './styles/legacy.css';
