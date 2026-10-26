@@ -3,12 +3,13 @@ import { fetchServerConfig } from '../api/config.js';
 
 let cachedFeatures = null;
 let fetchPromise = null;
+let isReady = false;
 const listeners = new Set();
 
 function notify() {
   for (const listener of listeners) {
     try {
-      listener(cachedFeatures);
+      listener(cachedFeatures, isReady);
     } catch {
       /* ignore */
     }
@@ -21,7 +22,7 @@ function notify() {
  * @param {boolean} force - whether to bypass cache and re-fetch (e.g. on focus)
  */
 export async function fetchFeatures(force = false) {
-  if (!force && cachedFeatures !== null) {
+  if (!force && isReady && cachedFeatures !== null) {
     return cachedFeatures;
   }
   if (fetchPromise && !force) {
@@ -31,12 +32,14 @@ export async function fetchFeatures(force = false) {
   fetchPromise = fetchServerConfig()
     .then((data) => {
       cachedFeatures = data?.features && typeof data.features === 'object' ? data.features : {};
+      isReady = true;
       notify();
       return cachedFeatures;
     })
     .catch(() => {
       // Fail closed: every flag is OFF
       cachedFeatures = {};
+      isReady = true;
       notify();
       return cachedFeatures;
     })
@@ -55,46 +58,25 @@ if (typeof window !== 'undefined' && window.addEventListener) {
 }
 
 /**
- * Hook that returns whether a given feature flag is enabled.
- * Default is false (fail closed). If disabled, renders nothing.
- * @param {string} name - e.g. 'RECORDING', 'REACTIONS'
- * @returns {boolean}
- */
-export function useFeature(name) {
-  const [features, setFeatures] = useState(() => cachedFeatures || {});
-
-  useEffect(() => {
-    const handler = (newFeatures) => setFeatures(newFeatures || {});
-    listeners.add(handler);
-
-    if (cachedFeatures === null) {
-      fetchFeatures().catch(() => {});
-    } else {
-      setFeatures(cachedFeatures);
-    }
-
-    return () => {
-      listeners.delete(handler);
-    };
-  }, []);
-
-  return Boolean(features && features[name]);
-}
-
-/**
- * Hook that returns all features and helper methods.
+ * Hook that returns all features, helper methods, and ready state.
+ * `ready` is false until the first /api/config response (success or failure) has arrived.
  */
 export function useFeatures() {
   const [features, setFeatures] = useState(() => cachedFeatures || {});
+  const [ready, setReady] = useState(() => isReady);
 
   useEffect(() => {
-    const handler = (newFeatures) => setFeatures(newFeatures || {});
+    const handler = (newFeatures, newReady) => {
+      setFeatures(newFeatures || {});
+      setReady(Boolean(newReady));
+    };
     listeners.add(handler);
 
-    if (cachedFeatures === null) {
+    if (!isReady) {
       fetchFeatures().catch(() => {});
     } else {
-      setFeatures(cachedFeatures);
+      setFeatures(cachedFeatures || {});
+      setReady(true);
     }
 
     return () => {
@@ -106,7 +88,19 @@ export function useFeatures() {
     features,
     isEnabled: (name) => Boolean(features && features[name]),
     reload: () => fetchFeatures(true),
+    ready,
   };
+}
+
+/**
+ * Hook that returns whether a given feature flag is enabled.
+ * Default is false (fail closed). If disabled, renders nothing.
+ * @param {string} name - e.g. 'RECORDING', 'REACTIONS'
+ * @returns {boolean}
+ */
+export function useFeature(name) {
+  const { isEnabled } = useFeatures();
+  return isEnabled(name);
 }
 
 /**
@@ -122,10 +116,16 @@ export function Feature({ name, children, fallback = null }) {
 export function _resetFeaturesCacheForTesting() {
   cachedFeatures = null;
   fetchPromise = null;
+  isReady = false;
   listeners.clear();
 }
 
 export function _setCachedFeaturesForTesting(mock) {
   cachedFeatures = mock;
+  isReady = true;
   notify();
+}
+
+export function _isReadyForTesting() {
+  return isReady;
 }
