@@ -855,10 +855,11 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     const { peerId, name } = parse(hostRenameSchema, payload);
 
     assertCanActOn(registry, code, socket.id, peerId);
-    const renamed = registry.renamePeer(code, peerId, name);
-    if (!renamed) {
+    const renamedResult = registry.renamePeer(code, peerId, name);
+    if (!renamedResult) {
       throw new AppError(404, 'PEER_NOT_FOUND', 'Participant is not in this meeting');
     }
+    const renamed = renamedResult.peer || renamedResult;
 
     io.to(code).emit('peer:renamed', {
       peerId,

@@ -82,9 +82,10 @@ const reactionSendSchema = z.object({
   }),
 });
 
-// hand:set { raised }
+// hand:set { raised, peerId? }
 const handSetSchema = z.object({
   raised: z.boolean({ required_error: 'raised is required' }),
+  peerId: z.string().min(1).max(64).optional(),
 });
 
 // feedback:set { kind }: yes, no, slower, faster, break, or null
