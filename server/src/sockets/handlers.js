@@ -1,4 +1,5 @@
 const AppError = require('../utils/AppError');
+const { sanitizeError } = require('../utils/sanitizeLog');
 const { MEETING_STATUS } = require('../config/constants');
 const Meeting = require('../models/Meeting');
 const Message = require('../models/Message');
@@ -35,7 +36,7 @@ function parse(schema, payload) {
 
 function toAckError(err) {
   if (err instanceof AppError) return { code: err.code, message: err.message };
-  console.error(err);
+  console.error(sanitizeError(err));
   return { code: 'INTERNAL_ERROR', message: 'Something went wrong' };
 }
 
@@ -95,7 +96,7 @@ async function recordAdmittedJoin(code, userId) {
       );
     }
   } catch (err) {
-    console.error(`Failed to record admitted join for meeting ${code}:`, err);
+    console.error(`Failed to record admitted join for meeting ${code}:`, sanitizeError(err));
   }
 }
 
@@ -103,7 +104,7 @@ async function recordRoomInactive(code) {
   try {
     await Meeting.updateOne({ code }, { $set: { lastActiveAt: new Date() } });
   } catch (err) {
-    console.error(`Failed to record room inactivity for meeting ${code}:`, err);
+    console.error(`Failed to record room inactivity for meeting ${code}:`, sanitizeError(err));
   }
 }
 
@@ -527,7 +528,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     await Meeting.updateOne(
       { code },
       { $set: { status: MEETING_STATUS.ENDED, lastActiveAt: new Date() } }
-    ).catch((err) => console.error(`Failed to update meeting status on end for ${code}:`, err));
+    ).catch((err) => console.error(`Failed to update meeting status on end for ${code}:`, sanitizeError(err)));
 
     const { peers, waiting } = registry.end(code);
     if (waiting && waiting.length > 0) {
@@ -670,7 +671,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       }
       saved = await Message.create(docData);
     } catch (err) {
-      console.error(`Failed to persist chat message in room ${code}:`, err);
+      console.error(`Failed to persist chat message in room ${code}:`, sanitizeError(err));
       throw new AppError(500, 'CHAT_FAILED', 'Failed to save message');
     }
 

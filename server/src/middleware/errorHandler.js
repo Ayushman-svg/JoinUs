@@ -1,5 +1,6 @@
 const AppError = require('../utils/AppError');
 const { isProduction } = require('../config/env');
+const { sanitizeError } = require('../utils/sanitizeLog');
 
 function notFound(req, res, next) {
   next(new AppError(404, 'NOT_FOUND', `Route not found: ${req.method} ${req.originalUrl}`));
@@ -24,8 +25,8 @@ function errorHandler(err, req, res, next) {
   const isAppError = error instanceof AppError;
   const status = isAppError ? error.statusCode : 500;
 
-  if (status >= 500 && process.env.NODE_ENV !== 'test') {
-    console.error(error);
+  if (status >= 500) {
+    console.error(sanitizeError(error));
   }
 
   res.status(status).json({

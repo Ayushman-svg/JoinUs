@@ -3,6 +3,7 @@ const { Server } = require('socket.io');
 const env = require('../config/env');
 const { MAX_PARTICIPANTS } = require('../config/constants');
 const AppError = require('../utils/AppError');
+const { sanitizeError } = require('../utils/sanitizeLog');
 const { verifyToken } = require('../utils/token');
 const User = require('../models/User');
 const RoomRegistry = require('./roomRegistry');
@@ -37,7 +38,7 @@ async function authenticate(socket, next) {
     socket.join(`user:${user.id}`);
     next();
   } catch (err) {
-    if (!(err instanceof AppError)) console.error(err);
+    if (!(err instanceof AppError)) console.error(sanitizeError(err));
     next(toConnectError(err));
   }
 }

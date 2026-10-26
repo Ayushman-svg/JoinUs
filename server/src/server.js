@@ -2,6 +2,7 @@ const http = require('http');
 
 const env = require('./config/env');
 const { connectDB, disconnectDB } = require('./config/db');
+const { sanitizeError } = require('./utils/sanitizeLog');
 const app = require('./app');
 const { initSockets } = require('./sockets');
 
@@ -14,7 +15,7 @@ async function start() {
   try {
     await connectDB();
   } catch (err) {
-    console.error('Failed to connect to MongoDB:', err.message);
+    console.error('Failed to connect to MongoDB:', sanitizeError(err));
     process.exit(1);
   }
 
@@ -22,8 +23,6 @@ async function start() {
     console.log(`JoinUs server running on port ${env.port} (${env.nodeEnv})`);
   });
 }
-
-const { sanitizeError } = require('./utils/sanitizeLog');
 
 function shutdown(signal, exitCode = 0) {
   console.log(`${signal} received, shutting down`);
