@@ -1,4 +1,14 @@
-import { Hand, MicOff, MoreHorizontal, Pin } from 'lucide-react';
+import {
+  Check,
+  ChevronsDown,
+  ChevronsUp,
+  Coffee,
+  Hand,
+  MicOff,
+  MoreHorizontal,
+  Pin,
+  X,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useFeature } from '../../hooks/useFeature.js';
 
@@ -23,6 +33,7 @@ export default function ParticipantTile({
   isSpeaking = false,
   isHost = false,
   handRaised = false,
+  feedback = null,
   reaction = null,
   isPinned = false,
   onPinToggle,
@@ -73,13 +84,29 @@ export default function ParticipantTile({
         </div>
       )}
 
-      {/* Top Left: Hand Raised Badge */}
-      {reactionsEnabled && handRaised && (
-        <div className="zoom-tile__hand-badge" role="status">
-          <Hand size={14} aria-hidden="true" className="icon-hand" />
-          <span>Hand Raised</span>
-        </div>
-      )}
+      {/* Top Left: Hand Raised & Feedback Badges */}
+      <div className="zoom-tile__status-badges">
+        {reactionsEnabled && handRaised && (
+          <div className="zoom-tile__hand-badge" role="status">
+            <Hand size={14} aria-hidden="true" className="icon-hand" />
+            <span>Hand Raised</span>
+          </div>
+        )}
+        {reactionsEnabled && feedback && (
+          <div
+            className={`zoom-tile__feedback-badge zoom-tile__feedback-badge--${feedback}`}
+            role="status"
+            title={`Feedback: ${feedback}`}
+          >
+            {feedback === 'yes' && <Check size={13} aria-hidden="true" />}
+            {feedback === 'no' && <X size={13} aria-hidden="true" />}
+            {feedback === 'slower' && <ChevronsDown size={13} aria-hidden="true" />}
+            {feedback === 'faster' && <ChevronsUp size={13} aria-hidden="true" />}
+            {feedback === 'break' && <Coffee size={13} aria-hidden="true" />}
+            <span>{feedback === 'break' ? 'Break' : feedback.toUpperCase()}</span>
+          </div>
+        )}
+      </div>
 
       {/* Top Right: Pin button & More options */}
       <div className="zoom-tile__top-actions">

@@ -19,6 +19,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { useFeature } from '../../hooks/useFeature.js';
 import MicTestModal from './MicTestModal.jsx';
+import ReactionsPopover from './ReactionsPopover.jsx';
 
 export default function CallControls({
   media,
@@ -39,12 +40,15 @@ export default function CallControls({
   handRaised = false,
   onToggleHandRaise,
   onSendReaction,
+  currentFeedback = null,
+  onSetFeedback,
   onReplaceTrack,
 }) {
   const reactionsEnabled = useFeature('REACTIONS');
   const [showAudioMenu, setShowAudioMenu] = useState(false);
   const [showVideoMenu, setShowVideoMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showReactionsPopover, setShowReactionsPopover] = useState(false);
   const [showMicTestModal, setShowMicTestModal] = useState(false);
 
   const audioMenuRef = useRef(null);
@@ -440,20 +444,33 @@ export default function CallControls({
             <span className="zoom-btn__label">Chat</span>
           </button>
 
-          {/* Reactions slot (disabled until Prompt 4 ships, hidden when flag is off) */}
+          {/* Reactions button & Popover */}
           {reactionsEnabled && (
-            <button
-              type="button"
-              className="zoom-btn zoom-btn--reactions zoom-btn--desktop-only is-disabled"
-              disabled
-              aria-label="Reactions"
-              title="Reactions (coming in next update)"
-            >
-              <span className="zoom-btn__icon">
-                <Smile size={20} aria-hidden="true" />
-              </span>
-              <span className="zoom-btn__label">Reactions</span>
-            </button>
+            <div className="zoom-control-relative">
+              <button
+                type="button"
+                className={`zoom-btn zoom-btn--reactions zoom-btn--desktop-only ${showReactionsPopover ? 'is-active' : ''}`}
+                onClick={() => setShowReactionsPopover((prev) => !prev)}
+                aria-label="Reactions"
+                aria-expanded={showReactionsPopover}
+              >
+                <span className="zoom-btn__icon">
+                  <Smile size={20} aria-hidden="true" />
+                </span>
+                <span className="zoom-btn__label">Reactions</span>
+              </button>
+              <ReactionsPopover
+                open={showReactionsPopover}
+                onClose={() => setShowReactionsPopover(false)}
+                onSendReaction={(kind) => {
+                  onSendReaction?.(kind);
+                }}
+                handRaised={handRaised}
+                onToggleHandRaise={onToggleHandRaise}
+                currentFeedback={currentFeedback}
+                onSetFeedback={onSetFeedback}
+              />
+            </div>
           )}
 
           {/* Raise Hand button */}
@@ -625,20 +642,32 @@ export default function CallControls({
                 </button>
               )}
 
-              {/* Reactions slot (if enabled) */}
+              {/* Reactions & Feedback (if enabled) */}
               {reactionsEnabled && (
-                <button
-                  type="button"
-                  className="zoom-sheet-item is-disabled"
-                  disabled
-                  title="Reactions (coming in next update)"
-                >
-                  <span className="zoom-sheet-item__icon">
-                    <Smile size={20} aria-hidden="true" />
-                  </span>
-                  <span className="zoom-sheet-item__label">Reactions</span>
-                  <span className="zoom-sheet-item__badge zoom-sheet-item__badge--muted">Soon</span>
-                </button>
+                <div className="zoom-sheet-reactions-section">
+                  <span className="zoom-sheet-section-title">Reactions</span>
+                  <div className="zoom-sheet-reactions-row">
+                    {[
+                      { kind: 'thumbs-up', emoji: '👍' },
+                      { kind: 'clap', emoji: '👏' },
+                      { kind: 'heart', emoji: '❤️' },
+                      { kind: 'laugh', emoji: '😂' },
+                      { kind: 'celebrate', emoji: '🎉' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.kind}
+                        type="button"
+                        className="zoom-sheet-reaction-btn"
+                        onClick={() => {
+                          setShowMoreMenu(false);
+                          onSendReaction?.(opt.kind);
+                        }}
+                      >
+                        <span aria-hidden="true">{opt.emoji}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
 
               <div className="zoom-sheet-divider" />

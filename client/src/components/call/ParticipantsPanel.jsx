@@ -1,10 +1,24 @@
-import { Check, MicOff, MonitorOff, MoreVertical, UserMinus, VideoOff, X } from 'lucide-react';
+import {
+  Check,
+  ChevronsDown,
+  ChevronsUp,
+  Coffee,
+  Hand,
+  MicOff,
+  MonitorOff,
+  MoreVertical,
+  UserMinus,
+  VideoOff,
+  X,
+} from 'lucide-react';
+import { useMemo } from 'react';
 
 import Avatar from '../ui/Avatar.jsx';
 import Badge from '../ui/Badge.jsx';
 import Button from '../ui/Button.jsx';
 import Dropdown, { DropdownItem } from '../ui/Dropdown.jsx';
 import Tooltip from '../ui/Tooltip.jsx';
+import { useFeature } from '../../hooks/useFeature.js';
 
 export default function ParticipantsPanel({
   isOpen,
@@ -21,8 +35,27 @@ export default function ParticipantsPanel({
   onRemove,
   onSwitchToChat,
   unreadCount = 0,
+  onLowerHand,
+  onLowerSelfHand,
 }) {
+  const reactionsEnabled = useFeature('REACTIONS');
   const inMeetingCount = peers.length + 1;
+
+  const sortedPeers = useMemo(() => {
+    if (!reactionsEnabled) return peers;
+    return [...peers].sort((a, b) => {
+      const aRaised = Boolean(a.handRaised);
+      const bRaised = Boolean(b.handRaised);
+      if (aRaised && !bRaised) return -1;
+      if (!aRaised && bRaised) return 1;
+      if (aRaised && bRaised) {
+        const timeA = a.raisedAt ? new Date(a.raisedAt).getTime() : 0;
+        const timeB = b.raisedAt ? new Date(b.raisedAt).getTime() : 0;
+        return timeA - timeB;
+      }
+      return 0;
+    });
+  }, [peers, reactionsEnabled]);
 
   return (
     <aside
@@ -130,9 +163,39 @@ export default function ParticipantsPanel({
                 <div className="participants-row__badges">
                   <Badge variant="neutral">You</Badge>
                   {isHost && <Badge variant="primary">Host</Badge>}
+                  {reactionsEnabled && self.handRaised && (
+                    <span className="participants-row__hand-badge" role="status" title="Hand raised">
+                      <Hand size={12} aria-hidden="true" />
+                      <span>Raised</span>
+                    </span>
+                  )}
+                  {reactionsEnabled && self.feedback && (
+                    <span
+                      className={`participants-row__feedback-badge participants-row__feedback-badge--${self.feedback}`}
+                      title={`Feedback: ${self.feedback}`}
+                    >
+                      {self.feedback === 'yes' && <Check size={11} aria-hidden="true" />}
+                      {self.feedback === 'no' && <X size={11} aria-hidden="true" />}
+                      {self.feedback === 'slower' && <ChevronsDown size={11} aria-hidden="true" />}
+                      {self.feedback === 'faster' && <ChevronsUp size={11} aria-hidden="true" />}
+                      {self.feedback === 'break' && <Coffee size={11} aria-hidden="true" />}
+                      <span>{self.feedback}</span>
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="participants-row__media">
+                {reactionsEnabled && self.handRaised && onLowerSelfHand && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onLowerSelfHand}
+                    aria-label="Lower hand"
+                    className="participants-row__lower-hand-btn"
+                  >
+                    Lower hand
+                  </Button>
+                )}
                 {!self.audioOn && (
                   <Tooltip label="Microphone off" side="left">
                     <span className="participants-row__icon-off" aria-label="Microphone off">
@@ -151,7 +214,7 @@ export default function ParticipantsPanel({
             </li>
 
             {/* Remote peers */}
-            {peers.map((peer) => {
+            {sortedPeers.map((peer) => {
               const name = peer.user?.name ?? 'Guest';
               const isPresenting = screenSharer?.peerId === peer.peerId;
               return (
@@ -162,6 +225,25 @@ export default function ParticipantsPanel({
                     <div className="participants-row__badges">
                       {peer.isHost && <Badge variant="primary">Host</Badge>}
                       {isPresenting && <Badge variant="primary">Presenting</Badge>}
+                      {reactionsEnabled && peer.handRaised && (
+                        <span className="participants-row__hand-badge" role="status" title="Hand raised">
+                          <Hand size={12} aria-hidden="true" />
+                          <span>Raised</span>
+                        </span>
+                      )}
+                      {reactionsEnabled && peer.feedback && (
+                        <span
+                          className={`participants-row__feedback-badge participants-row__feedback-badge--${peer.feedback}`}
+                          title={`Feedback: ${peer.feedback}`}
+                        >
+                          {peer.feedback === 'yes' && <Check size={11} aria-hidden="true" />}
+                          {peer.feedback === 'no' && <X size={11} aria-hidden="true" />}
+                          {peer.feedback === 'slower' && <ChevronsDown size={11} aria-hidden="true" />}
+                          {peer.feedback === 'faster' && <ChevronsUp size={11} aria-hidden="true" />}
+                          {peer.feedback === 'break' && <Coffee size={11} aria-hidden="true" />}
+                          <span>{peer.feedback}</span>
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="participants-row__media">
@@ -172,6 +254,18 @@ export default function ParticipantsPanel({
                         onClick={onStopHostScreenShare}
                       >
                         Stop sharing
+                      </Button>
+                    )}
+
+                    {isHost && reactionsEnabled && peer.handRaised && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onLowerHand?.(peer.peerId)}
+                        aria-label={`Lower ${name}'s hand`}
+                        className="participants-row__lower-hand-btn"
+                      >
+                        Lower hand
                       </Button>
                     )}
 
@@ -206,6 +300,14 @@ export default function ParticipantsPanel({
                           </Button>
                         )}
                       >
+                        {reactionsEnabled && peer.handRaised && (
+                          <DropdownItem
+                            icon={Hand}
+                            onSelect={() => onLowerHand?.(peer.peerId)}
+                          >
+                            Lower hand
+                          </DropdownItem>
+                        )}
                         {isPresenting && (
                           <DropdownItem
                             icon={MonitorOff}

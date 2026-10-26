@@ -1,4 +1,4 @@
-import { Clock, LayoutGrid, Link2, Maximize2, Minimize2, MonitorUp, ShieldCheck, User, Users } from 'lucide-react';
+import { Clock, Hand, LayoutGrid, Link2, Maximize2, Minimize2, MonitorUp, ShieldCheck, User, Users } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -8,6 +8,7 @@ import CallControls from '../components/call/CallControls.jsx';
 import CallProblem from '../components/call/CallProblem.jsx';
 import CallStatusCard from '../components/call/CallStatusCard.jsx';
 import ChatPanel from '../components/call/ChatPanel.jsx';
+import FloatingReactions from '../components/call/FloatingReactions.jsx';
 import MeetingHeader from '../components/call/MeetingHeader.jsx';
 import ParticipantsPanel from '../components/call/ParticipantsPanel.jsx';
 import ParticipantTile from '../components/call/ParticipantTile.jsx';
@@ -53,12 +54,46 @@ function useAnnouncement(peers) {
   return text;
 }
 
+// Polite text for screen readers when someone raises or lowers their hand
+function useHandAnnouncements(peers, self) {
+  const [text, setText] = useState('');
+  const prevHands = useRef(new Map());
+
+  useEffect(() => {
+    const current = new Map();
+    if (self) {
+      current.set('local', { name: self.name || 'You', raised: Boolean(self.handRaised) });
+    }
+    peers.forEach((p) => {
+      current.set(p.peerId, { name: p.user?.name || 'Someone', raised: Boolean(p.handRaised) });
+    });
+
+    const messages = [];
+    current.forEach(({ name, raised }, id) => {
+      const prev = prevHands.current.get(id);
+      if (prev && !prev.raised && raised) {
+        messages.push(`${name} raised a hand`);
+      } else if (prev && prev.raised && !raised) {
+        messages.push(`${name} lowered hand`);
+      }
+    });
+
+    prevHands.current = current;
+    if (messages.length) {
+      setText(messages.join('. '));
+    }
+  }, [peers, self?.handRaised, self?.name]);
+
+  return text;
+}
+
 export default function CallPage() {
   const { code } = useParams();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const media = useMeetingMedia();
   const roomViewsEnabled = useFeature('ROOM_VIEWS');
+  const reactionsEnabled = useFeature('REACTIONS');
 
   const [meeting, setMeeting] = useState(null);
   const [confirmingLeave, setConfirmingLeave] = useState(false);
@@ -143,7 +178,12 @@ export default function CallPage() {
   }, [mediaStatus, startMedia, call.status]);
 
   const slow = useSlowRequest(call.status === 'connecting' || call.status === 'idle', 4000);
+  const localName = user?.name ?? 'You';
   const announcement = useAnnouncement(call.peers);
+  const handAnnouncement = useHandAnnouncements(
+    call.peers,
+    reactionsEnabled ? { name: localName, handRaised: call.selfHandRaised } : null
+  );
 
   const isHost = Boolean(call.isHost);
 
@@ -279,7 +319,6 @@ export default function CallPage() {
   const gettingReady = !mediaSettled && !isStatusScreen && !problemCode;
   const inCall = !gettingReady && !problemCode && !isStatusScreen;
   const people = call.status === 'active' ? call.peers.length + 1 : null;
-  const localName = user.name;
 
   let notice = null;
   if (inCall) {
@@ -534,7 +573,8 @@ export default function CallPage() {
                       videoOn={media.videoEnabled}
                       isSpeaking={call.activeSpeaker === 'local'}
                       isHost={isHost}
-                      handRaised={handRaised}
+                      handRaised={reactionsEnabled ? call.selfHandRaised : handRaised}
+                      feedback={reactionsEnabled ? call.selfFeedback : null}
                       reaction={localReaction}
                     />
                     {call.peers.map((peer) => (
@@ -547,6 +587,8 @@ export default function CallPage() {
                         connectionState={peer.connectionState}
                         isSpeaking={call.activeSpeaker === peer.peerId}
                         isHost={peer.isHost}
+                        handRaised={peer.handRaised}
+                        feedback={peer.feedback}
                       />
                     ))}
                   </div>
@@ -575,7 +617,8 @@ export default function CallPage() {
                         videoOn={media.videoEnabled}
                         isSpeaking={call.activeSpeaker === 'local'}
                         isHost={isHost}
-                        handRaised={handRaised}
+                        handRaised={reactionsEnabled ? call.selfHandRaised : handRaised}
+                        feedback={reactionsEnabled ? call.selfFeedback : null}
                         reaction={localReaction}
                         isPinned={pinnedParticipantId === 'local'}
                         onPinToggle={() =>
@@ -595,6 +638,8 @@ export default function CallPage() {
                           connectionState={peer.connectionState}
                           isSpeaking={call.activeSpeaker === peer.peerId}
                           isHost={peer.isHost}
+                          handRaised={peer.handRaised}
+                          feedback={peer.feedback}
                           isPinned={pinnedParticipantId === peer.peerId}
                           onPinToggle={() =>
                             setPinnedParticipantId((curr) =>
@@ -615,7 +660,8 @@ export default function CallPage() {
                         videoOn={media.videoEnabled}
                         isSpeaking={call.activeSpeaker === 'local'}
                         isHost={isHost}
-                        handRaised={handRaised}
+                        handRaised={reactionsEnabled ? call.selfHandRaised : handRaised}
+                        feedback={reactionsEnabled ? call.selfFeedback : null}
                         reaction={localReaction}
                         isPinned={pinnedParticipantId === 'local'}
                         onPinToggle={() =>
@@ -632,6 +678,8 @@ export default function CallPage() {
                         connectionState={featuredPeer.connectionState}
                         isSpeaking={call.activeSpeaker === featuredPeer.peerId || pinnedParticipantId === featuredPeer.peerId}
                         isHost={featuredPeer.isHost}
+                        handRaised={featuredPeer.handRaised}
+                        feedback={featuredPeer.feedback}
                         isPinned={pinnedParticipantId === featuredPeer.peerId}
                         onPinToggle={() =>
                           setPinnedParticipantId((curr) =>
@@ -670,7 +718,8 @@ export default function CallPage() {
                         videoOn={media.videoEnabled}
                         isSpeaking={call.activeSpeaker === 'local'}
                         isHost={isHost}
-                        handRaised={handRaised}
+                        handRaised={reactionsEnabled ? call.selfHandRaised : handRaised}
+                        feedback={reactionsEnabled ? call.selfFeedback : null}
                         reaction={localReaction}
                         isPinned={pinnedParticipantId === 'local'}
                         onPinToggle={() =>
@@ -687,6 +736,8 @@ export default function CallPage() {
                         connectionState={item.peer.connectionState}
                         isSpeaking={call.activeSpeaker === item.peer.peerId}
                         isHost={item.peer.isHost}
+                        handRaised={item.peer.handRaised}
+                        feedback={item.peer.feedback}
                         isPinned={pinnedParticipantId === item.peer.peerId}
                         onPinToggle={() =>
                           setPinnedParticipantId((curr) =>
@@ -700,6 +751,8 @@ export default function CallPage() {
               )}
             </>
           )}
+
+          {reactionsEnabled && <FloatingReactions reactions={call.reactions} />}
         </main>
 
         {inCall && activePanel && (
@@ -724,6 +777,8 @@ export default function CallPage() {
                     name: localName,
                     audioOn: media.audioEnabled,
                     videoOn: media.videoEnabled,
+                    handRaised: reactionsEnabled && call.selfHandRaised,
+                    feedback: reactionsEnabled && call.selfFeedback,
                   }}
                   peers={call.peers}
                   waitingList={call.waitingList}
@@ -733,6 +788,8 @@ export default function CallPage() {
                   onDeny={(peerId) => call.denyPeer(peerId)}
                   onAdmitAll={() => call.admitAllPeers()}
                   onRemove={(peer) => setPeerToRemove(peer)}
+                  onLowerHand={(peerId) => call.lowerPeerHand(peerId)}
+                  onLowerSelfHand={() => call.setHandRaised(false)}
                 />
               </FeatureBoundary>
             )}
@@ -781,9 +838,27 @@ export default function CallPage() {
           }
           isHost={isHost}
           onOpenSecurity={() => setSecurityModalOpen(true)}
-          handRaised={handRaised}
-          onToggleHandRaise={() => setHandRaised((prev) => !prev)}
-          onSendReaction={(emoji) => setLocalReaction(emoji)}
+          handRaised={reactionsEnabled ? call.selfHandRaised : handRaised}
+          onToggleHandRaise={() => {
+            if (reactionsEnabled) {
+              call.setHandRaised(!call.selfHandRaised);
+            } else {
+              setHandRaised((prev) => !prev);
+            }
+          }}
+          onSendReaction={(kind) => {
+            if (reactionsEnabled) {
+              call.sendReaction(kind);
+            } else {
+              setLocalReaction(kind);
+            }
+          }}
+          currentFeedback={reactionsEnabled ? call.selfFeedback : null}
+          onSetFeedback={(kind) => {
+            if (reactionsEnabled) {
+              call.setFeedback(kind);
+            }
+          }}
           onReplaceTrack={call.replaceTrack}
         />
       )}
@@ -855,6 +930,36 @@ export default function CallPage() {
               }}
             >
               Deny
+            </Button>
+          </div>
+        </aside>
+      )}
+
+      {inCall && isHost && reactionsEnabled && call.handToast && (
+        <aside className="call__waiting-toast call__hand-toast" role="status" aria-live="polite">
+          <Avatar name={call.handToast.name ?? 'Guest'} size="sm" />
+          <span className="call__waiting-toast-text">
+            <strong>{call.handToast.name ?? 'Guest'}</strong> raised a hand
+          </span>
+          <div className="call__waiting-toast-actions">
+            {call.handToast.peerId && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  call.lowerPeerHand(call.handToast.peerId);
+                  call.clearHandToast();
+                }}
+              >
+                Lower hand
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => call.clearHandToast()}
+            >
+              Dismiss
             </Button>
           </div>
         </aside>
@@ -979,7 +1084,7 @@ export default function CallPage() {
       )}
 
       <p className="sr-only" role="status" aria-live="polite">
-        {announcement}
+        {[announcement, handAnnouncement].filter(Boolean).join('. ')}
       </p>
     </div>
   );

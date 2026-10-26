@@ -2803,6 +2803,336 @@
   color: var(--color-danger-light, #F87171);
 }
 
+/* ==========================================================================
+   PROMPT 4: REACTIONS, RAISE HAND, AND FEEDBACK STYLES
+   ========================================================================== */
+
+/* Reactions Popover (Toolbar) */
+.zoom-reactions-popover {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-surface, #1E232A);
+  border: 1px solid var(--color-border, #2D3742);
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+  z-index: 100;
+  min-width: 280px;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: ui-fade-in 0.15s ease both;
+}
+
+.zoom-popover-hand-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text, #FFFFFF);
+  border: 1px solid var(--color-border, #2D3742);
+  transition: all 0.15s ease;
+}
+
+.zoom-popover-hand-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.zoom-popover-hand-btn.is-active {
+  background: rgba(245, 158, 11, 0.16);
+  color: #F59E0B;
+  border-color: rgba(245, 158, 11, 0.5);
+}
+
+.zoom-reactions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.zoom-reaction-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease;
+}
+
+.zoom-reaction-btn:hover {
+  transform: scale(1.22);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.zoom-reaction-emoji {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.zoom-feedback-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--color-border, #2D3742);
+  padding-top: 8px;
+}
+
+.zoom-feedback-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary, #9CA3AF);
+  font-weight: 600;
+}
+
+.zoom-feedback-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.zoom-feedback-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text, #FFFFFF);
+  border: 1px solid var(--color-border, #2D3742);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.zoom-feedback-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.zoom-feedback-btn.is-active {
+  background: var(--color-primary, #0B5CFF);
+  color: #FFFFFF;
+  border-color: var(--color-primary, #0B5CFF);
+}
+
+.zoom-feedback-clear-btn {
+  background: transparent;
+  color: var(--color-text-tertiary, #6B7280);
+  border: 1px dashed var(--color-border, #2D3742);
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.zoom-feedback-clear-btn:hover {
+  color: var(--color-text, #FFFFFF);
+  border-color: var(--color-text-secondary, #9CA3AF);
+}
+
+/* Floating Reactions Overlay */
+.zoom-floating-reactions-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 50;
+}
+
+.zoom-floating-reaction-item {
+  position: absolute;
+  bottom: 84px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(18, 22, 28, 0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: zoom-reaction-float 2.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes zoom-reaction-float {
+  0% {
+    opacity: 0;
+    transform: translateY(40px) scale(0.65);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1.15);
+  }
+  24% {
+    transform: translateY(-20px) scale(1);
+  }
+  75% {
+    opacity: 1;
+    transform: translateY(-160px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-230px) scale(0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zoom-floating-reaction-item {
+    animation: zoom-reaction-fade 2.5s ease-out forwards;
+  }
+}
+
+@keyframes zoom-reaction-fade {
+  0% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.zoom-floating-reaction-emoji {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.zoom-floating-reaction-sender {
+  font-size: 12px;
+  font-weight: 500;
+  color: #FFFFFF;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+/* Badges on Participant Tile */
+.zoom-tile__status-badges {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.zoom-tile__hand-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(245, 158, 11, 0.95);
+  color: #000000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  animation: ui-fade-in 0.2s ease both;
+}
+
+.zoom-tile__feedback-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(30, 41, 59, 0.9);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+}
+
+.zoom-tile__feedback-badge--yes {
+  background: rgba(16, 185, 129, 0.95);
+  color: #FFFFFF;
+}
+
+.zoom-tile__feedback-badge--no {
+  background: rgba(239, 68, 68, 0.95);
+  color: #FFFFFF;
+}
+
+.zoom-tile__feedback-badge--slower {
+  background: rgba(59, 130, 246, 0.95);
+  color: #FFFFFF;
+}
+
+.zoom-tile__feedback-badge--faster {
+  background: rgba(139, 92, 246, 0.95);
+  color: #FFFFFF;
+}
+
+.zoom-tile__feedback-badge--break {
+  background: rgba(245, 158, 11, 0.95);
+  color: #000000;
+}
+
+/* Badges and Actions in Participants Panel */
+.participants-row__hand-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(245, 158, 11, 0.2);
+  color: #F59E0B;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.participants-row__feedback-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-secondary, #9CA3AF);
+  text-transform: capitalize;
+}
+
+.participants-row__lower-hand-btn {
+  color: #F59E0B !important;
+  font-size: 12px;
+}
+
+/* Host Hand Raise Toast */
+.call__hand-toast {
+  border-color: rgba(245, 158, 11, 0.45) !important;
+}
+
 
 
 
