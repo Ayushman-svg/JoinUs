@@ -45,6 +45,10 @@ export class CallSession {
     rtcConfig = DEFAULT_RTC_CONFIG,
     createSignalingClient = createSignaling,
     getMeetingMessagesApi = getMeetingMessages,
+    passcode = null,
+    onMuteDirective = null,
+    onStopVideoDirective = null,
+    onRequestUnmute = null,
   }) {
     this.code = code;
     this.url = url;
@@ -55,6 +59,10 @@ export class CallSession {
     this.rtcConfig = rtcConfig;
     this.createSignalingClient = createSignalingClient;
     this.getMeetingMessagesApi = getMeetingMessagesApi;
+    this.passcode = passcode;
+    this.onMuteDirective = onMuteDirective;
+    this.onStopVideoDirective = onStopVideoDirective;
+    this.onRequestUnmute = onRequestUnmute;
 
     this.listeners = new Set();
     this.signaling = null;
@@ -65,6 +73,18 @@ export class CallSession {
     this.waitingList = [];
     this.hostInRoom = true;
     this.isHost = false;
+    this.isCoHost = false;
+    this.role = 'participant';
+    this.canModerate = false;
+    this.roomSettings = {
+      muteOnEntry: false,
+      chatAllowed: true,
+      shareAllowed: 'all',
+      locked: false,
+    };
+    this.isLocked = false;
+    this.securityToast = null;
+    this.unmuteRequestPrompt = null;
     this.selfId = null;
     this.screenShare = null;
     this.joinAttempt = 0;
@@ -114,6 +134,18 @@ export class CallSession {
       waitingList: [],
       hostInRoom: true,
       isHost: false,
+      isCoHost: false,
+      role: 'participant',
+      canModerate: false,
+      roomSettings: {
+        muteOnEntry: false,
+        chatAllowed: true,
+        shareAllowed: 'all',
+        locked: false,
+      },
+      isLocked: false,
+      securityToast: null,
+      unmuteRequestPrompt: null,
       messages: [],
       unreadCount: 0,
       historyLoading: false,
@@ -177,6 +209,104 @@ export class CallSession {
         this.#finish(CallStatus.REMOVED, { reason: reason || 'REMOVED_BY_HOST' })
       ),
       signaling.on('room:ended', () => this.#finish(CallStatus.ENDED)),
+      signaling.on('room:locked', ({ locked }) => {
+        this.isLocked = Boolean(locked);
+        this.roomSettings = { ...this.roomSettings, locked: Boolean(locked) };
+        this.securityToast = {
+          message: locked ? 'This meeting is now locked' : 'This meeting is now unlocked',
+          id: `${Date.now()}-${Math.random()}`,
+        };
+        this.#update({
+          isLocked: this.isLocked,
+          roomSettings: this.roomSettings,
+          securityToast: this.securityToast,
+        });
+      }),
+      signaling.on('room:settings-changed', ({ settings }) => {
+        if (!settings) return;
+        this.roomSettings = { ...this.roomSettings, ...settings };
+        if (settings.locked !== undefined) {
+          this.isLocked = Boolean(settings.locked);
+        }
+        this.#update({
+          roomSettings: this.roomSettings,
+          isLocked: this.isLocked,
+        });
+      }),
+      signaling.on('peer:role-changed', ({ peerId, userId, role, isCoHost }) => {
+        const isSelf =
+          peerId === this.selfId ||
+          (this.currentUser?.id && String(userId) === String(this.currentUser.id));
+        if (isSelf) {
+          this.role = role;
+          this.isCoHost = Boolean(isCoHost);
+          this.canModerate = this.isHost || this.isCoHost;
+          this.securityToast = {
+            message:
+              role === 'co-host' ? 'You were made a co-host' : 'You are no longer a co-host',
+            id: `${Date.now()}-${Math.random()}`,
+          };
+          this.#update({
+            role: this.role,
+            isCoHost: this.isCoHost,
+            canModerate: this.canModerate,
+            securityToast: this.securityToast,
+          });
+        }
+        const entry = this.peers.get(peerId);
+        if (entry) {
+          entry.role = role;
+          entry.isCoHost = Boolean(isCoHost);
+          entry.isHost = role === 'host';
+          this.#update();
+        }
+      }),
+      signaling.on('peer:renamed', ({ peerId, userId, name }) => {
+        const isSelf =
+          peerId === this.selfId ||
+          (this.currentUser?.id && String(userId) === String(this.currentUser.id));
+        if (isSelf) {
+          if (this.currentUser) {
+            this.currentUser.name = name;
+          }
+          this.securityToast = {
+            message: `You were renamed to ${name}`,
+            id: `${Date.now()}-${Math.random()}`,
+          };
+          this.#update({ securityToast: this.securityToast });
+        }
+        const entry = this.peers.get(peerId);
+        if (entry) {
+          entry.user = { ...(entry.user || {}), name };
+          this.#update();
+        }
+      }),
+      signaling.on('host:command-mute', ({ by }) => {
+        this.securityToast = {
+          message: `${by || 'The host'} muted your microphone`,
+          id: `${Date.now()}-${Math.random()}`,
+          type: 'warning',
+        };
+        this.#update({ securityToast: this.securityToast });
+        this.onMuteDirective?.();
+      }),
+      signaling.on('host:command-stop-video', ({ by }) => {
+        this.securityToast = {
+          message: `${by || 'The host'} stopped your camera`,
+          id: `${Date.now()}-${Math.random()}`,
+          type: 'warning',
+        };
+        this.#update({ securityToast: this.securityToast });
+        this.onStopVideoDirective?.();
+      }),
+      signaling.on('host:command-request-unmute', ({ by }) => {
+        this.unmuteRequestPrompt = {
+          by: by || 'The host',
+          id: `${Date.now()}-${Math.random()}`,
+        };
+        this.#update({ unmuteRequestPrompt: this.unmuteRequestPrompt });
+        this.onRequestUnmute?.({ by });
+      }),
       signaling.on('chat:message', (message) => this.#onChatMessage(message)),
       signaling.on('reaction:new', (reaction) => this.#onReactionNew(reaction)),
       signaling.on('hand:changed', (data) => this.#onHandChanged(data)),
@@ -203,9 +333,76 @@ export class CallSession {
     return this.signaling.request('host:admit-all', {});
   }
 
-  async removePeer(peerId) {
+  async removePeer(peerId, block = false) {
     if (!this.signaling?.connected) throw new Error('Not connected');
-    return this.signaling.request('host:remove', { peerId });
+    return this.signaling.request('host:remove', { peerId, block: Boolean(block) });
+  }
+
+  async lockMeeting(locked = true) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    const res = await this.signaling.request('host:lock', { locked: Boolean(locked) });
+    this.isLocked = Boolean(locked);
+    this.roomSettings = { ...this.roomSettings, locked: Boolean(locked) };
+    this.#update({ isLocked: this.isLocked, roomSettings: this.roomSettings });
+    return res;
+  }
+
+  async updateRoomSettings(settings) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    const res = await this.signaling.request('host:settings', { settings });
+    if (res?.settings) {
+      this.roomSettings = res.settings;
+      if (res.settings.locked !== undefined) {
+        this.isLocked = Boolean(res.settings.locked);
+      }
+      this.#update({ roomSettings: this.roomSettings, isLocked: this.isLocked });
+    }
+    return res;
+  }
+
+  async promoteCoHost(peerId) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    return this.signaling.request('host:promote', { peerId });
+  }
+
+  async demoteCoHost(peerId) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    return this.signaling.request('host:demote', { peerId });
+  }
+
+  async mutePeer(peerId) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    return this.signaling.request('host:mute', { peerId });
+  }
+
+  async muteAllPeers() {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    return this.signaling.request('host:mute-all', {});
+  }
+
+  async requestUnmute(peerId) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    return this.signaling.request('host:request-unmute', { peerId });
+  }
+
+  async stopPeerVideo(peerId) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    return this.signaling.request('host:stop-video', { peerId });
+  }
+
+  async renamePeer(peerId, name) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    return this.signaling.request('host:rename', { peerId, name });
+  }
+
+  dismissUnmuteRequest() {
+    this.unmuteRequestPrompt = null;
+    this.#update({ unmuteRequestPrompt: null });
+  }
+
+  clearSecurityToast() {
+    this.securityToast = null;
+    this.#update({ securityToast: null });
   }
 
   async endMeeting() {
@@ -216,7 +413,7 @@ export class CallSession {
   }
 
   async refreshWaitingList() {
-    if (this.finished || !this.isHost || !this.signaling?.connected) return;
+    if (this.finished || !this.canModerate || !this.signaling?.connected) return;
     try {
       const res = await this.signaling.request('host:list-waiting', { code: this.code });
       if (this.finished) return;
@@ -232,7 +429,7 @@ export class CallSession {
   #startWaitingPolling() {
     if (this.waitingPollInterval) return;
     this.waitingPollInterval = setInterval(() => {
-      if (this.finished || !this.isHost || !this.signaling?.connected) return;
+      if (this.finished || !this.canModerate || !this.signaling?.connected) return;
       if (this.peers.size === 0 || this.waitingList.length > 0) {
         this.refreshWaitingList();
       }
@@ -258,6 +455,11 @@ export class CallSession {
           peerId: res.peerId || this.selfId || this.signaling?.id,
           peers: res.peers || [],
           screenSharer: res.screenSharer,
+          role: res.role,
+          isHost: res.isHost,
+          isCoHost: res.isCoHost,
+          settings: res.settings,
+          locked: res.locked,
         });
       } else if (res?.status === 'ended') {
         this.#stopGuestWaitingPolling();
@@ -770,22 +972,30 @@ export class CallSession {
     this.#update({ status: CallStatus.JOINING });
 
     try {
-      const response = await this.signaling.request('room:join', {
+      const payload = {
         code: this.code,
         ...this.getLocalMedia(),
-      });
+      };
+      if (this.passcode) {
+        payload.passcode = this.passcode;
+      }
+      const response = await this.signaling.request('room:join', payload);
       if (this.finished || attempt !== this.joinAttempt) return;
 
       if (response.status === 'waiting') {
         this.selfId = null;
         this.hostInRoom = response.hostInRoom !== false;
         this.isWaiting = true;
+        if (response.settings) this.roomSettings = response.settings;
+        this.isLocked = Boolean(response.locked || this.roomSettings?.locked);
         this.#acquireWakeLock();
         this.#update({
           status: CallStatus.WAITING,
           selfId: null,
           hostInRoom: this.hostInRoom,
           isReconnecting: false,
+          roomSettings: this.roomSettings,
+          isLocked: this.isLocked,
         });
         this.#startGuestWaitingPolling();
         return;
@@ -795,7 +1005,14 @@ export class CallSession {
       this.#stopGuestWaitingPolling();
       this.#releaseWakeLock();
       this.selfId = response.peerId;
-      this.isHost = Boolean(response.isHost);
+      this.role =
+        response.role ||
+        (response.isHost ? 'host' : response.isCoHost ? 'co-host' : 'participant');
+      this.isHost = Boolean(response.isHost || this.role === 'host');
+      this.isCoHost = Boolean(response.isCoHost || this.role === 'co-host');
+      this.canModerate = this.isHost || this.isCoHost;
+      if (response.settings) this.roomSettings = response.settings;
+      this.isLocked = Boolean(response.locked || this.roomSettings?.locked);
       this.screenShare = response.screenSharer ?? null;
       this.selfHandRaised = Boolean(response.handRaised);
       this.selfRaisedAt = response.raisedAt || null;
@@ -804,6 +1021,11 @@ export class CallSession {
         status: CallStatus.ACTIVE,
         selfId: this.selfId,
         isHost: this.isHost,
+        isCoHost: this.isCoHost,
+        role: this.role,
+        canModerate: this.canModerate,
+        roomSettings: this.roomSettings,
+        isLocked: this.isLocked,
         screenShare: this.screenShare,
         isReconnecting: false,
         selfHandRaised: this.selfHandRaised,
@@ -816,7 +1038,7 @@ export class CallSession {
         this.syncChat();
       }
       this.#startChatSync();
-      if (this.isHost) {
+      if (this.canModerate) {
         this.refreshWaitingList();
         this.#startWaitingPolling();
       } else {
@@ -847,20 +1069,36 @@ export class CallSession {
 
   #onWaitingUpdated(waiting) {
     if (this.finished) return;
-    this.isHost = true;
     this.waitingList = Array.isArray(waiting) ? waiting : [];
-    this.#update({ waitingList: this.waitingList, isHost: true });
+    this.#update({ waitingList: this.waitingList });
   }
 
-  #onAdmitted({ peerId, peers, screenSharer }) {
+  #onAdmitted({ peerId, peers, screenSharer, role, isCoHost, isHost, settings, locked }) {
     if (this.finished) return;
     if (this.state.status === CallStatus.ACTIVE && this.selfId) return;
     this.isWaiting = false;
     this.#stopGuestWaitingPolling();
     this.#releaseWakeLock();
     this.selfId = peerId;
+    if (role) this.role = role;
+    if (isHost !== undefined) this.isHost = Boolean(isHost || this.role === 'host');
+    if (isCoHost !== undefined) this.isCoHost = Boolean(isCoHost || this.role === 'co-host');
+    this.canModerate = this.isHost || this.isCoHost;
+    if (settings) this.roomSettings = settings;
+    if (locked !== undefined) this.isLocked = Boolean(locked || this.roomSettings?.locked);
     this.screenShare = screenSharer ?? null;
-    this.#update({ status: CallStatus.ACTIVE, selfId: this.selfId, screenShare: this.screenShare, isReconnecting: false });
+    this.#update({
+      status: CallStatus.ACTIVE,
+      selfId: this.selfId,
+      isHost: this.isHost,
+      isCoHost: this.isCoHost,
+      role: this.role,
+      canModerate: this.canModerate,
+      roomSettings: this.roomSettings,
+      isLocked: this.isLocked,
+      screenShare: this.screenShare,
+      isReconnecting: false,
+    });
     this.updateLocalMedia();
     if (!this.historyLoaded) {
       this.loadHistory();
@@ -868,7 +1106,10 @@ export class CallSession {
       this.syncChat();
     }
     this.#startChatSync();
-    if (!this.isHost) {
+    if (this.canModerate) {
+      this.refreshWaitingList();
+      this.#startWaitingPolling();
+    } else {
       this.#startInCallPolling();
     }
 
@@ -878,17 +1119,48 @@ export class CallSession {
     for (const info of waiting) this.#addPeer(info, { initiator: false });
   }
 
-  #addPeer({ peerId, user, isHost = false, audio = true, video = true, handRaised = false, raisedAt = null, feedback = null }, { initiator }) {
+  #addPeer(
+    {
+      peerId,
+      user,
+      isHost = false,
+      isCoHost = false,
+      role = 'participant',
+      audio = true,
+      video = true,
+      handRaised = false,
+      raisedAt = null,
+      feedback = null,
+    },
+    { initiator }
+  ) {
     if (this.finished || this.peers.has(peerId)) return;
     if (!this.selfId) {
-      this.earlyPeers.push({ peerId, user, isHost, audio, video, handRaised, raisedAt, feedback });
+      this.earlyPeers.push({
+        peerId,
+        user,
+        isHost,
+        isCoHost,
+        role,
+        audio,
+        video,
+        handRaised,
+        raisedAt,
+        feedback,
+      });
       return;
     }
+
+    const hostBool = Boolean(isHost || user?.isHost || role === 'host');
+    const coHostBool = Boolean(isCoHost || user?.isCoHost || role === 'co-host');
+    const peerRole = role || (hostBool ? 'host' : coHostBool ? 'co-host' : 'participant');
 
     const entry = {
       peer: null,
       user,
-      isHost: Boolean(isHost || user?.isHost),
+      isHost: hostBool,
+      isCoHost: coHostBool,
+      role: peerRole,
       stream: null,
       remoteStreams: new Map(),
       connectionState: 'new',
@@ -1228,6 +1500,13 @@ export class CallSession {
     if ('waitingList' in patch) this.waitingList = patch.waitingList;
     if ('hostInRoom' in patch) this.hostInRoom = patch.hostInRoom;
     if ('isHost' in patch) this.isHost = patch.isHost;
+    if ('isCoHost' in patch) this.isCoHost = patch.isCoHost;
+    if ('role' in patch) this.role = patch.role;
+    if ('canModerate' in patch) this.canModerate = patch.canModerate;
+    if ('roomSettings' in patch) this.roomSettings = patch.roomSettings;
+    if ('isLocked' in patch) this.isLocked = patch.isLocked;
+    if ('securityToast' in patch) this.securityToast = patch.securityToast;
+    if ('unmuteRequestPrompt' in patch) this.unmuteRequestPrompt = patch.unmuteRequestPrompt;
     if ('isReconnecting' in patch) this.isReconnecting = patch.isReconnecting;
     if ('messages' in patch) this.messages = patch.messages;
     if ('unreadCount' in patch) this.unreadCount = patch.unreadCount;
@@ -1250,6 +1529,13 @@ export class CallSession {
       waitingList: this.waitingList,
       hostInRoom: this.hostInRoom,
       isHost: this.isHost,
+      isCoHost: this.isCoHost,
+      role: this.role,
+      canModerate: this.canModerate,
+      roomSettings: this.roomSettings,
+      isLocked: this.isLocked,
+      securityToast: this.securityToast,
+      unmuteRequestPrompt: this.unmuteRequestPrompt,
       messages: this.messages,
       unreadCount: this.unreadCount,
       historyLoading: this.historyLoading,
@@ -1271,7 +1557,9 @@ export class CallSession {
         connectionState: entry.connectionState,
         audio: entry.audio,
         video: entry.video,
-        isHost: Boolean(entry.isHost || entry.user?.isHost),
+        isHost: Boolean(entry.isHost || entry.user?.isHost || entry.role === 'host'),
+        isCoHost: Boolean(entry.isCoHost || entry.user?.isCoHost || entry.role === 'co-host'),
+        role: entry.role || (entry.isHost ? 'host' : entry.isCoHost ? 'co-host' : 'participant'),
         handRaised: Boolean(entry.handRaised),
         raisedAt: entry.raisedAt || null,
         feedback: entry.feedback || null,
