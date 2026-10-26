@@ -3,10 +3,11 @@ const mongoose = require('mongoose');
 
 const { codeParamsSchema } = require('../schemas/meeting.schemas');
 
-// room:join { code, audio?, video? }: audio and video are the starting microphone and camera state
+// room:join { code, audio?, video?, passcode? }
 const joinSchema = codeParamsSchema.extend({
   audio: z.boolean().optional(),
   video: z.boolean().optional(),
+  passcode: z.string().trim().optional(),
 });
 
 // media:update { audio, video }
@@ -95,6 +96,35 @@ const feedbackSetSchema = z.object({
     .nullable(),
 });
 
+// host:lock { locked }
+const hostLockSchema = z.object({
+  locked: z.boolean({ required_error: 'locked is required' }),
+});
+
+// host:settings { muteOnEntry?, chatAllowed?, shareAllowed?, locked? }
+const hostSettingsSchema = z.object({
+  muteOnEntry: z.boolean().optional(),
+  chatAllowed: z.boolean().optional(),
+  shareAllowed: z.enum(['all', 'host-only']).optional(),
+  locked: z.boolean().optional(),
+});
+
+// host:rename { peerId, name }
+const hostRenameSchema = z.object({
+  peerId: z.string().min(1).max(64),
+  name: z
+    .string({ required_error: 'name is required' })
+    .trim()
+    .min(1, 'Name cannot be empty')
+    .max(50, 'Name must be at most 50 characters'),
+});
+
+// host:remove { peerId, block? }
+const hostRemoveSchema = z.object({
+  peerId: z.string().min(1).max(64),
+  block: z.boolean().optional(),
+});
+
 module.exports = {
   joinSchema,
   mediaSchema,
@@ -106,6 +136,10 @@ module.exports = {
   reactionSendSchema,
   handSetSchema,
   feedbackSetSchema,
+  hostLockSchema,
+  hostSettingsSchema,
+  hostRenameSchema,
+  hostRemoveSchema,
   codeSchema: codeParamsSchema,
 };
 
