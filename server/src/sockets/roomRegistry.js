@@ -292,6 +292,38 @@ class RoomRegistry {
     return { code, peer };
   }
 
+  // Sets hand raised status for a peer. Returns { code, peer } or null.
+  setHand(peerId, raised) {
+    const code = this.peerRooms.get(peerId);
+    if (code === undefined) return null;
+    const room = this.rooms.get(code);
+    const current = room?.get(peerId);
+    if (!current) return null;
+    const isRaised = Boolean(raised);
+    const peer = Object.freeze({
+      ...current,
+      handRaised: isRaised,
+      raisedAt: isRaised ? current.raisedAt || Date.now() : null,
+    });
+    room.set(peerId, peer);
+    return { code, peer };
+  }
+
+  // Sets feedback status (yes, no, slower, faster, break, or null) for a peer. Returns { code, peer } or null.
+  setFeedback(peerId, feedback) {
+    const code = this.peerRooms.get(peerId);
+    if (code === undefined) return null;
+    const room = this.rooms.get(code);
+    const current = room?.get(peerId);
+    if (!current) return null;
+    const peer = Object.freeze({
+      ...current,
+      feedback: feedback || null,
+    });
+    room.set(peerId, peer);
+    return { code, peer };
+  }
+
   // Removes a peer or waiting guest when leaving or disconnecting.
   // Returns { type: 'room' | 'waiting', code, peer?, waitingUser?, remaining?, remainingWaiting?, screenShareEnded? } or null.
   leave(peerId) {
@@ -468,7 +500,17 @@ class RoomRegistry {
       this.peerRooms.delete(old.peerId);
     }
 
-    const peer = Object.freeze({ peerId, userId, name, audio, video, joinedAt: Date.now() });
+    const peer = Object.freeze({
+      peerId,
+      userId,
+      name,
+      audio,
+      video,
+      handRaised: false,
+      raisedAt: null,
+      feedback: null,
+      joinedAt: Date.now(),
+    });
     room.set(peerId, peer);
     this.rooms.set(code, room);
     this.peerRooms.set(peerId, code);

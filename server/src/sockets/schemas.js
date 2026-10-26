@@ -74,6 +74,27 @@ const shareStartSchema = z.object({
   streamId: z.string().min(1).max(255),
 });
 
+// reaction:send { kind }: fixed list: thumbs-up, clap, heart, laugh, celebrate
+const reactionSendSchema = z.object({
+  kind: z.enum(['thumbs-up', 'clap', 'heart', 'laugh', 'celebrate'], {
+    errorMap: () => ({ message: 'Invalid reaction kind' }),
+  }),
+});
+
+// hand:set { raised }
+const handSetSchema = z.object({
+  raised: z.boolean({ required_error: 'raised is required' }),
+});
+
+// feedback:set { kind }: yes, no, slower, faster, break, or null
+const feedbackSetSchema = z.object({
+  kind: z
+    .enum(['yes', 'no', 'slower', 'faster', 'break'], {
+      errorMap: () => ({ message: 'Invalid feedback kind' }),
+    })
+    .nullable(),
+});
+
 module.exports = {
   joinSchema,
   mediaSchema,
@@ -82,6 +103,9 @@ module.exports = {
   emptySchema,
   chatSendSchema,
   shareStartSchema,
+  reactionSendSchema,
+  handSetSchema,
+  feedbackSetSchema,
   codeSchema: codeParamsSchema,
 };
 

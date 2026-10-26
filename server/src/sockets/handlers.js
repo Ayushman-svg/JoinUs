@@ -12,6 +12,9 @@ const {
   emptySchema,
   chatSendSchema,
   shareStartSchema,
+  reactionSendSchema,
+  handSetSchema,
+  feedbackSetSchema,
   codeSchema,
 } = require('./schemas');
 
@@ -23,6 +26,9 @@ const toPublicPeer = (peer, isHost = false) => ({
   isHost: Boolean(isHost || peer.isHost),
   audio: peer.audio,
   video: peer.video,
+  handRaised: Boolean(peer.handRaised),
+  raisedAt: peer.raisedAt || null,
+  feedback: peer.feedback || null,
 });
 
 function parse(schema, payload) {
@@ -197,13 +203,19 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
           join: new RateLimiter({ max: 10, windowMs: 10000 }),
           signal: new RateLimiter({ max: 300, windowMs: 10000 }),
           host: new RateLimiter({ max: 30, windowMs: 10000 }),
+          reaction: new RateLimiter({ max: 1, windowMs: 1000 }),
         }
       : rateLimiterInput || {
           chat: defaultRateLimiter,
           join: new RateLimiter({ max: 10, windowMs: 10000 }),
           signal: new RateLimiter({ max: 300, windowMs: 10000 }),
           host: new RateLimiter({ max: 30, windowMs: 10000 }),
+          reaction: new RateLimiter({ max: 1, windowMs: 1000 }),
         };
+
+  if (!limiters.reaction) {
+    limiters.reaction = new RateLimiter({ max: 1, windowMs: 1000 });
+  }
 
   on(socket, 'room:join', async (payload) => {
     if (limiters.join && !limiters.join.check(socket.id)) {
@@ -292,6 +304,9 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       peers: joinResult.peers.map((p) => toPublicPeer(p, registry.isHost(code, p.userId))),
       isHost,
       screenSharer: registry.getScreenSharer(code),
+      handRaised: Boolean(joinResult.peer.handRaised),
+      raisedAt: joinResult.peer.raisedAt || null,
+      feedback: joinResult.peer.feedback || null,
     };
   });
 
@@ -625,6 +640,108 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     return {};
   });
 
+  // reaction:send { kind }
+  // Admitted peers only, zod validation, 1 reaction/sec rate limit, broadcast to admitted peers
+  on(socket, 'reaction:send', async (payload) => {
+    const { kind } = parse(reactionSendSchema, payload);
+
+    const code = registry.getRoomCode(socket.id);
+    if (!code) {
+      throw new AppError(403, 'NOT_IN_ROOM', 'Participant is not in this meeting');
+    }
+
+    if (limiters.reaction && !limiters.reaction.check(socket.id)) {
+      throw new AppError(429, 'RATE_LIMITED', "You're sending reactions too fast");
+    }
+
+    const { user } = socket.data;
+    const reactionPayload = {
+      peerId: socket.id,
+      userId: user.id,
+      name: user.name,
+      kind,
+      timestamp: Date.now(),
+    };
+
+    emitToAdmitted(io, registry, code, 'reaction:new', reactionPayload);
+    return { ...reactionPayload };
+  });
+
+  // hand:set { raised, peerId? }
+  // Admitted peers only, zod validation, stored in room registry, broadcast to admitted peers
+  on(socket, 'hand:set', async (payload) => {
+    const { raised, peerId: requestedPeerId } = parse(handSetSchema, payload);
+
+    const code = registry.getRoomCode(socket.id);
+    if (!code) {
+      throw new AppError(403, 'NOT_IN_ROOM', 'Participant is not in this meeting');
+    }
+
+    // A host can lower another peer's hand; otherwise target is self
+    let targetPeerId = socket.id;
+    if (requestedPeerId && requestedPeerId !== socket.id) {
+      if (!registry.isHost(code, socket.data.user.id)) {
+        throw new AppError(403, 'FORBIDDEN', 'Only the host can modify other participants');
+      }
+      targetPeerId = requestedPeerId;
+    }
+
+    const updated = registry.setHand(targetPeerId, raised);
+    if (!updated) {
+      throw new AppError(404, 'PEER_NOT_FOUND', 'Participant is not in this meeting');
+    }
+
+    const targetPeer = updated.peer;
+    const handPayload = {
+      peerId: targetPeer.peerId,
+      userId: targetPeer.userId,
+      name: targetPeer.name,
+      raised: targetPeer.handRaised,
+      raisedAt: targetPeer.raisedAt,
+    };
+
+    emitToAdmitted(io, registry, code, 'hand:changed', handPayload);
+    io.to(code).emit('room:peer-updated', {
+      peerId: targetPeer.peerId,
+      handRaised: targetPeer.handRaised,
+      raisedAt: targetPeer.raisedAt,
+    });
+
+    return { ...handPayload };
+  });
+
+  // feedback:set { kind }
+  // Admitted peers only, zod validation, stored in room registry, broadcast to admitted peers
+  on(socket, 'feedback:set', async (payload) => {
+    const { kind } = parse(feedbackSetSchema, payload);
+
+    const code = registry.getRoomCode(socket.id);
+    if (!code) {
+      throw new AppError(403, 'NOT_IN_ROOM', 'Participant is not in this meeting');
+    }
+
+    const updated = registry.setFeedback(socket.id, kind);
+    if (!updated) {
+      throw new AppError(404, 'PEER_NOT_FOUND', 'Participant is not in this meeting');
+    }
+
+    const { user } = socket.data;
+    const feedbackPayload = {
+      peerId: socket.id,
+      userId: user.id,
+      name: user.name,
+      kind: updated.peer.feedback,
+    };
+
+    emitToAdmitted(io, registry, code, 'feedback:changed', feedbackPayload);
+    io.to(code).emit('room:peer-updated', {
+      peerId: socket.id,
+      feedback: updated.peer.feedback,
+    });
+
+    return { ...feedbackPayload };
+  });
+
   // chat:send { text, to? }
   on(socket, 'chat:send', async (payload) => {
     const { text, to } = parse(chatSendSchema, payload);
@@ -731,6 +848,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
   });
 
   socket.on('disconnect', () => {
+    limiters?.reaction?.reset(socket.id);
     const left = leaveRoom(io, registry, socket, limiters);
     const removedFrom = left
       ? (left.type === 'waiting' ? `waiting:${left.code}` : `room:${left.code}`)
