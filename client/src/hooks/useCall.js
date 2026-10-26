@@ -21,6 +21,11 @@ const INITIAL = {
   historyError: null,
   rateLimitHint: null,
   peerToast: null,
+  handToast: null,
+  reactions: [],
+  selfHandRaised: false,
+  selfRaisedAt: null,
+  selfFeedback: null,
 };
 
 // Joins the meeting `code` once `enabled` is true and leaves when the component unmounts,
@@ -103,6 +108,11 @@ export default function useCall({
   const stopHostScreenShare = useCallback(() => sessionRef.current?.stopHostScreenShare(), []);
   const replaceTrack = useCallback((kind, newTrack) => sessionRef.current?.replaceTrack(kind, newTrack), []);
 
+  const sendReaction = useCallback((kind) => sessionRef.current?.sendReaction(kind), []);
+  const setHandRaised = useCallback((raised, peerId) => sessionRef.current?.setHandRaised(raised, peerId), []);
+  const setFeedback = useCallback((kind) => sessionRef.current?.setFeedback(kind), []);
+  const lowerPeerHand = useCallback((peerId) => sessionRef.current?.lowerPeerHand(peerId), []);
+
   return {
     ...state,
     retry,
@@ -121,5 +131,9 @@ export default function useCall({
     stopScreenShare,
     stopHostScreenShare,
     replaceTrack,
+    sendReaction,
+    setHandRaised,
+    setFeedback,
+    lowerPeerHand,
   };
 }

@@ -97,6 +97,11 @@ export class CallSession {
     this.rateLimitHint = null;
 
     this.peerToast = null;
+    this.handToast = null;
+    this.reactions = [];
+    this.selfHandRaised = false;
+    this.selfRaisedAt = null;
+    this.selfFeedback = null;
 
     this.state = {
       status: CallStatus.CONNECTING,
@@ -115,6 +120,11 @@ export class CallSession {
       historyError: null,
       rateLimitHint: null,
       peerToast: null,
+      handToast: null,
+      reactions: [],
+      selfHandRaised: false,
+      selfRaisedAt: null,
+      selfFeedback: null,
     };
   }
 
@@ -168,6 +178,9 @@ export class CallSession {
       ),
       signaling.on('room:ended', () => this.#finish(CallStatus.ENDED)),
       signaling.on('chat:message', (message) => this.#onChatMessage(message)),
+      signaling.on('reaction:new', (reaction) => this.#onReactionNew(reaction)),
+      signaling.on('hand:changed', (data) => this.#onHandChanged(data)),
+      signaling.on('feedback:changed', (data) => this.#onFeedbackChanged(data)),
       signaling.on('signal', (message) => this.#onSignal(message)),
     ];
 
@@ -567,6 +580,114 @@ export class CallSession {
     return this.signaling.request('host:stop-share', {});
   }
 
+  // Screen share and track management methods
+  async sendReaction(kind) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    const ack = await this.signaling.request('reaction:send', { kind });
+    if (ack && ack.ok !== false) {
+      this.#onReactionNew({
+        kind,
+        peerId: this.selfId,
+        userId: this.currentUser?.id,
+        name: this.currentUser?.name,
+      });
+    }
+    return ack;
+  }
+
+  async setHandRaised(raised, peerId = null) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    const payload = { raised: Boolean(raised) };
+    if (peerId) payload.peerId = peerId;
+    const ack = await this.signaling.request('hand:set', payload);
+    if (!peerId || peerId === this.selfId) {
+      this.selfHandRaised = Boolean(raised);
+      this.selfRaisedAt = raised ? Date.now() : null;
+      this.#update({ selfHandRaised: this.selfHandRaised, selfRaisedAt: this.selfRaisedAt });
+    } else {
+      const entry = this.peers.get(peerId);
+      if (entry) {
+        entry.handRaised = Boolean(raised);
+        entry.raisedAt = raised ? Date.now() : null;
+        this.#update();
+      }
+    }
+    return ack;
+  }
+
+  async setFeedback(kind) {
+    if (!this.signaling?.connected) throw new Error('Not connected');
+    const ack = await this.signaling.request('feedback:set', { kind: kind || null });
+    this.selfFeedback = kind || null;
+    this.#update({ selfFeedback: this.selfFeedback });
+    return ack;
+  }
+
+  async lowerPeerHand(peerId) {
+    return this.setHandRaised(false, peerId);
+  }
+
+  #onReactionNew(reaction) {
+    if (this.finished || !reaction) return;
+    const item = {
+      id: `${Date.now()}-${Math.random()}`,
+      kind: reaction.kind,
+      peerId: reaction.peerId,
+      userId: reaction.userId,
+      name: reaction.name || 'Participant',
+      timestamp: reaction.timestamp || Date.now(),
+      leftPercent: 15 + Math.floor(Math.random() * 70),
+    };
+    const updated = [...this.reactions, item].slice(-8);
+    this.reactions = updated;
+    this.#update({ reactions: this.reactions });
+  }
+
+  #onHandChanged({ peerId, userId, name, raised, raisedAt }) {
+    if (this.finished) return;
+    const isSelf = peerId === this.selfId || (this.currentUser?.id && String(userId) === String(this.currentUser.id));
+    if (isSelf) {
+      this.selfHandRaised = Boolean(raised);
+      this.selfRaisedAt = raised ? (raisedAt || Date.now()) : null;
+    }
+
+    const entry = this.peers.get(peerId);
+    if (entry) {
+      entry.handRaised = Boolean(raised);
+      entry.raisedAt = raised ? (raisedAt || Date.now()) : null;
+    }
+
+    // Host toast: '<name> raised a hand'
+    if (raised && this.isHost && !isSelf) {
+      this.handToast = {
+        id: `${Date.now()}-${Math.random()}`,
+        message: `${name || 'Someone'} raised a hand`,
+        peerId,
+      };
+    }
+
+    this.#update({
+      selfHandRaised: this.selfHandRaised,
+      selfRaisedAt: this.selfRaisedAt,
+      handToast: this.handToast,
+    });
+  }
+
+  #onFeedbackChanged({ peerId, userId, name, kind }) {
+    if (this.finished) return;
+    const isSelf = peerId === this.selfId || (this.currentUser?.id && String(userId) === String(this.currentUser.id));
+    if (isSelf) {
+      this.selfFeedback = kind || null;
+    }
+
+    const entry = this.peers.get(peerId);
+    if (entry) {
+      entry.feedback = kind || null;
+    }
+
+    this.#update({ selfFeedback: this.selfFeedback });
+  }
+
   // Replaces the outgoing track across all active peer connections without renegotiation
   async replaceTrack(kind, newTrack) {
     if (this.finished) return;
@@ -676,12 +797,18 @@ export class CallSession {
       this.selfId = response.peerId;
       this.isHost = Boolean(response.isHost);
       this.screenShare = response.screenSharer ?? null;
+      this.selfHandRaised = Boolean(response.handRaised);
+      this.selfRaisedAt = response.raisedAt || null;
+      this.selfFeedback = response.feedback || null;
       this.#update({
         status: CallStatus.ACTIVE,
         selfId: this.selfId,
         isHost: this.isHost,
         screenShare: this.screenShare,
         isReconnecting: false,
+        selfHandRaised: this.selfHandRaised,
+        selfRaisedAt: this.selfRaisedAt,
+        selfFeedback: this.selfFeedback,
       });
       if (!this.historyLoaded) {
         this.loadHistory();
@@ -751,10 +878,10 @@ export class CallSession {
     for (const info of waiting) this.#addPeer(info, { initiator: false });
   }
 
-  #addPeer({ peerId, user, isHost = false, audio = true, video = true }, { initiator }) {
+  #addPeer({ peerId, user, isHost = false, audio = true, video = true, handRaised = false, raisedAt = null, feedback = null }, { initiator }) {
     if (this.finished || this.peers.has(peerId)) return;
     if (!this.selfId) {
-      this.earlyPeers.push({ peerId, user, isHost, audio, video });
+      this.earlyPeers.push({ peerId, user, isHost, audio, video, handRaised, raisedAt, feedback });
       return;
     }
 
@@ -767,6 +894,9 @@ export class CallSession {
       connectionState: 'new',
       audio,
       video,
+      handRaised: Boolean(handRaised),
+      raisedAt: raisedAt || null,
+      feedback: feedback || null,
     };
     entry.peer = new Peer({
       remoteId: peerId,
@@ -810,11 +940,14 @@ export class CallSession {
     this.#replayPending(peerId, entry.peer);
   }
 
-  #updatePeerMedia({ peerId, audio, video }) {
+  #updatePeerMedia({ peerId, audio, video, handRaised, raisedAt, feedback }) {
     const entry = this.peers.get(peerId);
     if (!entry) return;
-    entry.audio = audio;
-    entry.video = video;
+    if (audio !== undefined) entry.audio = audio;
+    if (video !== undefined) entry.video = video;
+    if (handRaised !== undefined) entry.handRaised = handRaised;
+    if (raisedAt !== undefined) entry.raisedAt = raisedAt;
+    if (feedback !== undefined) entry.feedback = feedback;
     this.#update();
   }
 
@@ -1104,6 +1237,11 @@ export class CallSession {
     if ('screenShare' in patch) this.screenShare = patch.screenShare;
     if ('activeSpeaker' in patch) this.activeSpeaker = patch.activeSpeaker;
     if ('peerToast' in patch) this.peerToast = patch.peerToast;
+    if ('handToast' in patch) this.handToast = patch.handToast;
+    if ('reactions' in patch) this.reactions = patch.reactions;
+    if ('selfHandRaised' in patch) this.selfHandRaised = patch.selfHandRaised;
+    if ('selfRaisedAt' in patch) this.selfRaisedAt = patch.selfRaisedAt;
+    if ('selfFeedback' in patch) this.selfFeedback = patch.selfFeedback;
     const activeScreen = this.#resolveScreenStream();
     this.state = {
       ...this.state,
@@ -1121,6 +1259,11 @@ export class CallSession {
       screenStream: activeScreen,
       activeSpeaker: this.activeSpeaker,
       peerToast: this.peerToast,
+      handToast: this.handToast,
+      reactions: this.reactions,
+      selfHandRaised: this.selfHandRaised,
+      selfRaisedAt: this.selfRaisedAt,
+      selfFeedback: this.selfFeedback,
       peers: [...this.peers.entries()].map(([peerId, entry]) => ({
         peerId,
         user: entry.user,
@@ -1129,6 +1272,9 @@ export class CallSession {
         audio: entry.audio,
         video: entry.video,
         isHost: Boolean(entry.isHost || entry.user?.isHost),
+        handRaised: Boolean(entry.handRaised),
+        raisedAt: entry.raisedAt || null,
+        feedback: entry.feedback || null,
       })),
     };
     this.listeners.forEach((listener) => listener(this.state));
