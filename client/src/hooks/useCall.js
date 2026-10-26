@@ -39,6 +39,8 @@ const INITIAL = {
   selfRaisedAt: null,
   selfFeedback: null,
   activePoll: null,
+  liveCaption: null,
+  transcript: [],
 };
 
 // Joins the meeting `code` once `enabled` is true and leaves when the component unmounts,
@@ -167,6 +169,11 @@ export default function useCall({
   const submitVote = useCallback((pollId, optionIds) => sessionRef.current?.submitVote(pollId, optionIds), []);
   const dismissActivePoll = useCallback(() => sessionRef.current?.dismissActivePoll(), []);
 
+  const sendCaptionSegment = useCallback(
+    (text, final) => sessionRef.current?.sendCaptionSegment(text, final),
+    []
+  );
+
   return {
     ...state,
     retry,
@@ -205,5 +212,6 @@ export default function useCall({
     closePoll,
     submitVote,
     dismissActivePoll,
+    sendCaptionSegment,
   };
 }

@@ -57,3 +57,7 @@ export const exportPollCsv = async (code, pollId) => {
   a.remove();
   window.URL.revokeObjectURL(url);
 };
+
+// Captions transcript for an active or past meeting (host or admitted attendee)
+export const getMeetingCaptions = (code, options = {}) =>
+  api.get(`/api/meetings/${encodeURIComponent(code)}/captions`, options).then((res) => res.captions);

@@ -123,6 +123,9 @@ export class CallSession {
     this.selfHandRaised = false;
     this.selfRaisedAt = null;
     this.selfFeedback = null;
+    this.liveCaption = null;
+    this.transcript = [];
+    this.captionFadeTimer = null;
 
     this.state = {
       status: CallStatus.CONNECTING,
@@ -159,6 +162,8 @@ export class CallSession {
       selfRaisedAt: null,
       selfFeedback: null,
       activePoll: null,
+      liveCaption: null,
+      transcript: [],
     };
   }
 
@@ -333,6 +338,7 @@ export class CallSession {
         }
         this.#update({ activePoll: this.activePoll });
       }),
+      signaling.on('caption:segment', (segment) => this.#onCaptionSegment(segment)),
       signaling.on('signal', (message) => this.#onSignal(message)),
     ];
 
@@ -477,6 +483,52 @@ export class CallSession {
   dismissActivePoll() {
     this.activePoll = null;
     this.#update({ activePoll: null });
+  }
+
+  async sendCaptionSegment(text, final = false) {
+    if (!this.signaling?.connected || !text || !text.trim()) return;
+    return this.signaling.request('caption:segment', {
+      text: text.trim().slice(0, 300),
+      final: Boolean(final),
+    });
+  }
+
+  #onCaptionSegment(segment) {
+    if (this.finished || !segment || !segment.text) return;
+
+    this.liveCaption = {
+      peerId: segment.peerId,
+      userId: segment.userId,
+      name: segment.name || 'Speaker',
+      text: segment.text,
+      final: Boolean(segment.final),
+      timestamp: segment.timestamp || Date.now(),
+      offsetMs: segment.offsetMs || 0,
+    };
+
+    if (segment.final) {
+      const item = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        peerId: segment.peerId,
+        userId: segment.userId,
+        name: segment.name || 'Speaker',
+        text: segment.text,
+        offsetMs: segment.offsetMs || 0,
+        timestamp: segment.timestamp || Date.now(),
+        final: true,
+      };
+      this.transcript = [...this.transcript, item];
+    }
+
+    if (this.captionFadeTimer) {
+      clearTimeout(this.captionFadeTimer);
+    }
+    this.captionFadeTimer = setTimeout(() => {
+      this.liveCaption = null;
+      this.#update({ liveCaption: null });
+    }, 5000);
+
+    this.#update({ liveCaption: this.liveCaption, transcript: this.transcript });
   }
 
   async refreshWaitingList() {
@@ -1351,6 +1403,10 @@ export class CallSession {
     this.finished = true;
     this.isWaiting = false;
     this.#releaseWakeLock();
+    if (this.captionFadeTimer) {
+      clearTimeout(this.captionFadeTimer);
+      this.captionFadeTimer = null;
+    }
     this.#stopWaitingPolling();
     this.#stopGuestWaitingPolling();
     this.#stopInCallPolling();
@@ -1601,6 +1657,8 @@ export class CallSession {
     if ('selfRaisedAt' in patch) this.selfRaisedAt = patch.selfRaisedAt;
     if ('selfFeedback' in patch) this.selfFeedback = patch.selfFeedback;
     if ('activePoll' in patch) this.activePoll = patch.activePoll;
+    if ('liveCaption' in patch) this.liveCaption = patch.liveCaption;
+    if ('transcript' in patch) this.transcript = patch.transcript;
     const activeScreen = this.#resolveScreenStream();
     this.state = {
       ...this.state,
@@ -1631,6 +1689,8 @@ export class CallSession {
       selfRaisedAt: this.selfRaisedAt,
       selfFeedback: this.selfFeedback,
       activePoll: this.activePoll,
+      liveCaption: this.liveCaption,
+      transcript: this.transcript,
       peers: [...this.peers.entries()].map(([peerId, entry]) => ({
         peerId,
         user: entry.user,
