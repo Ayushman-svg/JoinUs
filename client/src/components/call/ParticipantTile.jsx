@@ -32,6 +32,7 @@ export default function ParticipantTile({
   connectionState,
   isSpeaking = false,
   isHost = false,
+  isCoHost = false,
   handRaised = false,
   feedback = null,
   reaction = null,
@@ -152,7 +153,11 @@ export default function ParticipantTile({
         ) : null}
         <span className="zoom-tile__name-text">
           {name}
-          {isHost && <span className="zoom-tile__host-tag"> (Host)</span>}
+          {isHost ? (
+            <span className="zoom-tile__host-tag"> (Host)</span>
+          ) : isCoHost ? (
+            <span className="zoom-tile__host-tag zoom-tile__host-tag--cohost"> (Co-host)</span>
+          ) : null}
         </span>
       </div>
     </div>

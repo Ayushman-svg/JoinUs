@@ -1,12 +1,16 @@
 import {
+  Ban,
   Check,
   ChevronsDown,
   ChevronsUp,
   Coffee,
+  Edit2,
   Hand,
+  Mic,
   MicOff,
   MonitorOff,
   MoreVertical,
+  UserCheck,
   UserMinus,
   VideoOff,
   X,
@@ -24,6 +28,8 @@ export default function ParticipantsPanel({
   isOpen,
   onClose,
   isHost = false,
+  isCoHost = false,
+  canModerate = isHost || isCoHost,
   self,
   peers = [],
   waitingList = [],
@@ -33,6 +39,13 @@ export default function ParticipantsPanel({
   onDeny,
   onAdmitAll,
   onRemove,
+  onMutePeer,
+  onRequestUnmute,
+  onStopPeerVideo,
+  onRenamePeer,
+  onPromoteCoHost,
+  onDemoteCoHost,
+  onMuteAll,
   onSwitchToChat,
   unreadCount = 0,
   onLowerHand,
@@ -100,8 +113,8 @@ export default function ParticipantsPanel({
       </header>
 
       <div className="participants-panel__content">
-        {/* Waiting section: host only, hidden when empty */}
-        {isHost && waitingList.length > 0 && (
+        {/* Waiting section: moderator only, hidden when empty */}
+        {canModerate && waitingList.length > 0 && (
           <section className="participants-panel__section" aria-label="Waiting room">
             <div className="participants-panel__section-header">
               <h3 className="participants-panel__section-title">
@@ -163,6 +176,7 @@ export default function ParticipantsPanel({
                 <div className="participants-row__badges">
                   <Badge variant="neutral">You</Badge>
                   {isHost && <Badge variant="primary">Host</Badge>}
+                  {!isHost && isCoHost && <Badge variant="secondary" className="badge--cohost">Co-host</Badge>}
                   {reactionsEnabled && self.handRaised && (
                     <span className="participants-row__hand-badge" role="status" title="Hand raised">
                       <Hand size={12} aria-hidden="true" />
@@ -224,6 +238,11 @@ export default function ParticipantsPanel({
                     <span className="participants-row__name">{name}</span>
                     <div className="participants-row__badges">
                       {peer.isHost && <Badge variant="primary">Host</Badge>}
+                      {!peer.isHost && peer.isCoHost && (
+                        <Badge variant="secondary" className="badge--cohost">
+                          Co-host
+                        </Badge>
+                      )}
                       {isPresenting && <Badge variant="primary">Presenting</Badge>}
                       {reactionsEnabled && peer.handRaised && (
                         <span className="participants-row__hand-badge" role="status" title="Hand raised">
@@ -247,7 +266,7 @@ export default function ParticipantsPanel({
                     </div>
                   </div>
                   <div className="participants-row__media">
-                    {isHost && isPresenting && (
+                    {canModerate && isPresenting && (
                       <Button
                         variant="danger"
                         size="sm"
@@ -257,7 +276,7 @@ export default function ParticipantsPanel({
                       </Button>
                     )}
 
-                    {isHost && reactionsEnabled && peer.handRaised && (
+                    {canModerate && reactionsEnabled && peer.handRaised && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -284,7 +303,7 @@ export default function ParticipantsPanel({
                       </Tooltip>
                     )}
 
-                    {isHost && (
+                    {canModerate && (!isCoHost || !peer.isHost) && (
                       <Dropdown
                         label={`Options for ${name}`}
                         align="end"
@@ -316,12 +335,65 @@ export default function ParticipantsPanel({
                             Stop sharing
                           </DropdownItem>
                         )}
+                        {peer.audio ? (
+                          <DropdownItem
+                            icon={MicOff}
+                            onSelect={() => onMutePeer?.(peer.peerId)}
+                          >
+                            Mute
+                          </DropdownItem>
+                        ) : (
+                          <DropdownItem
+                            icon={Mic}
+                            onSelect={() => onRequestUnmute?.(peer.peerId)}
+                          >
+                            Ask to unmute
+                          </DropdownItem>
+                        )}
+                        {peer.video && (
+                          <DropdownItem
+                            icon={VideoOff}
+                            onSelect={() => onStopPeerVideo?.(peer.peerId)}
+                          >
+                            Stop video
+                          </DropdownItem>
+                        )}
+                        <DropdownItem
+                          icon={Edit2}
+                          onSelect={() => onRenamePeer?.(peer)}
+                        >
+                          Rename
+                        </DropdownItem>
+                        {isHost && (
+                          peer.isCoHost ? (
+                            <DropdownItem
+                              icon={UserMinus}
+                              onSelect={() => onDemoteCoHost?.(peer)}
+                            >
+                              Remove co-host
+                            </DropdownItem>
+                          ) : (
+                            <DropdownItem
+                              icon={UserCheck}
+                              onSelect={() => onPromoteCoHost?.(peer)}
+                            >
+                              Make co-host
+                            </DropdownItem>
+                          )
+                        )}
                         <DropdownItem
                           danger
                           icon={UserMinus}
-                          onSelect={() => onRemove(peer)}
+                          onSelect={() => onRemove?.(peer, false)}
                         >
-                          Remove from meeting
+                          Remove
+                        </DropdownItem>
+                        <DropdownItem
+                          danger
+                          icon={Ban}
+                          onSelect={() => onRemove?.(peer, true)}
+                        >
+                          Remove and block
                         </DropdownItem>
                       </Dropdown>
                     )}
@@ -346,13 +418,11 @@ export default function ParticipantsPanel({
         >
           Invite
         </Button>
-        {isHost && (
+        {canModerate && (
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => {
-              /* Mute all informational action */
-            }}
+            onClick={onMuteAll}
             aria-label="Mute all participants"
           >
             Mute All

@@ -57,6 +57,8 @@ export default function Dashboard() {
   // Form states for modals
   const [instantTitle, setInstantTitle] = useState('');
   const [instantWaitingRoom, setInstantWaitingRoom] = useState(true);
+  const [instantPasscode, setInstantPasscode] = useState('');
+  const [instantMuteOnEntry, setInstantMuteOnEntry] = useState(false);
   const [instantSubmitting, setInstantSubmitting] = useState(false);
   const [instantError, setInstantError] = useState('');
 
@@ -66,6 +68,8 @@ export default function Dashboard() {
   const [scheduleTitle, setScheduleTitle] = useState('');
   const [scheduleAt, setScheduleAt] = useState(() => toLocalInputValue(nextFullHour()));
   const [scheduleWaitingRoom, setScheduleWaitingRoom] = useState(true);
+  const [schedulePasscode, setSchedulePasscode] = useState('');
+  const [scheduleMuteOnEntry, setScheduleMuteOnEntry] = useState(false);
   const [scheduleSubmitting, setScheduleSubmitting] = useState(false);
   const [scheduleError, setScheduleError] = useState('');
   const [scheduleFieldErrors, setScheduleFieldErrors] = useState({});
@@ -199,9 +203,13 @@ export default function Dashboard() {
       const meeting = await createMeeting({
         title: instantTitle.trim() || undefined,
         waitingRoom: instantWaitingRoom,
+        passcode: instantPasscode.trim() || undefined,
+        settings: instantMuteOnEntry ? { muteOnEntry: true } : undefined,
       });
       setActiveModal(null);
       setInstantTitle('');
+      setInstantPasscode('');
+      setInstantMuteOnEntry(false);
       setInstantWaitingRoom(true);
       navigate(`/m/${meeting.code}`);
     } catch (err) {
@@ -245,9 +253,13 @@ export default function Dashboard() {
         title: scheduleTitle.trim() || undefined,
         scheduledAt: date.toISOString(),
         waitingRoom: scheduleWaitingRoom,
+        passcode: schedulePasscode.trim() || undefined,
+        settings: scheduleMuteOnEntry ? { muteOnEntry: true } : undefined,
       });
       setActiveModal(null);
       setScheduleTitle('');
+      setSchedulePasscode('');
+      setScheduleMuteOnEntry(false);
       setScheduleAt(toLocalInputValue(nextFullHour()));
       setScheduleWaitingRoom(true);
       setReloadKey((k) => k + 1);
@@ -405,6 +417,25 @@ export default function Dashboard() {
             onChange={setInstantWaitingRoom}
             disabled={instantSubmitting}
           />
+          <FormField
+            id="instant-passcode"
+            label="Passcode (optional)"
+            type="password"
+            maxLength={10}
+            placeholder="4 to 10 characters"
+            value={instantPasscode}
+            onChange={(e) => setInstantPasscode(e.target.value)}
+            disabled={instantSubmitting}
+            helper="Require a 4–10 character passcode to join"
+          />
+          <Toggle
+            id="instant-mute-on-entry"
+            label="Mute on entry"
+            helper="Automatically mute participants when they join"
+            checked={instantMuteOnEntry}
+            onChange={setInstantMuteOnEntry}
+            disabled={instantSubmitting}
+          />
           <div className="ui-modal__footer" style={{ padding: 0, marginTop: 'var(--space-6)' }}>
             <Button
               type="button"
@@ -501,6 +532,25 @@ export default function Dashboard() {
             helper="Guests wait until you let them in"
             checked={scheduleWaitingRoom}
             onChange={setScheduleWaitingRoom}
+            disabled={scheduleSubmitting}
+          />
+          <FormField
+            id="schedule-passcode"
+            label="Passcode (optional)"
+            type="password"
+            maxLength={10}
+            placeholder="4 to 10 characters"
+            value={schedulePasscode}
+            onChange={(e) => setSchedulePasscode(e.target.value)}
+            disabled={scheduleSubmitting}
+            helper="Require a 4–10 character passcode to join"
+          />
+          <Toggle
+            id="schedule-mute-on-entry"
+            label="Mute on entry"
+            helper="Automatically mute participants when they join"
+            checked={scheduleMuteOnEntry}
+            onChange={setScheduleMuteOnEntry}
             disabled={scheduleSubmitting}
           />
           <div className="ui-modal__footer" style={{ padding: 0, marginTop: 'var(--space-6)' }}>

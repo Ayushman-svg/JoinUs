@@ -15,6 +15,7 @@ export default function MeetingHeader({
   title = 'Meeting',
   code = '',
   waitingRoom = true,
+  isLocked = false,
   onOpenSecurity,
   elapsedSeconds = 0,
   isReconnecting = false,
@@ -56,6 +57,12 @@ export default function MeetingHeader({
           <h1 className="zoom-call-header__title" title={displayTitle}>
             {displayTitle}
           </h1>
+          {isLocked && (
+            <span className="zoom-locked-pill" role="status" title="Meeting is locked to new participants">
+              <Lock size={12} aria-hidden="true" />
+              <span>Locked</span>
+            </span>
+          )}
           <span className="zoom-call-header__divider" aria-hidden="true">
             |
           </span>

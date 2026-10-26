@@ -25,6 +25,8 @@ export default function ChatPanel({
   historyLoading = false,
   historyError = null,
   rateLimitHint = null,
+  chatAllowed = true,
+  canModerate = false,
   onSendMessage,
   onRetryMessage,
   onRetryLoadHistory,
@@ -372,6 +374,13 @@ export default function ChatPanel({
           </div>
         )}
 
+        {!chatAllowed && !canModerate && (
+          <div className="chat-panel__privacy-banner chat-panel__privacy-banner--disabled" role="status">
+            <Lock size={13} aria-hidden="true" className="chat-panel__privacy-icon" />
+            <span>Chat has been disabled by the meeting host</span>
+          </div>
+        )}
+
         <div className="chat-panel__input-row">
           <div className="chat-panel__input-wrapper">
             <textarea
@@ -381,14 +390,18 @@ export default function ChatPanel({
               onChange={handleInput}
               onKeyDown={handleKeyDown}
               placeholder={
-                hasLeft
+                !chatAllowed && !canModerate
+                  ? 'Chat is disabled by the host'
+                  : hasLeft
                   ? `${activeRecipientName} left the meeting`
                   : isPrivate
                   ? `Private message to ${activeRecipientName}`
                   : 'Send a message…'
               }
               aria-label={
-                hasLeft
+                !chatAllowed && !canModerate
+                  ? 'Chat is disabled by the host'
+                  : hasLeft
                   ? `${activeRecipientName} left the meeting`
                   : isPrivate
                   ? `Private message to ${activeRecipientName}`
@@ -396,7 +409,7 @@ export default function ChatPanel({
               }
               className="chat-panel__textarea"
               maxLength={1000}
-              disabled={hasLeft}
+              disabled={hasLeft || (!chatAllowed && !canModerate)}
             />
             {inputText.length > 900 && (
               <span className="chat-panel__char-counter" aria-live="polite">
@@ -411,7 +424,7 @@ export default function ChatPanel({
               variant="primary"
               size="md"
               iconOnly
-              disabled={!inputText.trim() || hasLeft}
+              disabled={!inputText.trim() || hasLeft || (!chatAllowed && !canModerate)}
               aria-label="Send message"
               className="chat-panel__send-btn"
             >

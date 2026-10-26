@@ -1,6 +1,6 @@
-import { Clock, Hand, LayoutGrid, Link2, Maximize2, Minimize2, MonitorUp, ShieldCheck, User, Users } from 'lucide-react';
+import { Clock, Hand, LayoutGrid, Link2, Lock, Maximize2, Minimize2, MonitorUp, Shield, ShieldAlert, ShieldCheck, User, Users } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { getIceServers } from '../api/ice.js';
 import { getMeeting } from '../api/meetings.js';
@@ -19,6 +19,7 @@ import Alert from '../components/ui/Alert.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
 import Button from '../components/ui/Button.jsx';
 import FeatureBoundary from '../components/ui/FeatureBoundary.jsx';
+import Input from '../components/ui/Input.jsx';
 import Modal from '../components/ui/Modal.jsx';
 import Spinner from '../components/ui/Spinner.jsx';
 import Tooltip from '../components/ui/Tooltip.jsx';
@@ -95,10 +96,23 @@ export default function CallPage() {
   const roomViewsEnabled = useFeature('ROOM_VIEWS');
   const reactionsEnabled = useFeature('REACTIONS');
 
+  const location = useLocation();
   const [meeting, setMeeting] = useState(null);
   const [confirmingLeave, setConfirmingLeave] = useState(false);
   const [activePanel, setActivePanel] = useState(null);
   const [peerToRemove, setPeerToRemove] = useState(null);
+  const [renamePeerTarget, setRenamePeerTarget] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [passcode, setPasscode] = useState(() => {
+    try {
+      return location.state?.passcode || sessionStorage.getItem(`passcode_${code}`) || '';
+    } catch {
+      return '';
+    }
+  });
+  const [passcodeModalOpen, setPasscodeModalOpen] = useState(false);
+  const [passcodeModalInput, setPasscodeModalInput] = useState('');
+  const [directiveToast, setDirectiveToast] = useState(null);
   const [toastGuest, setToastGuest] = useState(null);
   const toastedIds = useRef(new Set());
   const [rtcConfig, setRtcConfig] = useState(null);
@@ -162,14 +176,45 @@ export default function CallPage() {
 
   const { status: mediaStatus, start: startMedia } = media;
   const mediaSettled = mediaStatus === 'ready' || mediaStatus === 'error';
+
+  const handleMuteDirective = () => {
+    if (media.audioEnabled) {
+      media.toggleAudio();
+    }
+    setDirectiveToast('The host muted your microphone');
+    setTimeout(() => setDirectiveToast(null), 4000);
+  };
+
+  const handleStopVideoDirective = () => {
+    if (media.videoEnabled) {
+      media.toggleVideo();
+    }
+    setDirectiveToast('The host stopped your camera');
+    setTimeout(() => setDirectiveToast(null), 4000);
+  };
+
   const call = useCall({
     code,
+    passcode,
     localStream: media.stream,
     localMedia: { audio: media.audioEnabled, video: media.videoEnabled },
     enabled: mediaSettled && rtcConfig !== null,
     rtcConfig: rtcConfig ?? DEFAULT_RTC_CONFIG,
     currentUser: user,
+    onMuteDirective: handleMuteDirective,
+    onStopVideoDirective: handleStopVideoDirective,
   });
+
+  useEffect(() => {
+    if (call.securityToast) {
+      setDirectiveToast(call.securityToast.message);
+      const timer = setTimeout(() => {
+        setDirectiveToast(null);
+        call.clearSecurityToast?.();
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [call.securityToast]);
 
   useEffect(() => {
     if (mediaStatus === 'idle' && !['ended', 'denied', 'removed'].includes(call.status)) {
@@ -413,6 +458,7 @@ export default function CallPage() {
           title={meeting?.title}
           code={code}
           waitingRoom={meeting?.waitingRoom ?? true}
+          isLocked={call.isLocked}
           onOpenSecurity={() => setSecurityModalOpen(true)}
           elapsedSeconds={elapsedSeconds}
           isReconnecting={Boolean(call.isReconnecting || call.status === 'reconnecting')}
@@ -503,6 +549,7 @@ export default function CallPage() {
             <div className="call__center">
               <CallStatusCard
                 status={call.status}
+                reason={call.error?.code || call.state?.reason}
                 hostInRoom={call.hostInRoom}
                 isReconnecting={Boolean(call.isReconnecting || call.status === 'reconnecting')}
                 onRetry={call.retry}
@@ -736,6 +783,7 @@ export default function CallPage() {
                         connectionState={item.peer.connectionState}
                         isSpeaking={call.activeSpeaker === item.peer.peerId}
                         isHost={item.peer.isHost}
+                        isCoHost={item.peer.isCoHost}
                         handRaised={item.peer.handRaised}
                         feedback={item.peer.feedback}
                         isPinned={pinnedParticipantId === item.peer.peerId}
@@ -772,7 +820,9 @@ export default function CallPage() {
                   onClose={() => setActivePanel(null)}
                   onSwitchToChat={() => setActivePanel('chat')}
                   unreadCount={call.unreadCount}
-                  isHost={isHost}
+                  isHost={call.isHost}
+                  isCoHost={call.isCoHost}
+                  canModerate={call.canModerate}
                   self={{
                     name: localName,
                     audioOn: media.audioEnabled,
@@ -787,7 +837,17 @@ export default function CallPage() {
                   onAdmit={(peerId) => call.admitPeer(peerId)}
                   onDeny={(peerId) => call.denyPeer(peerId)}
                   onAdmitAll={() => call.admitAllPeers()}
-                  onRemove={(peer) => setPeerToRemove(peer)}
+                  onMutePeer={(peerId) => call.mutePeer(peerId)}
+                  onRequestUnmute={(peerId) => call.requestUnmute(peerId)}
+                  onStopPeerVideo={(peerId) => call.stopPeerVideo(peerId)}
+                  onRenamePeer={(peer) => {
+                    setRenamePeerTarget(peer);
+                    setRenameValue(peer.user?.name ?? '');
+                  }}
+                  onPromoteCoHost={(peer) => call.promoteCoHost(peer.peerId)}
+                  onDemoteCoHost={(peer) => call.demoteCoHost(peer.peerId)}
+                  onMuteAll={() => call.muteAllPeers()}
+                  onRemove={(peer, block) => setPeerToRemove({ peer, block })}
                   onLowerHand={(peerId) => call.lowerPeerHand(peerId)}
                   onLowerSelfHand={() => call.setHandRaised(false)}
                 />
@@ -800,13 +860,15 @@ export default function CallPage() {
                   onClose={() => setActivePanel(null)}
                   onSwitchToParticipants={() => setActivePanel('participants')}
                   participantCount={call.peers.length + 1}
-                  waitingCount={isHost ? call.waitingList.length : 0}
+                  waitingCount={call.canModerate ? call.waitingList.length : 0}
                   messages={call.messages}
                   currentUser={user}
                   peers={call.peers}
                   historyLoading={call.historyLoading}
                   historyError={call.historyError}
                   rateLimitHint={call.rateLimitHint}
+                  chatAllowed={call.roomSettings?.chatAllowed !== false}
+                  canModerate={call.canModerate}
                   onSendMessage={call.sendMessage}
                   onRetryMessage={call.retryMessage}
                   onRetryLoadHistory={call.loadHistory}
@@ -836,7 +898,12 @@ export default function CallPage() {
           onToggleChat={() =>
             setActivePanel((curr) => (curr === 'chat' ? null : 'chat'))
           }
-          isHost={isHost}
+          isHost={call.isHost}
+          canModerate={call.canModerate}
+          isLocked={call.isLocked}
+          roomSettings={call.roomSettings}
+          onLockMeeting={(locked) => call.lockMeeting(locked)}
+          onUpdateRoomSettings={(settings) => call.updateRoomSettings(settings)}
           onOpenSecurity={() => setSecurityModalOpen(true)}
           handRaised={reactionsEnabled ? call.selfHandRaised : handRaised}
           onToggleHandRaise={() => {
@@ -970,8 +1037,16 @@ export default function CallPage() {
         open={Boolean(peerToRemove)}
         onClose={() => setPeerToRemove(null)}
         size="sm"
-        title={`Remove ${peerToRemove?.user?.name ?? 'participant'}?`}
-        description="They will be disconnected from the call and can ask to join again."
+        title={
+          peerToRemove?.block
+            ? `Remove and block ${peerToRemove?.peer?.user?.name ?? 'participant'}?`
+            : `Remove ${peerToRemove?.peer?.user?.name ?? 'participant'}?`
+        }
+        description={
+          peerToRemove?.block
+            ? 'They will be disconnected from the call and blocked from rejoining.'
+            : 'They will be disconnected from the call and can ask to join again.'
+        }
         footer={
           <>
             <Button
@@ -984,17 +1059,169 @@ export default function CallPage() {
             <Button
               variant="danger"
               onClick={() => {
-                if (peerToRemove) {
-                  call.removePeer(peerToRemove.peerId);
+                if (peerToRemove?.peer) {
+                  call.removePeer(peerToRemove.peer.peerId, Boolean(peerToRemove.block));
                   setPeerToRemove(null);
                 }
               }}
             >
-              Remove
+              {peerToRemove?.block ? 'Remove and block' : 'Remove'}
             </Button>
           </>
         }
       />
+
+      {/* Rename Participant Modal */}
+      <Modal
+        open={Boolean(renamePeerTarget)}
+        onClose={() => setRenamePeerTarget(null)}
+        size="sm"
+        title="Rename participant"
+        description="Change display name for this participant in this meeting."
+      >
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const trimmed = renameValue.trim();
+            if (renamePeerTarget && trimmed) {
+              try {
+                await call.renamePeer(renamePeerTarget.peerId, trimmed);
+              } catch (err) {
+                console.error('Failed to rename participant:', err);
+              }
+              setRenamePeerTarget(null);
+            }
+          }}
+        >
+          <div style={{ marginBottom: 'var(--space-4)' }}>
+            <Input
+              id="rename-participant-input"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              placeholder="Display name"
+              autoFocus
+              maxLength={50}
+            />
+          </div>
+          <div className="ui-modal__footer" style={{ padding: 0 }}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setRenamePeerTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={!renameValue.trim()}
+            >
+              Rename
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Host Request Unmute Prompt Modal */}
+      <Modal
+        open={Boolean(call.unmuteRequestPrompt)}
+        onClose={() => call.dismissUnmuteRequest()}
+        size="sm"
+        title="Host requested unmute"
+        description="The host would like you to unmute your microphone. You can choose to unmute or remain muted."
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => call.dismissUnmuteRequest()}
+            >
+              Stay muted
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                if (!media.audioEnabled) {
+                  media.toggleAudio();
+                }
+                call.dismissUnmuteRequest();
+              }}
+            >
+              Unmute
+            </Button>
+          </>
+        }
+      />
+
+      {/* Passcode Required / Invalid Modal */}
+      <Modal
+        open={
+          passcodeModalOpen ||
+          call.error?.code === 'PASSCODE_REQUIRED' ||
+          call.error?.code === 'PASSCODE_INVALID'
+        }
+        onClose={() => setPasscodeModalOpen(false)}
+        size="sm"
+        title="Passcode required"
+        description={
+          call.error?.code === 'PASSCODE_INVALID'
+            ? 'The passcode entered was incorrect. Please try again.'
+            : 'This meeting requires a passcode to join.'
+        }
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const trimmed = passcodeModalInput.trim();
+            if (trimmed) {
+              setPasscode(trimmed);
+              try {
+                sessionStorage.setItem(`passcode_${code}`, trimmed);
+              } catch {}
+              setPasscodeModalOpen(false);
+              window.location.reload();
+            }
+          }}
+        >
+          <div style={{ marginBottom: 'var(--space-4)' }}>
+            <Input
+              id="passcode-modal-input"
+              type="password"
+              placeholder="Enter passcode (4-10 characters)"
+              value={passcodeModalInput}
+              onChange={(e) => setPasscodeModalInput(e.target.value)}
+              autoFocus
+              maxLength={10}
+            />
+          </div>
+          <div className="ui-modal__footer" style={{ padding: 0 }}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => navigate('/')}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={!passcodeModalInput.trim()}
+            >
+              Join
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Directive Toast Banner */}
+      {directiveToast && (
+        <aside className="call__waiting-toast call__directive-toast" role="status" aria-live="polite">
+          <ShieldAlert size={18} aria-hidden="true" />
+          <span className="call__waiting-toast-text">{directiveToast}</span>
+          <Button variant="ghost" size="sm" onClick={() => setDirectiveToast(null)}>
+            Dismiss
+          </Button>
+        </aside>
+      )}
 
       {/* Leave Modal */}
       <Modal

@@ -3133,6 +3133,65 @@
   border-color: rgba(245, 158, 11, 0.45) !important;
 }
 
+/* ==========================================================================
+   FEATURE_HOST_SECURITY: Locked Pill, Security Menu, Role Badges, Directives
+   ========================================================================== */
+
+/* Locked Pill in Header */
+.zoom-locked-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(239, 68, 68, 0.16);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #F87171;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-left: 6px;
+  animation: ui-fade-in 0.2s ease both;
+}
+
+/* Security Popover Menu */
+.zoom-menu--security {
+  min-width: 240px;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 70px;
+}
+
+.zoom-menu__item-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+/* Role Badges */
+.badge--cohost {
+  background: rgba(99, 102, 241, 0.18) !important;
+  color: #818CF8 !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+
+.zoom-tile__host-tag--cohost {
+  color: #818CF8 !important;
+}
+
+/* Directive Toasts */
+.call__directive-toast {
+  border-color: rgba(99, 102, 241, 0.45) !important;
+  color: var(--color-text, #F9FAFB);
+}
+
+.chat-panel__privacy-banner--disabled {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #F87171;
+}
+
 
 
 

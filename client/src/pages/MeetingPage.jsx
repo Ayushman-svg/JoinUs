@@ -1,10 +1,11 @@
-import { ArrowLeft, CalendarClock, Loader, Search, Video } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Loader, Lock, Search, Video } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { getMeeting } from '../api/meetings.js';
 import AppHeader from '../components/AppHeader.jsx';
 import CopyLinkButton from '../components/CopyLinkButton.jsx';
+import FormField from '../components/FormField.jsx';
 import MediaProblem from '../components/MediaProblem.jsx';
 import MediaToggleButton from '../components/MediaToggleButton.jsx';
 import PreviewTile from '../components/PreviewTile.jsx';
@@ -68,6 +69,13 @@ export default function MeetingPage() {
 
   const [reloadKey, setReloadKey] = useState(0);
   const [state, setState] = useState({ status: 'loading', meeting: null });
+  const [passcode, setPasscode] = useState(() => {
+    try {
+      return sessionStorage.getItem(`passcode_${code}`) || '';
+    } catch {
+      return '';
+    }
+  });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -229,13 +237,33 @@ export default function MeetingPage() {
                 </Button>
               ) : (
                 <>
+                  <div style={{ marginBottom: 'var(--space-4)', textAlign: 'left' }}>
+                    <FormField
+                      id="prejoin-passcode"
+                      label={meeting?.hasPasscode ? 'Meeting Passcode (required)' : 'Meeting Passcode (optional)'}
+                      type="password"
+                      placeholder="Enter passcode"
+                      value={passcode}
+                      onChange={(e) => setPasscode(e.target.value)}
+                      maxLength={10}
+                      helper={meeting?.hasPasscode ? 'This meeting is protected by a passcode.' : undefined}
+                    />
+                  </div>
                   <Button
                     size="lg"
                     fullWidth
                     leftIcon={Video}
                     disabled={!canJoin || !mediaSettled}
                     aria-describedby="join-hint"
-                    onClick={() => navigate(`/m/${code}/call`)}
+                    onClick={() => {
+                      const trimmed = passcode.trim();
+                      if (trimmed) {
+                        try {
+                          sessionStorage.setItem(`passcode_${code}`, trimmed);
+                        } catch {}
+                      }
+                      navigate(`/m/${code}/call`, { state: { passcode: trimmed } });
+                    }}
                   >
                     Join meeting
                   </Button>

@@ -7,6 +7,7 @@ import Button from '../ui/Button.jsx';
 // max-width 440px, surface #151A21, border #2D3742, 16px radius, generous padding.
 export default function CallStatusCard({
   status,
+  reason = null,
   hostInRoom = true,
   isReconnecting = false,
   onRetry,
@@ -58,9 +59,11 @@ export default function CallStatusCard({
       break;
 
     case 'removed':
-      icon = <UserMinus size={28} aria-hidden="true" />;
-      title = 'You were removed from the meeting';
-      description = 'The host has removed you from this call.';
+      icon = reason === 'BLOCKED' ? <Ban size={28} aria-hidden="true" /> : <UserMinus size={28} aria-hidden="true" />;
+      title = reason === 'BLOCKED' ? 'You were removed and blocked' : 'You were removed from the meeting';
+      description = reason === 'BLOCKED'
+        ? 'The host has removed and blocked you from rejoining this meeting.'
+        : 'The host has removed you from this call.';
       actions = (
         <Button variant="primary" onClick={onLeave}>
           Back to dashboard

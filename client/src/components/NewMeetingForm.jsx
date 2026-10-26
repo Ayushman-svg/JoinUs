@@ -10,6 +10,8 @@ export default function NewMeetingForm({ onCreated }) {
   const [mode, setMode] = useState('instant'); // instant | scheduled
   const [scheduledAt, setScheduledAt] = useState(() => toLocalInputValue(nextFullHour()));
   const [waitingRoom, setWaitingRoom] = useState(true);
+  const [passcode, setPasscode] = useState('');
+  const [muteOnEntry, setMuteOnEntry] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -21,6 +23,10 @@ export default function NewMeetingForm({ onCreated }) {
 
     const payload = { waitingRoom };
     if (title.trim()) payload.title = title.trim();
+    if (passcode.trim()) payload.passcode = passcode.trim();
+    if (muteOnEntry) {
+      payload.settings = { muteOnEntry: true };
+    }
 
     if (mode === 'scheduled') {
       const date = new Date(scheduledAt);
@@ -39,6 +45,8 @@ export default function NewMeetingForm({ onCreated }) {
     try {
       const meeting = await createMeeting(payload);
       setTitle('');
+      setPasscode('');
+      setMuteOnEntry(false);
       onCreated(meeting);
     } catch (err) {
       if (err.code === 'VALIDATION_ERROR' && err.details.length > 0) {
@@ -113,6 +121,27 @@ export default function NewMeetingForm({ onCreated }) {
           helper="Guests wait until you let them in"
           checked={waitingRoom}
           onChange={setWaitingRoom}
+          disabled={submitting}
+        />
+
+        <FormField
+          id="passcode"
+          label="Passcode (optional)"
+          type="password"
+          maxLength={10}
+          placeholder="4 to 10 characters"
+          value={passcode}
+          onChange={(e) => setPasscode(e.target.value)}
+          error={fieldErrors.passcode}
+          helper="Require a 4–10 character passcode to join"
+        />
+
+        <Toggle
+          id="new-meeting-mute-on-entry"
+          label="Mute on entry"
+          helper="Automatically mute participants when they join"
+          checked={muteOnEntry}
+          onChange={setMuteOnEntry}
           disabled={submitting}
         />
 

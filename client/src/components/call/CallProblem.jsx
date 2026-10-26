@@ -55,6 +55,43 @@ export default function CallProblem({ code, onRetry, onLogin }) {
           action={home}
         />
       );
+    case 'BLOCKED':
+      return (
+        <ErrorState
+          title="You cannot join this meeting"
+          description="The host has blocked you from joining this meeting."
+          action={home}
+        />
+      );
+    case 'MEETING_LOCKED':
+      return (
+        <ErrorState
+          title="This meeting is locked"
+          description="The host has locked this meeting. No new participants can join."
+          onRetry={onRetry}
+          action={home}
+        />
+      );
+    case 'RATE_LIMITED':
+      return (
+        <ErrorState
+          title="Too many attempts"
+          description="Too many incorrect passcode attempts. Please wait 10 minutes before trying again."
+          onRetry={onRetry}
+          action={home}
+        />
+      );
+    case 'PASSCODE_REQUIRED':
+    case 'PASSCODE_INVALID':
+      return (
+        <ErrorState
+          title="Passcode required"
+          description={code === 'PASSCODE_INVALID' ? "The passcode entered was incorrect." : "This meeting requires a valid passcode to join."}
+          onRetry={onRetry}
+          retryLabel="Enter passcode"
+          action={home}
+        />
+      );
     case 'KICKED':
       return (
         <ErrorState

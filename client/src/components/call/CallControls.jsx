@@ -2,6 +2,7 @@ import {
   Check,
   ChevronUp,
   Hand,
+  Lock,
   LogOut,
   MessageSquare,
   Mic,
@@ -36,6 +37,11 @@ export default function CallControls({
   onToggleParticipants,
   onToggleChat,
   isHost = false,
+  canModerate = false,
+  isLocked = false,
+  roomSettings = null,
+  onLockMeeting,
+  onUpdateRoomSettings,
   onOpenSecurity,
   handRaised = false,
   onToggleHandRaise,
@@ -45,15 +51,18 @@ export default function CallControls({
   onReplaceTrack,
 }) {
   const reactionsEnabled = useFeature('REACTIONS');
+  const hostSecurityEnabled = useFeature('HOST_SECURITY');
   const [showAudioMenu, setShowAudioMenu] = useState(false);
   const [showVideoMenu, setShowVideoMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showSecurityMenu, setShowSecurityMenu] = useState(false);
   const [showReactionsPopover, setShowReactionsPopover] = useState(false);
   const [showMicTestModal, setShowMicTestModal] = useState(false);
 
   const audioMenuRef = useRef(null);
   const videoMenuRef = useRef(null);
   const moreMenuRef = useRef(null);
+  const securityMenuRef = useRef(null);
 
   // Available devices
   const [audioInputs, setAudioInputs] = useState([]);
@@ -120,6 +129,9 @@ export default function CallControls({
       }
       if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) {
         setShowMoreMenu(false);
+      }
+      if (securityMenuRef.current && !securityMenuRef.current.contains(e.target)) {
+        setShowSecurityMenu(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -372,17 +384,120 @@ export default function CallControls({
         {/* Center controls: Security, Participants, Share, Chat, Reactions, More */}
         <div className="zoom-toolbar__group zoom-toolbar__group--center">
           {/* Security button (desktop only) */}
-          <button
-            type="button"
-            className="zoom-btn zoom-btn--desktop-only"
-            onClick={onOpenSecurity}
-            aria-label="Meeting security"
-          >
-            <span className="zoom-btn__icon zoom-btn__icon--security">
-              <ShieldCheck size={20} aria-hidden="true" />
-            </span>
-            <span className="zoom-btn__label">Security</span>
-          </button>
+          <div className="zoom-control-relative" ref={securityMenuRef}>
+            <button
+              type="button"
+              className={`zoom-btn zoom-btn--desktop-only ${showSecurityMenu ? 'is-active' : ''}`}
+              onClick={() => {
+                if (canModerate) {
+                  setShowSecurityMenu((prev) => !prev);
+                } else {
+                  onOpenSecurity?.();
+                }
+              }}
+              aria-label="Meeting security"
+              aria-expanded={showSecurityMenu}
+            >
+              <span className="zoom-btn__icon zoom-btn__icon--security">
+                <ShieldCheck size={20} aria-hidden="true" />
+              </span>
+              <span className="zoom-btn__label">Security</span>
+            </button>
+
+            {showSecurityMenu && canModerate && (
+              <div
+                className="zoom-menu zoom-menu--up zoom-menu--security"
+                role="menu"
+                aria-label="Security controls"
+              >
+                <div className="zoom-menu__header">Security</div>
+                <button
+                  type="button"
+                  className="zoom-menu__item"
+                  onClick={() => onLockMeeting?.(!isLocked)}
+                  role="menuitemcheckbox"
+                  aria-checked={isLocked}
+                >
+                  <span className="zoom-menu__check-slot">
+                    {isLocked && <Check size={13} aria-hidden="true" />}
+                  </span>
+                  <span className="zoom-menu__item-content">
+                    <Lock size={14} aria-hidden="true" />
+                    <span>Lock Meeting</span>
+                  </span>
+                </button>
+
+                <div className="zoom-menu__divider" />
+                <div className="zoom-menu__header">Allow participants to:</div>
+
+                <button
+                  type="button"
+                  className="zoom-menu__item"
+                  onClick={() =>
+                    onUpdateRoomSettings?.({
+                      shareAllowed: roomSettings?.shareAllowed === 'all' ? 'host-only' : 'all',
+                    })
+                  }
+                  role="menuitemcheckbox"
+                  aria-checked={roomSettings?.shareAllowed !== 'host-only'}
+                >
+                  <span className="zoom-menu__check-slot">
+                    {roomSettings?.shareAllowed !== 'host-only' && (
+                      <Check size={13} aria-hidden="true" />
+                    )}
+                  </span>
+                  <span className="zoom-menu__item-content">
+                    <MonitorUp size={14} aria-hidden="true" />
+                    <span>Share Screen</span>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className="zoom-menu__item"
+                  onClick={() =>
+                    onUpdateRoomSettings?.({
+                      chatAllowed: roomSettings?.chatAllowed !== false ? false : true,
+                    })
+                  }
+                  role="menuitemcheckbox"
+                  aria-checked={roomSettings?.chatAllowed !== false}
+                >
+                  <span className="zoom-menu__check-slot">
+                    {roomSettings?.chatAllowed !== false && (
+                      <Check size={13} aria-hidden="true" />
+                    )}
+                  </span>
+                  <span className="zoom-menu__item-content">
+                    <MessageSquare size={14} aria-hidden="true" />
+                    <span>Chat</span>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className="zoom-menu__item"
+                  onClick={() =>
+                    onUpdateRoomSettings?.({
+                      muteOnEntry: !roomSettings?.muteOnEntry,
+                    })
+                  }
+                  role="menuitemcheckbox"
+                  aria-checked={Boolean(roomSettings?.muteOnEntry)}
+                >
+                  <span className="zoom-menu__check-slot">
+                    {roomSettings?.muteOnEntry && (
+                      <Check size={13} aria-hidden="true" />
+                    )}
+                  </span>
+                  <span className="zoom-menu__item-content">
+                    <MicOff size={14} aria-hidden="true" />
+                    <span>Mute on entry</span>
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Participants button (desktop only) */}
           <button
@@ -411,12 +526,14 @@ export default function CallControls({
               type="button"
               className={`zoom-btn zoom-btn--share ${isSharing ? 'is-sharing' : ''}`}
               onClick={isSharing ? onStopScreenShare : onStartScreenShare}
-              disabled={someoneElseSharing}
+              disabled={someoneElseSharing || (roomSettings?.shareAllowed === 'host-only' && !canModerate)}
               aria-label={
                 isSharing
                   ? 'Stop Share'
                   : someoneElseSharing
                   ? 'Someone else is presenting'
+                  : roomSettings?.shareAllowed === 'host-only' && !canModerate
+                  ? 'Screen sharing limited to hosts'
                   : 'Share Screen'
               }
             >
