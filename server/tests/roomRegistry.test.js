@@ -544,5 +544,127 @@ describe('RoomRegistry', () => {
       expect(reg.isBlocked('room-sec', 'u2')).toBe(false);
     });
   });
+
+  describe('polls state management in RoomRegistry', () => {
+    const samplePoll = {
+      id: 'poll-123',
+      createdBy: 'host-1',
+      question: 'Favorite color?',
+      options: [
+        { id: 'opt-1', text: 'Blue' },
+        { id: 'opt-2', text: 'Red' },
+      ],
+      multiple: false,
+      anonymous: true,
+      shareResults: true,
+      status: 'open',
+    };
+
+    it('sets, retrieves, and clears active poll', () => {
+      const reg = new RoomRegistry();
+      reg.setActivePoll('room-poll', samplePoll);
+      expect(reg.getActivePoll('room-poll')?.question).toBe('Favorite color?');
+
+      reg.clearActivePoll('room-poll');
+      expect(reg.getActivePoll('room-poll')).toBeNull();
+    });
+
+    it('records valid vote and prevents double vote or invalid option', () => {
+      const reg = new RoomRegistry();
+      reg.setHost('room-poll', 'host-1');
+      reg.setActivePoll('room-poll', samplePoll);
+
+      const voteRes = reg.recordVote('room-poll', 'poll-123', 'user-2', ['opt-1']);
+      expect(voteRes.totalVotes).toBe(1);
+
+      // Double vote throws ALREADY_VOTED
+      expect(() => {
+        reg.recordVote('room-poll', 'poll-123', 'user-2', ['opt-2']);
+      }).toThrow('You have already voted');
+
+      // Invalid option
+      expect(() => {
+        reg.recordVote('room-poll', 'poll-123', 'user-3', ['invalid-opt']);
+      }).toThrow('Invalid option selected');
+
+      // Multiple options on single choice poll
+      expect(() => {
+        reg.recordVote('room-poll', 'poll-123', 'user-4', ['opt-1', 'opt-2']);
+      }).toThrow('Multiple options not allowed');
+    });
+
+    it('enforces that closed polls reject new votes', () => {
+      const reg = new RoomRegistry();
+      reg.setActivePoll('room-poll', samplePoll);
+      reg.closeActivePoll('room-poll');
+
+      expect(() => {
+        reg.recordVote('room-poll', 'poll-123', 'user-5', ['opt-1']);
+      }).toThrow('Poll is closed for voting');
+    });
+
+    it('enforces visibility and anonymity rules in formatPollForUser', () => {
+      const reg = new RoomRegistry();
+      reg.setHost('room-poll', 'host-1');
+      reg.setActivePoll('room-poll', samplePoll);
+      reg.recordVote('room-poll', 'poll-123', 'user-2', ['opt-1']);
+
+      // Host sees live counts
+      const hostView = reg.formatPollForUser('room-poll', 'host-1');
+      expect(hostView.totalVotes).toBe(1);
+      expect(hostView.options[0].voteCount).toBe(1);
+      expect(hostView.options[0].percentage).toBe(100);
+
+      // Participant while open sees NO counts
+      const participantViewOpen = reg.formatPollForUser('room-poll', 'user-2');
+      expect(participantViewOpen.totalVotes).toBeUndefined();
+      expect(participantViewOpen.options[0].voteCount).toBeUndefined();
+      expect(participantViewOpen.hasVoted).toBe(true);
+      expect(participantViewOpen.userVote).toEqual(['opt-1']);
+
+      // Close poll with shareResults = true
+      reg.closeActivePoll('room-poll');
+      const participantViewClosed = reg.formatPollForUser('room-poll', 'user-2');
+      expect(participantViewClosed.totalVotes).toBe(1);
+      expect(participantViewClosed.options[0].voteCount).toBe(1);
+
+      // Anonymity: neither hostView nor participantView expose who user-2 is
+      expect(JSON.stringify(hostView)).not.toContain('user-2');
+    });
+
+    it('delivers active poll to admitted late joiners, but not waiting guests', () => {
+      const reg = new RoomRegistry();
+      reg.setHost('room-poll', 'host-1');
+      reg.setActivePoll('room-poll', samplePoll);
+
+      // Admitted joiner receives activePoll
+      const admittedRes = reg.join('room-poll', {
+        peerId: 'p1',
+        userId: 'user-late',
+        name: 'Latecomer',
+        waitingRoom: false,
+      });
+      expect(admittedRes.status).toBe('admitted');
+      expect(admittedRes.activePoll).toBeDefined();
+      expect(admittedRes.activePoll.question).toBe('Favorite color?');
+
+      // Waiting guest receives nothing
+      const waitingRes = reg.join('room-poll', {
+        peerId: 'p2',
+        userId: 'user-waiting',
+        name: 'WaitingGuest',
+        waitingRoom: true,
+      });
+      expect(waitingRes.status).toBe('waiting');
+      expect(waitingRes.activePoll).toBeUndefined();
+    });
+
+    it('end meeting clears the active poll', () => {
+      const reg = new RoomRegistry();
+      reg.setActivePoll('room-poll', samplePoll);
+      reg.end('room-poll');
+      expect(reg.getActivePoll('room-poll')).toBeNull();
+    });
+  });
 });
 

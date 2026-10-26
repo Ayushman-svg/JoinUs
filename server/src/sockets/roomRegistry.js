@@ -26,6 +26,7 @@ class RoomRegistry {
     this.blockedUsers = new Map(); // meeting code -> Set(userId)
     this.roomSettings = new Map(); // meeting code -> { muteOnEntry, chatAllowed, shareAllowed, locked }
     this.screenSharers = new Map(); // meeting code -> { peerId, streamId }
+    this.activePolls = new Map(); // meeting code -> { ...poll, votes: Map(userId -> [optionIds]) }
   }
 
   isDenied(code, userId) {
@@ -211,6 +212,7 @@ class RoomRegistry {
         screenSharer: this.getScreenSharer(code),
         settings: this.getSettings(code),
         role: res.peer.role,
+        activePoll: this.formatPollForUser(code, userId),
       };
     }
 
@@ -298,6 +300,7 @@ class RoomRegistry {
       screenSharer: this.getScreenSharer(code),
       settings: this.getSettings(code),
       role: res.peer.role,
+      activePoll: this.formatPollForUser(code, waitingUser.userId),
     };
   }
 
@@ -566,6 +569,7 @@ class RoomRegistry {
     this.coHosts.delete(code);
     this.blockedUsers.delete(code);
     this.roomSettings.delete(code);
+    this.activePolls.delete(code);
 
     return { code, peers, waiting: waitingUsers };
   }
@@ -605,6 +609,131 @@ class RoomRegistry {
 
   getScreenSharer(code) {
     return this.screenSharers.get(code) ?? null;
+  }
+
+  // Poll state management
+  setActivePoll(code, pollData) {
+    const existing = this.activePolls.get(code);
+    const votes = existing && existing.id === String(pollData.id || pollData._id) ? existing.votes : new Map();
+    const poll = {
+      id: String(pollData.id || pollData._id),
+      meeting: code,
+      createdBy: String(pollData.createdBy),
+      question: pollData.question,
+      options: pollData.options.map((o) => ({ id: o.id, text: o.text })),
+      multiple: Boolean(pollData.multiple),
+      anonymous: Boolean(pollData.anonymous),
+      shareResults: Boolean(pollData.shareResults),
+      status: pollData.status || 'open',
+      createdAt: pollData.createdAt || Date.now(),
+      votes,
+    };
+    this.activePolls.set(code, poll);
+    return poll;
+  }
+
+  getActivePoll(code) {
+    return this.activePolls.get(code) ?? null;
+  }
+
+  clearActivePoll(code) {
+    const current = this.activePolls.get(code) ?? null;
+    if (current) this.activePolls.delete(code);
+    return current;
+  }
+
+  closeActivePoll(code) {
+    const poll = this.activePolls.get(code);
+    if (!poll) return null;
+    poll.status = 'closed';
+    return poll;
+  }
+
+  recordVote(code, pollId, userId, optionIds) {
+    const poll = this.activePolls.get(code);
+    if (!poll || poll.id !== String(pollId)) {
+      throw new AppError(404, 'POLL_NOT_FOUND', 'Active poll not found');
+    }
+    if (poll.status !== 'open') {
+      throw new AppError(400, 'POLL_NOT_OPEN', 'Poll is closed for voting');
+    }
+    const uid = String(userId);
+    if (poll.votes.has(uid)) {
+      throw new AppError(409, 'ALREADY_VOTED', 'You have already voted in this poll');
+    }
+    if (!Array.isArray(optionIds) || optionIds.length === 0) {
+      throw new AppError(400, 'INVALID_OPTION', 'At least one option must be selected');
+    }
+    if (!poll.multiple && optionIds.length > 1) {
+      throw new AppError(400, 'INVALID_OPTION', 'Multiple options not allowed');
+    }
+    const validIds = new Set(poll.options.map((o) => o.id));
+    for (const id of optionIds) {
+      if (!validIds.has(id)) {
+        throw new AppError(400, 'INVALID_OPTION', `Invalid option selected: ${id}`);
+      }
+    }
+    poll.votes.set(uid, [...optionIds]);
+    return {
+      poll,
+      totalVotes: poll.votes.size,
+    };
+  }
+
+  formatPollForUser(code, userId, poll = null) {
+    const active = poll || this.activePolls.get(code);
+    if (!active) return null;
+
+    const uid = String(userId);
+    const canModerate = this.canModerate(code, uid);
+
+    if (!canModerate && active.status === 'draft') {
+      return null;
+    }
+
+    const totalVotes = active.votes ? active.votes.size : 0;
+    const showResults = canModerate || (active.status === 'closed' && active.shareResults);
+
+    const counts = {};
+    for (const opt of active.options) {
+      counts[opt.id] = 0;
+    }
+    if (active.votes) {
+      for (const chosenIds of active.votes.values()) {
+        for (const optId of chosenIds) {
+          if (counts[optId] !== undefined) {
+            counts[optId] += 1;
+          }
+        }
+      }
+    }
+
+    const options = active.options.map((opt) => {
+      const item = { id: opt.id, text: opt.text };
+      if (showResults) {
+        const count = counts[opt.id] || 0;
+        item.voteCount = count;
+        item.percentage = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+      }
+      return item;
+    });
+
+    const userVote = active.votes ? active.votes.get(uid) || null : null;
+    const hasVoted = Boolean(userVote);
+
+    return {
+      id: active.id,
+      question: active.question,
+      options,
+      multiple: active.multiple,
+      anonymous: active.anonymous,
+      shareResults: active.shareResults,
+      status: active.status,
+      createdAt: active.createdAt,
+      totalVotes: showResults ? totalVotes : undefined,
+      hasVoted,
+      userVote,
+    };
   }
 
   getRoomCode(peerId) {
