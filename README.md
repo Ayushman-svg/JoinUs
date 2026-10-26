@@ -282,23 +282,131 @@ JoinUs maintains extensive automated test suites across both the server and the 
 cd server
 npm test
 ```
-*Covers 13 test suites and 83 tests using Jest, Supertest, and `mongodb-memory-server`:*
+*Covers 15 test suites and 123 tests using Jest, Supertest, and `mongodb-memory-server`:*
 - `auth.test.js` & `security.test.js`: Registration, password length validation, JWT generation, error masking.
 - `meetings.test.js` & `history.test.js`: Meeting creation, lifecycle states, participant authorization, chat history queries.
 - `ice.test.js`: ICE / STUN endpoints and sanitized Metered TURN fallback.
 - `rateLimitRest.test.js` & `rateLimitSocket.test.js`: REST 429 responses and socket sliding-window limits.
 - `roomRegistry.test.js` & `waitingRoomSocket.test.js`: Room admission, capacity capping, host moderation, reconnection bypass.
-- `chatSocket.test.js`: Chat authorization, persistence, and waiting room isolation.
+- `chatSocket.test.js` & `chatPrivate.test.js`: Chat authorization, persistence, private messaging, and waiting room isolation.
 - `screenShareSocket.test.js`: Single-presenter enforcement and room capacity boundaries.
+- `features.test.js`: Feature flag resolution, fallback defaults, and `requireFeature` route middleware.
+- `sanitizeLog.test.js`: Secret masking and log sanitation for uncaught exceptions and fatal errors.
 
 ### Running Frontend Tests
 ```bash
 cd client
 npm test
 ```
-*Covers 14 unit tests using Node.js test runner (`node:test`):*
+*Covers 26 unit tests using Node.js test runner (`node:test`):*
 - `call.test.js`: Multi-party mesh offer generation, polite/impolite polarity derivation, peer cleanup, screen sharing lifecycle, active speaker audio tracking, network reconnection recovery without duplicate tiles, and room-full/ended meeting transitions.
 - `helpers.test.js`: Duration formatting, local input string parsing, and meeting code extraction.
+- `useFeature.test.js`: Feature flag fetching, cache storage, focus refetching, and fail-closed behavior on network failures.
+
+---
+
+## Release Safety
+
+To ensure zero downtime and maintain safety when pushing changes to `main`, JoinUs follows a release safety architecture based on feature flags, fail-closed clients, isolated crash boundaries, strict local and CI verification, and rapid rollback workflows.
+
+### 1. Feature Flags
+
+All new features ship dark behind flags that default to `false` (OFF).
+
+- **Server-Side Configuration:** `server/src/config/features.js` reads `FEATURE_<NAME>` environment variables. Unset variables evaluate to `false`.
+- **Public Config Endpoint:** `GET /api/config` returns `{ features: { [name]: boolean } }` for consumption by the client without requiring authentication.
+- **Route & Socket Protection:** Server routes can be protected using the `requireFeature(name)` middleware, which responds with HTTP 403 `{ error: 'FEATURE_DISABLED', message: '...' }`. Socket handlers check `assertFeature(name)` and ack with `{ ok: false, error: 'FEATURE_DISABLED' }`.
+- **Fail-Closed Client:** The `useFeature(name)` React hook queries `/api/config` once, caches the result in memory, and refetches automatically on window focus. If the config request fails or the network drops, **every flag defaults to `false` (fail-closed)**. Disabled features render nothing (no links, buttons, or menu entries).
+- **Crash Isolation:** Server process-level `uncaughtException` and `unhandledRejection` handlers log errors with the `[fatal]` prefix and strip out connection strings, JWTs, and passwords. Panels and complex components are wrapped in `<FeatureBoundary>` to present an inline "This feature is unavailable" fallback card with a Retry button rather than crashing the entire app into a blank screen.
+
+#### Supported Flags
+
+| Flag | Default | Description |
+| :--- | :--- | :--- |
+| `FEATURE_LANDING` | `false` | Redesigned public landing page |
+| `FEATURE_NEW_HOME` | `false` | New home dashboard layout |
+| `FEATURE_ROOM_VIEWS` | `false` | Advanced video grid view modes (e.g. gallery/speaker) |
+| `FEATURE_REACTIONS` | `false` | In-call floating emoji reactions and hand raising |
+| `FEATURE_HOST_SECURITY` | `false` | Host security panel (lock room, mute all, disable share) |
+| `FEATURE_POLLS` | `false` | In-meeting interactive polling |
+| `FEATURE_CAPTIONS` | `false` | Live speech-to-text automated captions |
+| `FEATURE_CHAT_PLUS` | `false` | Enhanced chat (file attachments, markdown, reactions) |
+| `FEATURE_SCHEDULING` | `false` | Advanced meeting recurrence and invite scheduling |
+| `FEATURE_SETTINGS` | `false` | User preferences and device management |
+| `FEATURE_RECORDING` | `false` | Local or cloud meeting recording |
+| `FEATURE_CALENDAR` | `false` | Built-in calendar agenda view |
+| `FEATURE_SEARCH` | `false` | Global meeting and chat transcript search |
+| `FEATURE_WHITEBOARD` | `false` | Interactive collaborative whiteboard |
+| `FEATURE_CONTACTS` | `false` | Team contacts and address book |
+| `FEATURE_TEAM_CHAT` | `false` | Out-of-meeting team messaging |
+| `FEATURE_ACCOUNT_RECOVERY`| `false` | Self-service password reset and account recovery |
+| `FEATURE_TWO_FACTOR` | `false` | Two-factor authentication (TOTP/SMS) |
+| `FEATURE_SOCIAL_LOGIN` | `false` | Third-party OAuth authentication |
+| `FEATURE_TRANSLATION` | `false` | Real-time multilingual chat and caption translation |
+| `FEATURE_AI_RECAP` | `false` | Automated meeting summary and action item generation |
+| `FEATURE_AI_COMPANION` | `false` | Real-time AI in-meeting assistant |
+| `FEATURE_CALENDAR_SYNC` | `false` | Google Calendar / Outlook two-way calendar sync |
+
+### 2. How to Turn a Feature On or Off
+
+1. Open `server/.env` (locally) or navigate to the environment variable settings on your hosting provider (e.g., Render Dashboard):
+   ```env
+   # Turn a feature ON
+   FEATURE_REACTIONS=true
+   FEATURE_POLLS=true
+
+   # Turn a feature OFF (or delete the line)
+   FEATURE_REACTIONS=false
+   ```
+2. Restart or redeploy the server.
+3. The REST API and Socket.io signaling server immediately apply the new flag states. Clients pick up the new configuration on initial page load or when switching back to the browser window.
+
+### 3. Verification Script (`scripts/verify`)
+
+Before opening a pull request or pushing to `main`, run the verification script. It executes backend tests, frontend tests, and the client build in sequence and exits non-zero if any step fails:
+
+- **PowerShell (Windows):**
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
+  ```
+- **Bash (Linux / macOS / Git Bash):**
+  ```bash
+  ./scripts/verify
+  # or
+  bash scripts/verify.sh
+  ```
+
+The same script runs automatically on every push and pull request via `.github/workflows/ci.yml`.
+
+### 4. Rollback Procedures
+
+If an unexpected regression or service disruption occurs:
+
+#### Option A: Instant Flag Killswitch (Zero Deployment)
+If the regression is isolated to a flagged feature:
+1. Set `FEATURE_<NAME>=false` in the server environment settings.
+2. Restart the web service.
+3. The server immediately blocks requests with `FEATURE_DISABLED` and clients hide the feature UI on their next window focus.
+
+#### Option B: Code Rollback via `git revert` and Git Tag
+If a code rollback is required:
+1. Revert the offending commit locally:
+   ```bash
+   git revert <commit-sha> -m 1   # (use -m 1 only if reverting a merge commit)
+   ```
+2. Verify that all suites still pass:
+   ```bash
+   ./scripts/verify
+   ```
+3. Tag the rollback release for clear audit history:
+   ```bash
+   git tag -a v1.0.1-rollback -m "Rollback commit <commit-sha> due to incident"
+   ```
+4. Push to `main` and publish the tag:
+   ```bash
+   git push origin main --tags
+   ```
+5. Confirm that the automated CI pipeline succeeds and production platforms (Render/Vercel) deploy the rollback.
 
 ---
 
