@@ -76,10 +76,16 @@ const messagesQuerySchema = z.object({
   after: z.string().trim().optional(),
 });
 
+const pollIdParamsSchema = z.object({
+  code: z.string().trim().toLowerCase().min(1).max(30),
+  id: z.string().trim().min(1),
+});
+
 module.exports = {
   createMeetingSchema,
   updateMeetingSchema,
   listQuerySchema,
   codeParamsSchema,
   messagesQuerySchema,
+  pollIdParamsSchema,
 };

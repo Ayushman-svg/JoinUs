@@ -5,6 +5,8 @@ const { MongoMemoryServer } = require('mongodb-memory-server');
 // Registers the models so their unique indexes can be built
 require('../../src/models/User');
 require('../../src/models/Meeting');
+require('../../src/models/Poll');
+require('../../src/models/Vote');
 
 let mongod;
 

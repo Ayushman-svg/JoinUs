@@ -3,12 +3,14 @@ const express = require('express');
 const asyncHandler = require('../utils/asyncHandler');
 const validate = require('../middleware/validate');
 const { requireAuth } = require('../middleware/auth');
+const { requireFeature } = require('../config/features');
 const {
   createMeetingSchema,
   updateMeetingSchema,
   listQuerySchema,
   codeParamsSchema,
   messagesQuerySchema,
+  pollIdParamsSchema,
 } = require('../schemas/meeting.schemas');
 const {
   createMeeting,
@@ -18,6 +20,7 @@ const {
   cancelMeeting,
 } = require('../controllers/meeting.controller');
 const { getMeetingMessages } = require('../controllers/history.controller');
+const { getMeetingPolls, exportPollCsv } = require('../controllers/polls.controller');
 
 const router = express.Router();
 
@@ -31,6 +34,24 @@ router.get(
   validate(codeParamsSchema, 'params'),
   validate(messagesQuerySchema, 'query'),
   asyncHandler(getMeetingMessages)
+);
+
+// Polls for host and attendees (respects anonymity and feature flag)
+router.get(
+  '/:code/polls',
+  requireFeature('POLLS'),
+  requireAuth,
+  validate(codeParamsSchema, 'params'),
+  asyncHandler(getMeetingPolls)
+);
+
+// CSV export (host only)
+router.get(
+  '/:code/polls/:id/export.csv',
+  requireFeature('POLLS'),
+  requireAuth,
+  validate(pollIdParamsSchema, 'params'),
+  asyncHandler(exportPollCsv)
 );
 
 // Public: minimal info for the invite page
