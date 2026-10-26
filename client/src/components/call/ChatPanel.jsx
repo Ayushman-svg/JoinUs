@@ -1,9 +1,43 @@
 import { useEffect, useRef, useState } from 'react';
-import { Send, X, Lock, AlertCircle } from 'lucide-react';
+import { Send, X, Lock, AlertCircle, Search, Reply, Copy, Check, Smile } from 'lucide-react';
 
 import Button from '../ui/Button.jsx';
 import Tooltip from '../ui/Tooltip.jsx';
 import { useFeature } from '../../hooks/useFeature.js';
+
+const EMOJI_LIST = [
+  '😀', '😂', '😊', '😍', '👍', '👏', '🎉', '❤️',
+  '🔥', '🚀', '💡', '✨', '💯', '✅', '🙏', '🤝',
+  '🙌', '😎', '🤔', '🥳'
+];
+
+/**
+ * Automatically detects http:// and https:// URLs in text and renders them as
+ * secure anchor tags with rel="noopener noreferrer" and target="_blank".
+ * All other content is rendered as plain text (never innerHTML).
+ */
+export function renderMessageText(text) {
+  if (!text) return null;
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  if (parts.length === 1) return text;
+  return parts.map((part, index) => {
+    if (urlRegex.test(part)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="chat-bubble__link"
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+}
 
 function formatTime(isoString) {
   if (!isoString) return '';
@@ -29,15 +63,23 @@ export default function ChatPanel({
   rateLimitHint = null,
   chatAllowed = true,
   canModerate = false,
+  initialRecipient = null,
   onSendMessage,
   onRetryMessage,
   onRetryLoadHistory,
 }) {
   const [inputText, setInputText] = useState('');
   const [showNewPill, setShowNewPill] = useState(false);
-  const [selectedRecipientId, setSelectedRecipientId] = useState('');
-  const [selectedRecipientName, setSelectedRecipientName] = useState('');
+  const [selectedRecipientId, setSelectedRecipientId] = useState(() => initialRecipient?.id || '');
+  const [selectedRecipientName, setSelectedRecipientName] = useState(() => initialRecipient?.name || '');
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
+
   const pollsEnabled = useFeature('POLLS');
+  const chatPlusEnabled = useFeature('CHAT_PLUS');
+
   const listRef = useRef(null);
   const textareaRef = useRef(null);
   const isNearBottomRef = useRef(true);
@@ -127,19 +169,66 @@ export default function ChatPanel({
     const recipientPayload = isPrivate
       ? { id: selectedRecipientId, name: activeRecipientName }
       : null;
-    onSendMessage(trimmed, recipientPayload);
+    const replyToPayload = chatPlusEnabled && replyingTo
+      ? { id: replyingTo.id, text: replyingTo.text, fromName: replyingTo.fromName }
+      : null;
+
+    onSendMessage(trimmed, recipientPayload, replyToPayload);
     setInputText('');
+    setReplyingTo(null);
+    setShowEmojiPicker(false);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
   };
 
-  // Group messages: consecutive from same user within 2 minutes, separating on privacy change
+  const handleStartReply = (msg) => {
+    const isSelf =
+      currentUser?.id && msg.from?.id ? String(msg.from.id) === String(currentUser.id) : false;
+    setReplyingTo({
+      id: msg.id || msg.tempId,
+      text: msg.text,
+      fromName: isSelf ? 'You' : msg.from?.name || 'Guest',
+    });
+    textareaRef.current?.focus();
+  };
+
+  const handleCopyMessage = async (text, id) => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      }
+    } catch {
+      // ignore clipboard error in restricted environments
+    }
+    setCopiedId(id);
+    setTimeout(() => {
+      setCopiedId((curr) => (curr === id ? null : curr));
+    }, 2000);
+  };
+
+  const handleInsertEmoji = (emoji) => {
+    setInputText((prev) => prev + emoji);
+    setShowEmojiPicker(false);
+    textareaRef.current?.focus();
+  };
+
+  // Filter messages
   const userMessages = messages.filter((m) => !m.isSystem);
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const visibleMessages = chatPlusEnabled && normalizedQuery
+    ? userMessages.filter((m) => {
+        const textMatch = (m.text || '').toLowerCase().includes(normalizedQuery);
+        const senderMatch = (m.from?.name || '').toLowerCase().includes(normalizedQuery);
+        return textMatch || senderMatch;
+      })
+    : userMessages;
+
+  // Group visible messages
   const grouped = [];
-  for (let i = 0; i < userMessages.length; i++) {
-    const m = userMessages[i];
-    const prev = i > 0 ? userMessages[i - 1] : null;
+  for (let i = 0; i < visibleMessages.length; i++) {
+    const m = visibleMessages[i];
+    const prev = i > 0 ? visibleMessages[i - 1] : null;
     const isSelf =
       currentUser?.id && m.from?.id ? String(m.from.id) === String(currentUser.id) : false;
 
@@ -151,7 +240,8 @@ export default function ChatPanel({
       m.from?.id &&
       String(prev.from.id) === String(m.from.id) &&
       Boolean(prev.to) === Boolean(m.to) &&
-      (prev.to?.id || null) === (m.to?.id || null)
+      (prev.to?.id || null) === (m.to?.id || null) &&
+      !m.replyTo
     ) {
       const prevTime = new Date(prev.createdAt).getTime();
       const currTime = new Date(m.createdAt).getTime();
@@ -225,6 +315,36 @@ export default function ChatPanel({
         </Tooltip>
       </header>
 
+      {chatPlusEnabled && (
+        <div className="chat-panel__search-bar">
+          <Search size={14} className="chat-panel__search-icon" aria-hidden="true" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search in chat…"
+            aria-label="Search messages"
+            className="chat-panel__search-input"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="chat-panel__search-clear-btn"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+            >
+              <X size={13} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {chatPlusEnabled && normalizedQuery && (
+        <div className="chat-panel__search-results-info" role="status">
+          Found {visibleMessages.length} {visibleMessages.length === 1 ? 'message' : 'messages'}
+        </div>
+      )}
+
       <div className="chat-panel__body">
         {historyError && (
           <div className="chat-panel__history-error" role="status">
@@ -254,23 +374,29 @@ export default function ChatPanel({
             </div>
           )}
 
-          {!historyLoading && userMessages.length === 0 && (
+          {!historyLoading && visibleMessages.length === 0 && (
             <div className="chat-panel__empty" role="status">
-              <p className="chat-panel__empty-title">No messages yet</p>
-              <p className="chat-panel__empty-subtitle">Messages are saved with this meeting</p>
+              <p className="chat-panel__empty-title">
+                {normalizedQuery ? 'No matching messages' : 'No messages yet'}
+              </p>
+              <p className="chat-panel__empty-subtitle">
+                {normalizedQuery
+                  ? `No messages matched "${searchQuery}"`
+                  : 'Messages are saved with this meeting'}
+              </p>
             </div>
           )}
 
           {grouped.map((item) => {
-
             const { message, isSelf, isFirstInGroup, time } = item;
             const isSending = message.status === 'sending';
             const isFailed = message.status === 'failed';
             const isMsgPrivate = Boolean(message.to);
+            const msgId = message.id || message.tempId;
 
             return (
               <div
-                key={message.id || message.tempId}
+                key={msgId}
                 className={`chat-group ${isSelf ? 'chat-group--self' : 'chat-group--other'} ${
                   isFirstInGroup ? 'chat-group--first' : 'chat-group--tight'
                 }`}
@@ -308,8 +434,57 @@ export default function ChatPanel({
                       </span>
                     </div>
                   )}
-                  <p className="chat-bubble__text">{message.text}</p>
+
+                  {message.replyTo && (
+                    <div
+                      className="chat-bubble__reply-quote"
+                      aria-label={`In reply to ${message.replyTo.fromName || 'Guest'}`}
+                    >
+                      <div className="chat-bubble__reply-quote-sender">
+                        {message.replyTo.fromName || 'Guest'}
+                      </div>
+                      <div className="chat-bubble__reply-quote-text">
+                        {message.replyTo.text}
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="chat-bubble__text">{renderMessageText(message.text)}</p>
                 </div>
+
+                {chatPlusEnabled && !isSending && !isFailed && (
+                  <div className="chat-bubble__actions" role="toolbar" aria-label="Message actions">
+                    <button
+                      type="button"
+                      className="chat-bubble__action-btn"
+                      title="Reply"
+                      aria-label="Reply to message"
+                      onClick={() => handleStartReply(message)}
+                    >
+                      <Reply size={12} aria-hidden="true" />
+                      <span className="chat-bubble__action-text">Reply</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="chat-bubble__action-btn"
+                      title="Copy message"
+                      aria-label="Copy message text"
+                      onClick={() => handleCopyMessage(message.text, msgId)}
+                    >
+                      {copiedId === msgId ? (
+                        <>
+                          <Check size={12} aria-hidden="true" />
+                          <span className="chat-bubble__action-text">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={12} aria-hidden="true" />
+                          <span className="chat-bubble__action-text">Copy</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
 
                 {isFailed && (
                   <div className="chat-bubble__failure">
@@ -317,7 +492,7 @@ export default function ChatPanel({
                     <button
                       type="button"
                       className="chat-bubble__retry-btn"
-                      onClick={() => onRetryMessage(message.id || message.tempId)}
+                      onClick={() => onRetryMessage(msgId)}
                     >
                       Retry
                     </button>
@@ -395,6 +570,32 @@ export default function ChatPanel({
           </div>
         )}
 
+        {chatPlusEnabled && replyingTo && (
+          <div
+            className="chat-panel__reply-chip"
+            role="status"
+            aria-label={`Replying to ${replyingTo.fromName}`}
+          >
+            <div className="chat-panel__reply-chip-content">
+              <Reply size={13} className="chat-panel__reply-icon" aria-hidden="true" />
+              <div className="chat-panel__reply-chip-text">
+                <span className="chat-panel__reply-target">Replying to {replyingTo.fromName}:</span>
+                <span className="chat-panel__reply-snippet">
+                  {replyingTo.text.length > 50 ? `${replyingTo.text.slice(0, 50)}…` : replyingTo.text}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="chat-panel__reply-cancel-btn"
+              onClick={() => setReplyingTo(null)}
+              aria-label="Cancel reply"
+            >
+              <X size={14} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+
         <div className="chat-panel__input-row">
           <div className="chat-panel__input-wrapper">
             <textarea
@@ -431,6 +632,40 @@ export default function ChatPanel({
               </span>
             )}
           </div>
+
+          {chatPlusEnabled && (
+            <div className="chat-panel__emoji-wrapper">
+              <Tooltip label="Insert emoji" side="top">
+                <button
+                  type="button"
+                  className={`chat-panel__emoji-btn ${showEmojiPicker ? 'is-active' : ''}`}
+                  onClick={() => setShowEmojiPicker((prev) => !prev)}
+                  aria-label="Insert emoji"
+                  aria-expanded={showEmojiPicker}
+                  disabled={hasLeft || (!chatAllowed && !canModerate)}
+                >
+                  <Smile size={18} aria-hidden="true" />
+                </button>
+              </Tooltip>
+              {showEmojiPicker && (
+                <div className="chat-panel__emoji-popover" role="dialog" aria-label="Emoji picker">
+                  <div className="chat-panel__emoji-grid">
+                    {EMOJI_LIST.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        className="chat-panel__emoji-item"
+                        onClick={() => handleInsertEmoji(emoji)}
+                        aria-label={`Insert emoji ${emoji}`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <Tooltip label="Send message" side="top">
             <Button
