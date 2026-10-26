@@ -54,11 +54,12 @@ describe('Feature Flags and /api/config', () => {
     expect(isFeatureEnabled('UNKNOWN_FEATURE')).toBe(false);
   });
 
-  it('GET /api/config returns 200 with all feature flags', async () => {
+  it('GET /api/config returns 200 with all feature flags and Cache-Control: no-store', async () => {
     process.env.FEATURE_WHITEBOARD = 'true';
 
     const res = await request(app).get('/api/config');
     expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-store');
     expect(res.body).toHaveProperty('features');
     expect(res.body.features.WHITEBOARD).toBe(true);
     expect(res.body.features.LANDING).toBe(false);
