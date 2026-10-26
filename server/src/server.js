@@ -23,6 +23,8 @@ async function start() {
   });
 }
 
+const { sanitizeError } = require('./utils/sanitizeLog');
+
 function shutdown(signal) {
   console.log(`${signal} received, shutting down`);
   // Force exit if connections refuse to close
@@ -37,5 +39,14 @@ function shutdown(signal) {
 
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+process.on('unhandledRejection', (reason) => {
+  console.error(`[fatal] unhandledRejection: ${sanitizeError(reason)}`);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error(`[fatal] uncaughtException: ${sanitizeError(err)}`);
+  shutdown('uncaughtException');
+});
 
 start();

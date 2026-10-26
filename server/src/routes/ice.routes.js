@@ -1,6 +1,7 @@
 const express = require('express');
 
 const env = require('../config/env');
+const asyncHandler = require('../utils/asyncHandler');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -8,7 +9,7 @@ const router = express.Router();
 const DEFAULT_STUN = { urls: 'stun:stun.l.google.com:19302' };
 
 // GET /api/ice-servers: STUN plus TURN server configurations for WebRTC peer connections
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requireAuth, asyncHandler(async (req, res) => {
   const iceServers = [DEFAULT_STUN];
 
   // If METERED_APP and METERED_API_KEY are configured, fetch credentials server-side
@@ -44,6 +45,6 @@ router.get('/', requireAuth, async (req, res) => {
   }
 
   res.json({ iceServers });
-});
+}));
 
 module.exports = router;

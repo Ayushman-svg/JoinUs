@@ -15,6 +15,7 @@ import CopyLinkButton from '../components/CopyLinkButton.jsx';
 import Alert from '../components/ui/Alert.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
 import Button from '../components/ui/Button.jsx';
+import FeatureBoundary from '../components/ui/FeatureBoundary.jsx';
 import Modal from '../components/ui/Modal.jsx';
 import Spinner from '../components/ui/Spinner.jsx';
 import Tooltip from '../components/ui/Tooltip.jsx';
@@ -553,44 +554,48 @@ export default function CallPage() {
         {inCall && (
           <div className={`call__panel-slot ${activePanel ? 'is-open' : ''}`}>
             {activePanel === 'participants' && (
-              <ParticipantsPanel
-                isOpen={activePanel === 'participants'}
-                onClose={() => setActivePanel(null)}
-                onSwitchToChat={() => setActivePanel('chat')}
-                unreadCount={call.unreadCount}
-                isHost={isHost}
-                self={{
-                  name: localName,
-                  audioOn: media.audioEnabled,
-                  videoOn: media.videoEnabled,
-                }}
-                peers={call.peers}
-                waitingList={call.waitingList}
-                screenSharer={call.screenShare}
-                onStopHostScreenShare={call.stopHostScreenShare}
-                onAdmit={(peerId) => call.admitPeer(peerId)}
-                onDeny={(peerId) => call.denyPeer(peerId)}
-                onAdmitAll={() => call.admitAllPeers()}
-                onRemove={(peer) => setPeerToRemove(peer)}
-              />
+              <FeatureBoundary title="Participants panel is unavailable">
+                <ParticipantsPanel
+                  isOpen={activePanel === 'participants'}
+                  onClose={() => setActivePanel(null)}
+                  onSwitchToChat={() => setActivePanel('chat')}
+                  unreadCount={call.unreadCount}
+                  isHost={isHost}
+                  self={{
+                    name: localName,
+                    audioOn: media.audioEnabled,
+                    videoOn: media.videoEnabled,
+                  }}
+                  peers={call.peers}
+                  waitingList={call.waitingList}
+                  screenSharer={call.screenShare}
+                  onStopHostScreenShare={call.stopHostScreenShare}
+                  onAdmit={(peerId) => call.admitPeer(peerId)}
+                  onDeny={(peerId) => call.denyPeer(peerId)}
+                  onAdmitAll={() => call.admitAllPeers()}
+                  onRemove={(peer) => setPeerToRemove(peer)}
+                />
+              </FeatureBoundary>
             )}
             {activePanel === 'chat' && (
-              <ChatPanel
-                isOpen={activePanel === 'chat'}
-                onClose={() => setActivePanel(null)}
-                onSwitchToParticipants={() => setActivePanel('participants')}
-                participantCount={call.peers.length + 1}
-                waitingCount={isHost ? call.waitingList.length : 0}
-                messages={call.messages}
-                currentUser={user}
-                peers={call.peers}
-                historyLoading={call.historyLoading}
-                historyError={call.historyError}
-                rateLimitHint={call.rateLimitHint}
-                onSendMessage={call.sendMessage}
-                onRetryMessage={call.retryMessage}
-                onRetryLoadHistory={call.loadHistory}
-              />
+              <FeatureBoundary title="Chat panel is unavailable">
+                <ChatPanel
+                  isOpen={activePanel === 'chat'}
+                  onClose={() => setActivePanel(null)}
+                  onSwitchToParticipants={() => setActivePanel('participants')}
+                  participantCount={call.peers.length + 1}
+                  waitingCount={isHost ? call.waitingList.length : 0}
+                  messages={call.messages}
+                  currentUser={user}
+                  peers={call.peers}
+                  historyLoading={call.historyLoading}
+                  historyError={call.historyError}
+                  rateLimitHint={call.rateLimitHint}
+                  onSendMessage={call.sendMessage}
+                  onRetryMessage={call.retryMessage}
+                  onRetryLoadHistory={call.loadHistory}
+                />
+              </FeatureBoundary>
             )}
           </div>
         )}

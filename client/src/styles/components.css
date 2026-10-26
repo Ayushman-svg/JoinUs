@@ -887,3 +887,40 @@
   text-align: center;
 }
 
+/* ---------- Feature Boundary Fallback Card ---------- */
+.feature-boundary-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  margin: var(--space-3) auto;
+  max-width: 24rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  text-align: center;
+  color: var(--color-text);
+  animation: ui-fade-in 0.2s var(--ease) both;
+}
+
+.feature-boundary-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-danger);
+}
+
+.feature-boundary-card__title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+}
+
+.feature-boundary-card__retry {
+  margin-top: var(--space-1);
+}
+
