@@ -1,6 +1,6 @@
 import { Clock, LayoutGrid, Link2, Maximize2, Minimize2, MonitorUp, ShieldCheck, User, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { getIceServers } from '../api/ice.js';
 import { getMeeting } from '../api/meetings.js';
@@ -241,6 +241,20 @@ export default function CallPage() {
       setTimeout(() => setScreenToast(null), 4000);
     }
   };
+
+  const [searchParams] = useSearchParams();
+  const autoShareTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    if (
+      searchParams.get('startShare') === 'true' &&
+      !autoShareTriggeredRef.current &&
+      call.status === 'active'
+    ) {
+      autoShareTriggeredRef.current = true;
+      handleStartScreenShare();
+    }
+  }, [call.status, searchParams]);
 
   function leave() {
     media.stop(); // releases the camera and microphone; leaving the page ends the call

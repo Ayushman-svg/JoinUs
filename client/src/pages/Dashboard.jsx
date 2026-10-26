@@ -28,7 +28,10 @@ import Skeleton from '../components/ui/Skeleton.jsx';
 import { useToast } from '../components/ui/Toast.jsx';
 import Toggle from '../components/ui/Toggle.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useFeature } from '../hooks/useFeature.js';
 import useSlowRequest from '../hooks/useSlowRequest.js';
+import ClassicDashboard from '../components/dashboard/ClassicDashboard.jsx';
+import WorkplaceHome from '../components/dashboard/WorkplaceHome.jsx';
 import { formatDateTime, formatDuration, nextFullHour, toLocalInputValue } from '../lib/datetime.js';
 import { extractMeetingCode } from '../lib/meetingLink.js';
 
@@ -268,402 +271,107 @@ export default function Dashboard() {
     }
   }
 
+  const newHomeEnabled = useFeature('NEW_HOME');
+  const supportsScreenShare =
+    typeof navigator !== 'undefined' && Boolean(navigator?.mediaDevices?.getDisplayMedia);
+
+  // Filter meetings scheduled or active for today
+  const todayMeetings = useMemo(() => {
+    return meetingsState.meetings.filter((m) => {
+      if (m.status === 'cancelled') return false;
+      const dateStr = m.scheduledAt || m.startedAt || m.createdAt;
+      if (!dateStr) return false;
+      const target = new Date(dateStr);
+      const now = new Date();
+      return (
+        target.getFullYear() === now.getFullYear() &&
+        target.getMonth() === now.getMonth() &&
+        target.getDate() === now.getDate()
+      );
+    });
+  }, [meetingsState.meetings]);
+
+  async function handleStartShare() {
+    try {
+      const meeting = await createMeeting({
+        title: `${user?.name || 'User'}'s Presentation`,
+        waitingRoom: false,
+      });
+      navigate(`/m/${meeting.code}/call?startShare=true`);
+    } catch (err) {
+      toast({
+        title: 'Could not start screen share meeting',
+        description: err.message || 'Please try again',
+        variant: 'danger',
+      });
+    }
+  }
+
   const nextMeeting = inProgress[0] || upcoming[0] || null;
 
   return (
-    <div className="dash zoom-dash">
-      {/* Zoom Home Hero: 4 Signature Quick Action Tiles + Zoom Live Clock Widget */}
-      <section className="zoom-home-hero" aria-label="Zoom quick actions and schedule">
-        <div className="zoom-actions-grid">
-          {/* 1. New Meeting (Iconic Zoom Orange) */}
-          <button
-            type="button"
-            className="zoom-action-tile zoom-action-tile--orange"
-            onClick={() => {
-              setInstantError('');
-              setActiveModal('instant');
-            }}
-          >
-            <div className="zoom-action-tile__icon-box">
-              <Video size={36} aria-hidden="true" />
-            </div>
-            <span className="zoom-action-tile__label">New Meeting</span>
-          </button>
-
-          {/* 2. Join (Iconic Zoom Blue) */}
-          <button
-            type="button"
-            className="zoom-action-tile zoom-action-tile--blue"
-            onClick={() => {
-              setJoinError('');
-              setActiveModal('join');
-            }}
-          >
-            <div className="zoom-action-tile__icon-box">
-              <Plus size={36} aria-hidden="true" />
-            </div>
-            <span className="zoom-action-tile__label">Join</span>
-          </button>
-
-          {/* 3. Schedule (Iconic Zoom Calendar) */}
-          <button
-            type="button"
-            className="zoom-action-tile zoom-action-tile--blue"
-            onClick={() => {
-              setScheduleError('');
-              setScheduleFieldErrors({});
-              setActiveModal('schedule');
-            }}
-          >
-            <div className="zoom-action-tile__icon-box">
-              <Calendar size={36} aria-hidden="true" />
-            </div>
-            <span className="zoom-action-tile__label">Schedule</span>
-          </button>
-
-          {/* 4. Share Screen (Iconic Zoom Screen Share) */}
-          <button
-            type="button"
-            className="zoom-action-tile zoom-action-tile--teal"
-            onClick={() => {
-              setJoinError('');
-              setActiveModal('join');
-            }}
-          >
-            <div className="zoom-action-tile__icon-box">
-              <MonitorUp size={36} aria-hidden="true" />
-            </div>
-            <span className="zoom-action-tile__label">Share Screen</span>
-          </button>
-        </div>
-
-        {/* Zoom Clock & Next Meeting Widget */}
-        <div className="zoom-widget-card">
-          <div className="zoom-widget-clock">
-            <span className="zoom-widget-time">{timeString}</span>
-            <span className="zoom-widget-date">{dateString}</span>
-          </div>
-
-          <div className="zoom-widget-meeting">
-            {nextMeeting ? (
-              <div className="zoom-next-card">
-                <div className="zoom-next-card__badge">
-                  {nextMeeting.phase === 'ongoing' ? (
-                    <span className="zoom-pulsing-badge">● IN PROGRESS</span>
-                  ) : (
-                    <span>UPCOMING</span>
-                  )}
-                </div>
-                <h3 className="zoom-next-card__title">{nextMeeting.title || 'Meeting'}</h3>
-                <p className="zoom-next-card__time">
-                  {nextMeeting.scheduledAt
-                    ? formatDateTime(nextMeeting.scheduledAt)
-                    : 'Ready to continue'}
-                </p>
-                <div className="zoom-next-card__actions">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => navigate(`/meeting/${nextMeeting.code}`)}
-                  >
-                    {nextMeeting.phase === 'ongoing' ? 'Join Now' : 'Start'}
-                  </Button>
-                  <CopyLinkButton code={nextMeeting.code} variant="secondary" size="sm" />
-                </div>
-              </div>
-            ) : (
-              <div className="zoom-widget-empty">
-                <Clock size={22} className="zoom-widget-empty-icon" aria-hidden="true" />
-                <p className="zoom-widget-empty-text">No more meetings scheduled today</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* Stats Summary Bar */}
-      <section className="dash-stats zoom-stats" aria-label="Meeting statistics">
-        <div className="dash-stat-card">
-          <div className="dash-stat-card__left">
-            <span className="dash-stat-card__icon">
-              <Video size={20} aria-hidden="true" />
-            </span>
-            <p className="dash-stat-card__label">Meetings hosted</p>
-          </div>
-          <span className="dash-stat-card__value">
-            {meetingsState.status === 'loading' ? '-' : stats.hosted}
-          </span>
-        </div>
-
-        <div className="dash-stat-card">
-          <div className="dash-stat-card__left">
-            <span className="dash-stat-card__icon">
-              <CalendarClock size={20} aria-hidden="true" />
-            </span>
-            <p className="dash-stat-card__label">Upcoming meetings</p>
-          </div>
-          <span className="dash-stat-card__value">
-            {meetingsState.status === 'loading' ? '-' : stats.upcoming}
-          </span>
-        </div>
-      </section>
-
-      {/* Search notice if filter is applied */}
-      {query && (
-        <div className="dash-search-info" role="status">
-          <span>
-            Filtering by &ldquo;<strong>{searchQuery}</strong>&rdquo; (
-            {filteredUpcoming.length + filteredRecent.length} results)
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={X}
-            onClick={() => setSearchQuery('')}
-          >
-            Clear filter
-          </Button>
-        </div>
+    <>
+      {newHomeEnabled ? (
+        <WorkplaceHome
+          timeString={timeString}
+          dateString={dateString}
+          onStartInstant={() => {
+            setInstantError('');
+            setActiveModal('instant');
+          }}
+          onOpenJoin={() => {
+            setJoinError('');
+            setActiveModal('join');
+          }}
+          onOpenSchedule={() => {
+            setScheduleError('');
+            setScheduleFieldErrors({});
+            setActiveModal('schedule');
+          }}
+          onStartShare={handleStartShare}
+          supportsScreenShare={supportsScreenShare}
+          todayMeetings={todayMeetings}
+          inProgress={filteredInProgress}
+          upcoming={filteredUpcoming}
+          recent={filteredRecent}
+          searchQuery={searchQuery}
+          onClearSearch={() => setSearchQuery('')}
+          navigate={navigate}
+          user={user}
+          getRecentBadgeKind={getRecentBadgeKind}
+          meetingsStatus={meetingsState.status}
+          meetingsError={meetingsState.error}
+          onRetry={() => setReloadKey((k) => k + 1)}
+        />
+      ) : (
+        <ClassicDashboard
+          user={user}
+          stats={stats}
+          inProgress={filteredInProgress}
+          upcoming={filteredUpcoming}
+          recent={filteredRecent}
+          searchQuery={searchQuery}
+          onClearSearch={() => setSearchQuery('')}
+          onStartInstant={() => {
+            setInstantError('');
+            setActiveModal('instant');
+          }}
+          onOpenJoin={() => {
+            setJoinError('');
+            setActiveModal('join');
+          }}
+          onOpenSchedule={() => {
+            setScheduleError('');
+            setScheduleFieldErrors({});
+            setActiveModal('schedule');
+          }}
+          navigate={navigate}
+          getRecentBadgeKind={getRecentBadgeKind}
+          meetingsStatus={meetingsState.status}
+          meetingsError={meetingsState.error}
+          onRetry={() => setReloadKey((k) => k + 1)}
+        />
       )}
-
-      {/* Error State */}
-      {meetingsState.status === 'error' && (
-        <Card padding="lg">
-          <ErrorState
-            title="Could not load your meetings"
-            description={meetingsState.error}
-            onRetry={() => setReloadKey((k) => k + 1)}
-          />
-        </Card>
-      )}
-
-      {/* In progress Section - shown only when it has items */}
-      {meetingsState.status === 'ready' && filteredInProgress.length > 0 && (
-        <section className="dash-section" aria-labelledby="in-progress-title">
-          <div className="dash-section__header">
-            <h2 id="in-progress-title" className="dash-section__title">
-              In progress
-            </h2>
-          </div>
-
-          <div className="dash-grid">
-            {filteredInProgress.map((meeting) => (
-              <div key={meeting.id || meeting._id} className="dash-meeting-card">
-                <div className="dash-meeting-card__top">
-                  <h3 className="dash-meeting-card__title">{meeting.title}</h3>
-                  <Badge variant={meeting.isLive ? 'success' : 'neutral'}>
-                    {meeting.isLive
-                      ? `Live (${meeting.participantCount ?? 1})`
-                      : 'Not ended'}
-                  </Badge>
-                </div>
-
-                <div className="dash-meeting-card__meta">
-                  <div className="dash-meeting-card__time">
-                    <Clock size={16} aria-hidden="true" />
-                    <span>
-                      {meeting.scheduledAt
-                        ? `Scheduled · ${formatDateTime(meeting.scheduledAt)}`
-                        : `Instant · ${formatDateTime(meeting.startedAt || meeting.startsAt || meeting.createdAt)}`}
-                    </span>
-                  </div>
-                  <span className="dash-meeting-card__code">{meeting.code}</span>
-                </div>
-
-                <div className="dash-meeting-card__actions">
-                  <Button
-                    variant="primary"
-                    leftIcon={Video}
-                    onClick={() => navigate(`/m/${meeting.code}`)}
-                  >
-                    {meeting.isLive ? 'Rejoin' : 'Continue'}
-                  </Button>
-                  <CopyLinkButton code={meeting.code} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Upcoming Meetings Section */}
-      <section className="dash-section" aria-labelledby="upcoming-meetings-title">
-        <div className="dash-section__header">
-          <h2 id="upcoming-meetings-title" className="dash-section__title">
-            Upcoming meetings
-          </h2>
-        </div>
-
-        {/* Loading Skeletons */}
-        {meetingsState.status === 'loading' && (
-          <div className="dash-skeleton-grid" aria-busy="true" aria-label="Loading upcoming meetings">
-            <div className="dash-skeleton-card">
-              <Skeleton width="60%" height="1.5rem" />
-              <Skeleton width="40%" height="1rem" />
-              <Skeleton width="30%" height="1rem" />
-              <Skeleton height="2.5rem" />
-            </div>
-            <div className="dash-skeleton-card">
-              <Skeleton width="70%" height="1.5rem" />
-              <Skeleton width="50%" height="1rem" />
-              <Skeleton width="30%" height="1rem" />
-              <Skeleton height="2.5rem" />
-            </div>
-            <div className="dash-skeleton-card">
-              <Skeleton width="55%" height="1.5rem" />
-              <Skeleton width="45%" height="1rem" />
-              <Skeleton width="30%" height="1rem" />
-              <Skeleton height="2.5rem" />
-            </div>
-          </div>
-        )}
-        {meetingsState.status === 'loading' && isSlow && (
-          <p className="auth__hint" style={{ textAlign: 'center', marginTop: 'var(--space-4)' }} role="status">
-            Waking up the server, this can take up to a minute on the free plan
-          </p>
-        )}
-
-        {/* Ready: List or Empty State */}
-        {meetingsState.status === 'ready' && filteredUpcoming.length === 0 && (
-          <Card padding="lg">
-            <EmptyState
-              icon={query ? Search : Calendar}
-              title={query ? 'No matching upcoming meetings' : 'No upcoming meetings'}
-              description={
-                query
-                  ? `No upcoming meetings matched "${searchQuery}". Try a different search term or clear the filter.`
-                  : 'Schedule a meeting for a future date.'
-              }
-              action={
-                query ? (
-                  <Button variant="secondary" onClick={() => setSearchQuery('')}>
-                    Clear search
-                  </Button>
-                ) : (
-                  <Button
-                    leftIcon={CalendarClock}
-                    onClick={() => {
-                      setScheduleError('');
-                      setActiveModal('schedule');
-                    }}
-                  >
-                    Schedule a meeting
-                  </Button>
-                )
-              }
-            />
-          </Card>
-        )}
-
-        {meetingsState.status === 'ready' && filteredUpcoming.length > 0 && (
-          <div className="dash-grid">
-            {filteredUpcoming.map((meeting) => {
-              const diffMs = new Date(meeting.scheduledAt).getTime() - Date.now();
-              const canJoin = diffMs <= 15 * 60 * 1000;
-
-              return (
-                <div key={meeting.id || meeting._id} className="dash-meeting-card">
-                  <div className="dash-meeting-card__top">
-                    <h3 className="dash-meeting-card__title">{meeting.title}</h3>
-                    <StatusBadge kind="scheduled" />
-                  </div>
-
-                  <div className="dash-meeting-card__meta">
-                    <div className="dash-meeting-card__time">
-                      <Clock size={16} aria-hidden="true" />
-                      <span>{formatDateTime(meeting.scheduledAt)}</span>
-                    </div>
-                    <span className="dash-meeting-card__code">{meeting.code}</span>
-                  </div>
-
-                  <div className="dash-meeting-card__actions">
-                    {canJoin ? (
-                      <Button
-                        variant="primary"
-                        leftIcon={Video}
-                        onClick={() => navigate(`/m/${meeting.code}`)}
-                      >
-                        Join
-                      </Button>
-                    ) : (
-                      <Button variant="secondary" disabled>
-                        Starts in {formatDuration(diffMs)}
-                      </Button>
-                    )}
-                    <CopyLinkButton code={meeting.code} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* Recent Meetings Section */}
-      <section className="dash-section" aria-labelledby="recent-meetings-title">
-        <div className="dash-section__header">
-          <h2 id="recent-meetings-title" className="dash-section__title">
-            Recent meetings
-          </h2>
-        </div>
-
-        {meetingsState.status === 'loading' && (
-          <div className="dash-skeleton-grid">
-            <div className="dash-skeleton-card">
-              <Skeleton width="50%" height="1.25rem" />
-              <Skeleton width="40%" height="1rem" />
-            </div>
-            <div className="dash-skeleton-card">
-              <Skeleton width="60%" height="1.25rem" />
-              <Skeleton width="40%" height="1rem" />
-            </div>
-          </div>
-        )}
-
-        {meetingsState.status === 'ready' && filteredRecent.length === 0 && (
-          <Card padding="md">
-            <EmptyState
-              title={query ? 'No matching recent meetings' : 'No past meetings yet'}
-              description={
-                query
-                  ? `No past meetings matched "${searchQuery}".`
-                  : 'Completed or past meetings will appear here.'
-              }
-            />
-          </Card>
-        )}
-
-        {meetingsState.status === 'ready' && filteredRecent.length > 0 && (
-          <div className="dash-recent-list">
-            {filteredRecent.map((meeting) => (
-              <div key={meeting.id || meeting._id} className="dash-recent-item">
-                <div className="dash-recent-item__main">
-                  {meeting.status === 'ended' || meeting.status === 'cancelled' ? (
-                    <span className="dash-recent-item__title">{meeting.title}</span>
-                  ) : (
-                    <Link
-                      to={`/m/${meeting.code}`}
-                      className="dash-recent-item__title"
-                    >
-                      {meeting.title}
-                    </Link>
-                  )}
-                  <p className="dash-recent-item__time">
-                    {meeting.scheduledAt
-                      ? formatDateTime(meeting.scheduledAt)
-                      : formatDateTime(meeting.startedAt || meeting.startsAt || meeting.createdAt)}
-                    {' · '}
-                    <code>{meeting.code}</code>
-                  </p>
-                </div>
-                <div className="dash-recent-item__actions">
-                  <StatusBadge kind={getRecentBadgeKind(meeting)} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
 
       {/* Modal: New Instant Meeting */}
       <Modal
@@ -813,6 +521,6 @@ export default function Dashboard() {
           </div>
         </form>
       </Modal>
-    </div>
+    </>
   );
 }

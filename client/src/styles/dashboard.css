@@ -571,3 +571,318 @@
   font-size: var(--text-sm);
 }
 
+/* ==========================================================================
+   Workplace Home Dashboard Styles (flag FEATURE_NEW_HOME)
+   ========================================================================== */
+
+.workplace-home {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.workplace-hero {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+  align-items: stretch;
+}
+
+@media (min-width: 960px) {
+  .workplace-hero {
+    grid-template-columns: 1.15fr 1fr;
+  }
+}
+
+/* Left Column: Large Clock & 4 Action Tiles */
+.workplace-hero__left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.workplace-clock {
+  background: var(--color-widget-card-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--color-widget-card-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.workplace-clock__time {
+  font-size: clamp(2.5rem, 2rem + 2vw, 3.75rem);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.workplace-clock__date {
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.workplace-tiles-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+}
+
+@media (min-width: 480px) and (max-width: 959px) {
+  .workplace-tiles-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.workplace-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
+  padding: var(--space-4);
+  border: none;
+  border-radius: var(--radius-xl);
+  cursor: pointer;
+  color: var(--tile-on-tile);
+  box-shadow: var(--tile-shadow);
+  transition: transform var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease), filter var(--duration-fast);
+  min-height: 120px;
+}
+
+.workplace-tile:hover {
+  transform: translateY(-3px);
+  filter: brightness(1.06);
+}
+
+.workplace-tile:active {
+  transform: translateY(-1px);
+}
+
+.workplace-tile:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.workplace-tile--orange {
+  background: var(--tile-orange-gradient);
+  box-shadow: var(--tile-orange-shadow);
+}
+
+.workplace-tile--blue {
+  background: var(--tile-blue-gradient);
+  box-shadow: var(--tile-blue-shadow);
+}
+
+.workplace-tile--teal {
+  background: var(--tile-teal-gradient);
+  box-shadow: var(--tile-teal-shadow);
+}
+
+.workplace-tile__icon-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  background: var(--tile-icon-box-bg);
+  border: 1px solid var(--tile-icon-box-border);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(8px);
+  margin-bottom: var(--space-3);
+}
+
+.workplace-tile__label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  text-align: center;
+}
+
+/* Right Column: 'Today' Schedule Card */
+.workplace-today-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+
+.workplace-today-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.workplace-today-card__title {
+  font-size: var(--text-h3);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.workplace-today-card__count {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-secondary);
+  background-color: var(--color-surface-2);
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-full);
+}
+
+.workplace-today-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 1;
+  overflow-y: auto;
+  max-height: 380px;
+}
+
+.workplace-today-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  gap: var(--space-3);
+  transition: border-color var(--duration-fast) var(--ease);
+}
+
+.workplace-today-item:hover {
+  border-color: var(--color-primary);
+}
+
+.workplace-today-item__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.workplace-today-item__title {
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workplace-today-item__details {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.workplace-today-item__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.workplace-today-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+  color: var(--color-text-secondary);
+  gap: var(--space-2);
+  flex: 1;
+}
+
+.workplace-today-empty__icon {
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-2);
+}
+
+.workplace-today-empty__title {
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+  margin: 0;
+}
+
+.workplace-today-empty__desc {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-3);
+  max-width: 300px;
+}
+
+/* Collapsible Sections Below */
+.workplace-collapsible-section {
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.workplace-collapsible-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-6);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--color-text);
+  transition: background-color var(--duration-fast) var(--ease);
+}
+
+.workplace-collapsible-header:hover {
+  background-color: var(--color-surface-2);
+}
+
+.workplace-collapsible-header:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.workplace-collapsible-header__title {
+  font-size: var(--text-h3);
+  font-weight: var(--weight-bold);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.workplace-collapsible-header__chevron {
+  color: var(--color-text-secondary);
+  transition: transform var(--duration-fast) var(--ease);
+}
+
+.workplace-collapsible-header__chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.workplace-collapsible-body {
+  padding: 0 var(--space-6) var(--space-6);
+}
+
+
