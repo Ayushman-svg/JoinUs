@@ -1,6 +1,14 @@
 import { Link } from 'react-router-dom';
 
+import { useDocumentMeta } from '../../hooks/useDocumentMeta.js';
+
 export default function PrivacyPage() {
+  useDocumentMeta({
+    title: 'Privacy Policy',
+    description:
+      'Plain-English privacy policy for JoinUs: no advertising cookies, no data sales, and peer-to-peer WebRTC media streams.',
+  });
+
   return (
     <div className="public-page">
       <section className="public-page__hero public-page__hero--compact">

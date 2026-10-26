@@ -1,6 +1,14 @@
 import { Link } from 'react-router-dom';
 
+import { useDocumentMeta } from '../../hooks/useDocumentMeta.js';
+
 export default function TermsPage() {
+  useDocumentMeta({
+    title: 'Terms of Service',
+    description:
+      'Transparent, honest terms of service for JoinUs, an open-source educational student project.',
+  });
+
   return (
     <div className="public-page">
       <section className="public-page__hero public-page__hero--compact">

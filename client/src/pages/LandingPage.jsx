@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { extractMeetingCode } from '../lib/meetingLink.js';
+import { useDocumentMeta } from '../hooks/useDocumentMeta.js';
 
 const FEATURES = [
   {
@@ -116,6 +117,12 @@ export default function LandingPage() {
   const [meetingInput, setMeetingInput] = useState('');
   const [inputError, setInputError] = useState('');
   const [expandedFaq, setExpandedFaq] = useState(null);
+
+  useDocumentMeta({
+    title: 'Video Meetings for Teams & Classes',
+    description:
+      'JoinUs is a simple, secure video meeting platform with host moderation, waiting room, screen sharing, and persistent chat transcripts.',
+  });
 
   function handleJoinSubmit(e) {
     e.preventDefault();

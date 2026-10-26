@@ -1,3 +1,26 @@
+/* Skip to main content link for keyboard & screen reader accessibility */
+.skip-link {
+  position: absolute;
+  top: -999px;
+  left: var(--space-4);
+  background: var(--color-primary);
+  color: #ffffff;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-sm);
+  text-decoration: none;
+  z-index: 9999;
+  box-shadow: var(--shadow-lg);
+  transition: top 0.15s ease-in-out;
+}
+
+.skip-link:focus {
+  top: var(--space-4);
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
 /* Public Layout & Navigation Styles */
 .public-layout {
   display: flex;
@@ -1233,5 +1256,20 @@
   .landing-cta__btn-secondary {
     width: 100%;
     justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-header,
+  .public-header__link,
+  .landing-feature-card,
+  .landing-preview__frame,
+  .landing-faq-chevron,
+  .landing-faq-answer,
+  .features-grid__card,
+  .security-card,
+  .skip-link {
+    transition: none !important;
+    animation: none !important;
   }
 }

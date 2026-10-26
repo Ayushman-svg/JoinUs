@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+import { useDocumentMeta } from '../../hooks/useDocumentMeta.js';
+
 const SECURITY_MEASURES = [
   {
     icon: Lock,
@@ -57,6 +59,12 @@ const SECURITY_MEASURES = [
 ];
 
 export default function SecurityPage() {
+  useDocumentMeta({
+    title: 'Security & Privacy',
+    description:
+      'Review JoinUs security architecture: bcrypt password hashing, server-verified room registry, rate limiting, and peer-to-peer WebRTC encryption.',
+  });
+
   return (
     <div className="public-page">
       {/* Header */}

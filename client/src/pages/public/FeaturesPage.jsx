@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+import { useDocumentMeta } from '../../hooks/useDocumentMeta.js';
+
 const CORE_FEATURES = [
   {
     icon: Video,
@@ -57,6 +59,12 @@ const CORE_FEATURES = [
 ];
 
 export default function FeaturesPage() {
+  useDocumentMeta({
+    title: 'Features',
+    description:
+      'Explore JoinUs features: peer-to-peer WebRTC video, host waiting rooms, one-at-a-time screen sharing, persistent chat transcripts, and active speaker highlighting.',
+  });
+
   return (
     <div className="public-page">
       {/* Page Header */}
