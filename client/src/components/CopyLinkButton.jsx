@@ -4,14 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 import { copyText, inviteLink } from '../lib/meetingLink.js';
 import Button from './ui/Button.jsx';
 
-export default function CopyLinkButton({ code, label = 'Copy link' }) {
+export default function CopyLinkButton({ code, url, label = 'Copy link' }) {
   const [state, setState] = useState('idle'); // idle | copied | failed
   const timer = useRef(null);
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
   async function onClick() {
-    const ok = await copyText(inviteLink(code));
+    const target = url || (code ? inviteLink(code) : '');
+    const ok = await copyText(target);
+
     setState(ok ? 'copied' : 'failed');
     clearTimeout(timer.current);
     timer.current = setTimeout(() => setState('idle'), 2000);

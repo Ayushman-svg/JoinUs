@@ -24,6 +24,8 @@ import TermsPage from './pages/public/TermsPage.jsx';
 import Register from './pages/Register.jsx';
 import SchedulePage from './pages/SchedulePage.jsx';
 import MeetingDetailsPage from './pages/MeetingDetailsPage.jsx';
+import PersonalRoomPage from './pages/PersonalRoomPage.jsx';
+
 
 
 
@@ -71,8 +73,10 @@ export default function App() {
           </Route>
         </Route>
 
+        <Route path="/room/:slug" element={<PersonalRoomPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+
     </>
   );
 }

@@ -22,6 +22,7 @@ import EmptyState from '../ui/EmptyState.jsx';
 import ErrorState from '../ui/ErrorState.jsx';
 import Skeleton from '../ui/Skeleton.jsx';
 import { formatDateTime, formatDuration } from '../../lib/datetime.js';
+import { useFeature } from '../../hooks/useFeature.js';
 
 export default function WorkplaceHome({
   timeString,
@@ -59,9 +60,11 @@ export default function WorkplaceHome({
     }));
   }
 
+  const schedulingEnabled = useFeature('SCHEDULING');
   const query = searchQuery.trim().toLowerCase();
 
   return (
+
     <div className="workplace-home" aria-label="Workplace Home Dashboard">
       {/* 1. Hero: Left Column (Large Clock + 4 Action Tiles) & Right Column ('Today' Schedule Card) */}
       <section className="workplace-hero" aria-label="Quick actions and today's schedule">
@@ -244,7 +247,34 @@ export default function WorkplaceHome({
         </div>
       </section>
 
+      {/* Personal Meeting Room Banner */}
+      {schedulingEnabled && user?.personalRoomSlug && (
+        <div className="personal-room-dash-banner">
+          <div className="personal-room-dash-info">
+            <span className="personal-room-dash-title">Personal Meeting Room</span>
+            <span className="personal-room-dash-url">
+              {typeof window !== 'undefined' ? window.location.origin : ''}/room/{user.personalRoomSlug}
+            </span>
+          </div>
+          <div className="personal-room-dash-actions">
+            <CopyLinkButton
+              url={`${typeof window !== 'undefined' ? window.location.origin : ''}/room/${user.personalRoomSlug}`}
+              label="Copy link"
+            />
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={Video}
+              onClick={() => navigate(`/room/${user.personalRoomSlug}`)}
+            >
+              Start
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Search notice if filter is applied */}
+
       {query && (
         <div className="dash-search-info" role="status">
           <span>
@@ -412,8 +442,18 @@ export default function WorkplaceHome({
                           </Button>
                         )}
                         <CopyLinkButton code={meeting.code} />
+                        {schedulingEnabled && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate(`/meetings/${meeting.code}`)}
+                          >
+                            Details
+                          </Button>
+                        )}
                       </div>
                     </div>
+
                   );
                 })}
               </div>
