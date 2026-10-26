@@ -44,7 +44,10 @@ JoinUs decouples signaling and coordination from real-time media exchange:
 - **One-at-a-Time Screen Sharing:** Server-enforced single active sharer (`SCREEN_SHARE_BUSY`). Features stage-and-filmstrip layouts, presenter status banners, toasts, and host controls to stop presentations remotely.
 - **Active Speaker Detection:** Real-time Web Audio API frequency and volume analysis highlighting the current speaker with glowing borders and animated audio meters.
 - **In-Call Real-Time Chat & Persistence:** Admitted users exchange messages in real-time. Messages are validated (1–1000 characters), rate-limited (5 msgs / 5s), stored in MongoDB, and automatically reloaded upon reconnection.
-- **Meeting History & Transcripts:** Past meetings automatically record duration, participant lists, and complete, timestamped read-only chat transcripts available on the History dashboard.
+- **Live Captions & Transcripts (`FEATURE_CAPTIONS`):** Real-time client-side speech-to-text using the Web Speech API with floating stage captions (configurable size S/M/L, top/bottom positioning, and 5-second auto-fade) and a dedicated Transcript side panel with live auto-scrolling, search filtering, and `.txt` export.
+  - **Browser Vendor Speech Service Notice & Explicit Opt-In:** Each user's browser transcribes only their own microphone audio. The Web Speech API forwards audio to the browser vendor's speech recognition service (e.g., Google or Microsoft). JoinUs requires an explicit user consent opt-in modal before any microphone transcription starts and never stores raw audio.
+  - **Browser Compatibility:** Feature-detected on supported browsers (primarily Chromium browsers like Google Chrome and Microsoft Edge); the controls are hidden automatically on unsupported browsers.
+- **Meeting History & Transcripts:** Past meetings automatically record duration, participant lists, and complete, timestamped read-only chat and spoken transcripts available on the History dashboard with the same authorization rules as chat.
 - **Resilience & Error Handling:** Global React Error Boundary, proper 404 page, browser offline banners, cold-start indicators for free-tier delays, and automated reconnection without duplicate tiles or messages.
 
 ---
