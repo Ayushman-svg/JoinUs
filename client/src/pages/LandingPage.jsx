@@ -5,7 +5,10 @@ import {
   ChevronDown,
   Lock,
   MessageSquare,
+  Mic,
+  MicOff,
   MonitorUp,
+  PhoneOff,
   Share2,
   ShieldCheck,
   Users,
@@ -227,12 +230,75 @@ export default function LandingPage() {
               <div className="landing-frame__placeholder" aria-hidden="true" />
             </div>
             <div className="landing-frame__body">
-              <img
-                src="/screenshots/call-preview.png"
-                alt="JoinUs video meeting interface showing active call participant tiles, waiting room controls, and audio indicators"
-                className="landing-frame__image"
-                loading="lazy"
-              />
+              <div className="landing-preview-stage" aria-label="JoinUs active video meeting demonstration">
+                <div className="landing-preview-grid">
+                  <div className="landing-preview-tile landing-preview-tile--speaking">
+                    <div className="landing-preview-tile__avatar">
+                      <span>AY</span>
+                    </div>
+                    <div className="landing-preview-tile__name">
+                      <span>Ayushman (Host)</span>
+                      <Mic size={14} className="landing-preview-tile__mic" aria-hidden="true" />
+                    </div>
+                    <span className="landing-preview-tile__badge">Speaking</span>
+                  </div>
+                  <div className="landing-preview-tile">
+                    <div className="landing-preview-tile__avatar">
+                      <span>SJ</span>
+                    </div>
+                    <div className="landing-preview-tile__name">
+                      <span>Sarah Jenkins</span>
+                      <Mic size={14} className="landing-preview-tile__mic" aria-hidden="true" />
+                    </div>
+                  </div>
+                  <div className="landing-preview-tile">
+                    <div className="landing-preview-tile__avatar">
+                      <span>DC</span>
+                    </div>
+                    <div className="landing-preview-tile__name">
+                      <span>David Chen</span>
+                      <MicOff size={14} className="landing-preview-tile__mic landing-preview-tile__mic--muted" aria-hidden="true" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="landing-preview-controls" aria-hidden="true">
+                  <div className="landing-preview-controls__group">
+                    <div className="landing-preview-btn">
+                      <Mic size={16} />
+                      <span>Mute</span>
+                    </div>
+                    <div className="landing-preview-btn">
+                      <Video size={16} />
+                      <span>Stop Video</span>
+                    </div>
+                  </div>
+                  <div className="landing-preview-controls__group">
+                    <div className="landing-preview-btn">
+                      <ShieldCheck size={16} />
+                      <span>Security</span>
+                    </div>
+                    <div className="landing-preview-btn">
+                      <Users size={16} />
+                      <span>3</span>
+                    </div>
+                    <div className="landing-preview-btn">
+                      <MessageSquare size={16} />
+                      <span>Chat</span>
+                    </div>
+                    <div className="landing-preview-btn">
+                      <MonitorUp size={16} />
+                      <span>Share</span>
+                    </div>
+                  </div>
+                  <div className="landing-preview-controls__group">
+                    <div className="landing-preview-btn landing-preview-btn--leave">
+                      <PhoneOff size={16} />
+                      <span>End</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
