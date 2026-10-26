@@ -2,6 +2,7 @@ import {
   Check,
   ChevronUp,
   Hand,
+  LogOut,
   MessageSquare,
   Mic,
   MicOff,
@@ -13,6 +14,7 @@ import {
   Video,
   VideoOff,
   Volume2,
+  X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useFeature } from '../../hooks/useFeature.js';
@@ -363,12 +365,12 @@ export default function CallControls({
           </div>
         </div>
 
-        {/* Center controls: Security, Participants, Chat, Share, Reactions, More */}
+        {/* Center controls: Security, Participants, Share, Chat, Reactions, More */}
         <div className="zoom-toolbar__group zoom-toolbar__group--center">
-          {/* Security button */}
+          {/* Security button (desktop only) */}
           <button
             type="button"
-            className="zoom-btn"
+            className="zoom-btn zoom-btn--desktop-only"
             onClick={onOpenSecurity}
             aria-label="Meeting security"
           >
@@ -378,10 +380,10 @@ export default function CallControls({
             <span className="zoom-btn__label">Security</span>
           </button>
 
-          {/* Participants button */}
+          {/* Participants button (desktop only) */}
           <button
             type="button"
-            className={`zoom-btn ${isPanelOpen ? 'is-active' : ''}`}
+            className={`zoom-btn zoom-btn--desktop-only ${isPanelOpen ? 'is-active' : ''}`}
             onClick={onToggleParticipants}
             aria-label={`Participants (${badgeCount})`}
             aria-pressed={isPanelOpen}
@@ -397,23 +399,6 @@ export default function CallControls({
               </span>
             </span>
             <span className="zoom-btn__label">Participants</span>
-          </button>
-
-          {/* Chat button */}
-          <button
-            type="button"
-            className={`zoom-btn ${isChatOpen ? 'is-active' : ''}`}
-            onClick={onToggleChat}
-            aria-label={unreadCount > 0 ? `Chat (${unreadCount} unread)` : 'Chat'}
-            aria-pressed={isChatOpen}
-          >
-            <span className="zoom-btn__icon">
-              <MessageSquare size={20} aria-hidden="true" />
-              {unreadCount > 0 && !isChatOpen && (
-                <span className="zoom-btn__badge zoom-btn__badge--unread">{unreadCount}</span>
-              )}
-            </span>
-            <span className="zoom-btn__label">Chat</span>
           </button>
 
           {/* Share Screen button (Iconic green button) */}
@@ -438,11 +423,28 @@ export default function CallControls({
             </button>
           )}
 
+          {/* Chat button */}
+          <button
+            type="button"
+            className={`zoom-btn ${isChatOpen ? 'is-active' : ''}`}
+            onClick={onToggleChat}
+            aria-label={unreadCount > 0 ? `Chat (${unreadCount} unread)` : 'Chat'}
+            aria-pressed={isChatOpen}
+          >
+            <span className="zoom-btn__icon">
+              <MessageSquare size={20} aria-hidden="true" />
+              {unreadCount > 0 && !isChatOpen && (
+                <span className="zoom-btn__badge zoom-btn__badge--unread">{unreadCount}</span>
+              )}
+            </span>
+            <span className="zoom-btn__label">Chat</span>
+          </button>
+
           {/* Reactions slot (disabled until Prompt 4 ships, hidden when flag is off) */}
           {reactionsEnabled && (
             <button
               type="button"
-              className="zoom-btn zoom-btn--reactions is-disabled"
+              className="zoom-btn zoom-btn--reactions zoom-btn--desktop-only is-disabled"
               disabled
               aria-label="Reactions"
               title="Reactions (coming in next update)"
@@ -458,7 +460,7 @@ export default function CallControls({
           {reactionsEnabled && (
             <button
               type="button"
-              className={`zoom-btn zoom-btn--raise-hand ${handRaised ? 'is-active is-hand-raised' : ''}`}
+              className={`zoom-btn zoom-btn--raise-hand zoom-btn--desktop-only ${handRaised ? 'is-active is-hand-raised' : ''}`}
               onClick={onToggleHandRaise}
               aria-label={handRaised ? 'Lower Hand' : 'Raise Hand'}
               aria-pressed={handRaised}
@@ -487,7 +489,7 @@ export default function CallControls({
 
             {showMoreMenu && (
               <div
-                className="zoom-menu zoom-menu--up zoom-menu--more"
+                className="zoom-menu zoom-menu--up zoom-menu--more zoom-menu--desktop-only"
                 role="menu"
                 aria-label="More options"
               >
@@ -519,7 +521,7 @@ export default function CallControls({
         </div>
 
         {/* Right controls: Red End / Leave */}
-        <div className="zoom-toolbar__group zoom-toolbar__group--right">
+        <div className="zoom-toolbar__group zoom-toolbar__group--right zoom-toolbar__group--desktop-only">
           <button
             type="button"
             className="zoom-end-btn"
@@ -530,6 +532,137 @@ export default function CallControls({
           </button>
         </div>
       </footer>
+
+      {/* Mobile More Bottom Sheet (shown on mobile when More button is tapped) */}
+      {showMoreMenu && (
+        <div
+          className="zoom-mobile-more-backdrop"
+          onClick={() => setShowMoreMenu(false)}
+          role="presentation"
+        >
+          <div
+            className="zoom-mobile-more-sheet"
+            role="dialog"
+            aria-label="More meeting options"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="zoom-sheet-handle" aria-hidden="true" />
+            <div className="zoom-sheet-header">
+              <h3 className="zoom-sheet-title">Meeting Options</h3>
+              <button
+                type="button"
+                className="zoom-sheet-close"
+                onClick={() => setShowMoreMenu(false)}
+                aria-label="Close options"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="zoom-sheet-body">
+              {/* Participants */}
+              <button
+                type="button"
+                className="zoom-sheet-item"
+                onClick={() => {
+                  setShowMoreMenu(false);
+                  onToggleParticipants();
+                }}
+              >
+                <span className="zoom-sheet-item__icon">
+                  <Users size={20} aria-hidden="true" />
+                </span>
+                <span className="zoom-sheet-item__label">Participants</span>
+                <span className="zoom-sheet-item__badge">{badgeCount}</span>
+              </button>
+
+              {/* Security */}
+              <button
+                type="button"
+                className="zoom-sheet-item"
+                onClick={() => {
+                  setShowMoreMenu(false);
+                  onOpenSecurity();
+                }}
+              >
+                <span className="zoom-sheet-item__icon">
+                  <ShieldCheck size={20} aria-hidden="true" />
+                </span>
+                <span className="zoom-sheet-item__label">Security</span>
+              </button>
+
+              {/* Test Audio */}
+              <button
+                type="button"
+                className="zoom-sheet-item"
+                onClick={() => {
+                  setShowMoreMenu(false);
+                  setShowMicTestModal(true);
+                }}
+              >
+                <span className="zoom-sheet-item__icon">
+                  <Mic size={20} aria-hidden="true" />
+                </span>
+                <span className="zoom-sheet-item__label">Test Speaker &amp; Microphone</span>
+              </button>
+
+              {/* Raise Hand (if enabled) */}
+              {reactionsEnabled && (
+                <button
+                  type="button"
+                  className="zoom-sheet-item"
+                  onClick={() => {
+                    setShowMoreMenu(false);
+                    onToggleHandRaise?.();
+                  }}
+                >
+                  <span className="zoom-sheet-item__icon">
+                    <Hand size={20} aria-hidden="true" />
+                  </span>
+                  <span className="zoom-sheet-item__label">
+                    {handRaised ? 'Lower Hand' : 'Raise Hand'}
+                  </span>
+                </button>
+              )}
+
+              {/* Reactions slot (if enabled) */}
+              {reactionsEnabled && (
+                <button
+                  type="button"
+                  className="zoom-sheet-item is-disabled"
+                  disabled
+                  title="Reactions (coming in next update)"
+                >
+                  <span className="zoom-sheet-item__icon">
+                    <Smile size={20} aria-hidden="true" />
+                  </span>
+                  <span className="zoom-sheet-item__label">Reactions</span>
+                  <span className="zoom-sheet-item__badge zoom-sheet-item__badge--muted">Soon</span>
+                </button>
+              )}
+
+              <div className="zoom-sheet-divider" />
+
+              {/* End / Leave button */}
+              <button
+                type="button"
+                className="zoom-sheet-item zoom-sheet-item--danger"
+                onClick={() => {
+                  setShowMoreMenu(false);
+                  onLeave?.();
+                }}
+              >
+                <span className="zoom-sheet-item__icon">
+                  <LogOut size={20} aria-hidden="true" />
+                </span>
+                <span className="zoom-sheet-item__label">
+                  {isHost ? 'End Meeting for All' : 'Leave Meeting'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Microphone and Speaker Test Modal */}
       <MicTestModal

@@ -714,6 +714,14 @@ export default function CallPage() {
           )}
         </main>
 
+        {inCall && activePanel && (
+          <div
+            className="call__panel-backdrop"
+            onClick={() => setActivePanel(null)}
+            aria-hidden="true"
+          />
+        )}
+
         {inCall && (
           <div className={`call__panel-slot ${activePanel ? 'is-open' : ''}`}>
             {activePanel === 'participants' && (
