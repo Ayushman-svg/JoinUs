@@ -12,6 +12,7 @@ import {
   VideoOff,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useFeature } from '../../hooks/useFeature.js';
 
 export default function CallControls({
   media,
@@ -33,6 +34,7 @@ export default function CallControls({
   onToggleHandRaise,
   onSendReaction,
 }) {
+  const reactionsEnabled = useFeature('REACTIONS');
   const [showReactions, setShowReactions] = useState(false);
   const [showAudioMenu, setShowAudioMenu] = useState(false);
   const [showVideoMenu, setShowVideoMenu] = useState(false);
@@ -237,56 +239,60 @@ export default function CallControls({
         )}
 
         {/* Reactions button & Popover */}
-        <div className="zoom-control-relative" ref={reactionsRef}>
-          <button
-            type="button"
-            className={`zoom-btn zoom-btn--reactions ${showReactions ? 'is-active' : ''}`}
-            onClick={() => setShowReactions((prev) => !prev)}
-            aria-label="Reactions"
-            aria-expanded={showReactions}
-          >
-            <span className="zoom-btn__icon">
-              <Smile size={20} aria-hidden="true" />
-            </span>
-            <span className="zoom-btn__label">Reactions</span>
-          </button>
+        {reactionsEnabled && (
+          <div className="zoom-control-relative" ref={reactionsRef}>
+            <button
+              type="button"
+              className={`zoom-btn zoom-btn--reactions ${showReactions ? 'is-active' : ''}`}
+              onClick={() => setShowReactions((prev) => !prev)}
+              aria-label="Reactions"
+              aria-expanded={showReactions}
+            >
+              <span className="zoom-btn__icon">
+                <Smile size={20} aria-hidden="true" />
+              </span>
+              <span className="zoom-btn__label">Reactions</span>
+            </button>
 
-          {showReactions && (
-            <div className="zoom-reactions-popover" role="dialog" aria-label="Meeting reactions">
-              <div className="zoom-reactions-popover__title">Reactions</div>
-              <div className="zoom-reactions-grid">
-                {EMOJIS.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    className="zoom-reaction-btn"
-                    onClick={() => {
-                      onSendReaction?.(emoji);
-                      setShowReactions(false);
-                    }}
-                    aria-label={`React ${emoji}`}
-                  >
-                    {emoji}
-                  </button>
-                ))}
+            {showReactions && (
+              <div className="zoom-reactions-popover" role="dialog" aria-label="Meeting reactions">
+                <div className="zoom-reactions-popover__title">Reactions</div>
+                <div className="zoom-reactions-grid">
+                  {EMOJIS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      className="zoom-reaction-btn"
+                      onClick={() => {
+                        onSendReaction?.(emoji);
+                        setShowReactions(false);
+                      }}
+                      aria-label={`React ${emoji}`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Raise Hand separate button */}
-        <button
-          type="button"
-          className={`zoom-btn zoom-btn--raise-hand ${handRaised ? 'is-active is-hand-raised' : ''}`}
-          onClick={onToggleHandRaise}
-          aria-label={handRaised ? 'Lower Hand' : 'Raise Hand'}
-          aria-pressed={handRaised}
-        >
-          <span className="zoom-btn__icon">
-            <Hand size={20} aria-hidden="true" className={handRaised ? 'icon-hand-active' : ''} />
-          </span>
-          <span className="zoom-btn__label">{handRaised ? 'Lower Hand' : 'Raise Hand'}</span>
-        </button>
+        {reactionsEnabled && (
+          <button
+            type="button"
+            className={`zoom-btn zoom-btn--raise-hand ${handRaised ? 'is-active is-hand-raised' : ''}`}
+            onClick={onToggleHandRaise}
+            aria-label={handRaised ? 'Lower Hand' : 'Raise Hand'}
+            aria-pressed={handRaised}
+          >
+            <span className="zoom-btn__icon">
+              <Hand size={20} aria-hidden="true" className={handRaised ? 'icon-hand-active' : ''} />
+            </span>
+            <span className="zoom-btn__label">{handRaised ? 'Lower Hand' : 'Raise Hand'}</span>
+          </button>
+        )}
       </div>
 
       {/* Right controls: End / Leave */}

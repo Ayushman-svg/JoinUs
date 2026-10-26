@@ -1,5 +1,6 @@
 import { Hand, MicOff, MoreHorizontal } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useFeature } from '../../hooks/useFeature.js';
 
 import Avatar from '../ui/Avatar.jsx';
 import Spinner from '../ui/Spinner.jsx';
@@ -24,6 +25,7 @@ export default function ParticipantTile({
   handRaised = false,
   reaction = null,
 }) {
+  const reactionsEnabled = useFeature('REACTIONS');
   const [floatingReaction, setFloatingReaction] = useState(null);
 
   useEffect(() => {
@@ -43,7 +45,7 @@ export default function ParticipantTile({
     !audioOn && 'microphone off',
     !videoOn && 'camera off',
     showSpeaking && 'speaking',
-    handRaised && 'hand raised',
+    reactionsEnabled && handRaised && 'hand raised',
   ]
     .filter(Boolean)
     .join(', ');
@@ -70,7 +72,7 @@ export default function ParticipantTile({
       )}
 
       {/* Top Left: Hand Raised Badge */}
-      {handRaised && (
+      {reactionsEnabled && handRaised && (
         <div className="zoom-tile__hand-badge" role="status">
           <Hand size={14} aria-hidden="true" className="icon-hand" />
           <span>Hand Raised</span>
@@ -87,7 +89,7 @@ export default function ParticipantTile({
       </button>
 
       {/* Floating Reaction Animation */}
-      {floatingReaction && (
+      {reactionsEnabled && floatingReaction && (
         <div className="zoom-tile__floating-reaction" aria-hidden="true">
           {floatingReaction}
         </div>
