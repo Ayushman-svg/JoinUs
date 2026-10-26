@@ -27,6 +27,7 @@ const Meeting = require('../src/models/Meeting');
 const Message = require('../src/models/Message');
 const Poll = require('../src/models/Poll');
 const Vote = require('../src/models/Vote');
+const Caption = require('../src/models/Caption');
 
 const THROWAWAY_EMAIL_DOMAINS = /@(example\.com|test\.com|temp\.com)$/i;
 const TEST_TITLE = /^\s*(test|smoke)\b/i;
@@ -104,6 +105,7 @@ async function main() {
   console.log('\nDeleting...');
   if (testMeetingIds.length > 0) {
     const messages = await Message.deleteMany(messageFilter);
+    const captions = await Caption.deleteMany({ meeting: { $in: testMeetingIds } });
     const polls = await Poll.find({ meeting: { $in: testMeetingIds } }).select('_id').lean();
     const pollIds = polls.map((p) => p._id);
     if (pollIds.length > 0) {
@@ -111,7 +113,7 @@ async function main() {
       await Poll.deleteMany({ _id: { $in: pollIds } });
     }
     const meetings = await Meeting.deleteMany({ _id: { $in: testMeetingIds } });
-    console.log(`Deleted ${messages.deletedCount} messages, ${pollIds.length} polls, and ${meetings.deletedCount} meetings.`);
+    console.log(`Deleted ${messages.deletedCount} messages, ${captions.deletedCount} captions, ${pollIds.length} polls, and ${meetings.deletedCount} meetings.`);
   }
   if (testUserIds.length > 0) {
     const users = await User.deleteMany({ _id: { $in: testUserIds } });

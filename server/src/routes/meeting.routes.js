@@ -21,6 +21,7 @@ const {
 } = require('../controllers/meeting.controller');
 const { getMeetingMessages } = require('../controllers/history.controller');
 const { getMeetingPolls, exportPollCsv } = require('../controllers/polls.controller');
+const { getMeetingCaptions } = require('../controllers/captions.controller');
 
 const router = express.Router();
 
@@ -52,6 +53,15 @@ router.get(
   requireAuth,
   validate(pollIdParamsSchema, 'params'),
   asyncHandler(exportPollCsv)
+);
+
+// Captions transcript for admitted participants and host
+router.get(
+  '/:code/captions',
+  requireFeature('CAPTIONS'),
+  requireAuth,
+  validate(codeParamsSchema, 'params'),
+  asyncHandler(getMeetingCaptions)
 );
 
 // Public: minimal info for the invite page

@@ -7,6 +7,7 @@ require('../../src/models/User');
 require('../../src/models/Meeting');
 require('../../src/models/Poll');
 require('../../src/models/Vote');
+require('../../src/models/Caption');
 
 let mongod;
 
