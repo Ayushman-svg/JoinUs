@@ -12,6 +12,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Search,
+  Settings,
   ShieldCheck,
   Video,
   X,
@@ -20,8 +21,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useFeature } from '../../hooks/useFeature.js';
 import BrandMark from '../BrandMark.jsx';
 import ThemeToggle from '../ThemeToggle.jsx';
+import NotificationBell from '../NotificationBell.jsx';
 import Avatar from '../ui/Avatar.jsx';
 import Button from '../ui/Button.jsx';
 import Dropdown, { DropdownHeader, DropdownItem, DropdownSeparator } from '../ui/Dropdown.jsx';
@@ -33,6 +36,7 @@ export default function AppShell() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const settingsEnabled = useFeature('SETTINGS');
 
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -118,6 +122,19 @@ export default function AppShell() {
     </NavLink>
   );
 
+  const settingsLink = (
+    <NavLink
+      to="/settings"
+      className={({ isActive }) =>
+        `shell-nav__item ${isActive ? 'is-active' : ''} ${collapsed ? 'is-collapsed' : ''}`.trim()
+      }
+      aria-label="Settings"
+    >
+      <Settings size={20} aria-hidden="true" />
+      {!collapsed && <span className="shell-nav__label">Settings</span>}
+    </NavLink>
+  );
+
   return (
     <div className={`app-shell ${collapsed ? 'is-sidebar-collapsed' : ''}`}>
       {/* Desktop Sidebar */}
@@ -165,6 +182,17 @@ export default function AppShell() {
                 historyLink
               )}
             </li>
+            {settingsEnabled && (
+              <li className="shell-nav__entry">
+                {collapsed ? (
+                  <Tooltip label="Settings" side="right">
+                    {settingsLink}
+                  </Tooltip>
+                ) : (
+                  settingsLink
+                )}
+              </li>
+            )}
           </ul>
         </nav>
       </aside>
@@ -229,6 +257,20 @@ export default function AppShell() {
                 <span className="shell-nav__label">History</span>
               </NavLink>
             </li>
+            {settingsEnabled && (
+              <li className="shell-nav__entry">
+                <NavLink
+                  to="/settings"
+                  className={({ isActive }) =>
+                    `shell-nav__item ${isActive ? 'is-active' : ''}`.trim()
+                  }
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <Settings size={20} aria-hidden="true" />
+                  <span className="shell-nav__label">Settings</span>
+                </NavLink>
+              </li>
+            )}
           </ul>
         </nav>
 
@@ -277,6 +319,8 @@ export default function AppShell() {
           </div>
 
           <div className="shell-header__right">
+            <NotificationBell />
+
             {/* Help & Resources Menu */}
             <Dropdown
               label="Help and resources"
@@ -349,6 +393,14 @@ export default function AppShell() {
                 </div>
               </DropdownHeader>
               <DropdownSeparator />
+              {settingsEnabled && (
+                <>
+                  <DropdownItem icon={Settings} onSelect={() => navigate('/settings')}>
+                    Settings
+                  </DropdownItem>
+                  <DropdownSeparator />
+                </>
+              )}
               <DropdownItem icon={LogOut} danger onSelect={logout}>
                 Sign out
               </DropdownItem>
