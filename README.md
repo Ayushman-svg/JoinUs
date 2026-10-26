@@ -145,7 +145,7 @@ sequenceDiagram
 
 ### Data Model Summary
 
-- **`User`**: Manages credentials (`email`, `passwordHash`), display name (`name`), `personalRoomSlug` (permanent unique slug for personal meeting room `/room/<slug>`), and timestamps.
+- **`User`**: Manages credentials (`email`, `passwordHash`), display name (`name`), `personalRoomSlug` (permanent unique slug for personal meeting room `/room/<slug>`), `timeZone` (default `'UTC'`), `defaultWaitingRoom` (boolean, default true), `defaultMuteOnEntry` (boolean, default false), and timestamps.
 - **`Meeting`**: Stores meeting lifecycle details (`code`, `title`, `description`, `host`, `scheduledAt`, `duration` (in minutes), `timeZone`, `recurrence` (`{ frequency, count, until }`), `isPersonalRoom` (boolean), `startedAt`, `lastActiveAt`, `durationMs`, `status`: `'active'` | `'ended'` | `'cancelled'`, `waitingRoom`: boolean, `passcode`, `muteOnEntry`, and an `attendees` array of user IDs).
 - **`Message`**: Stores persistent in-meeting chat (`meetingCode`, `sender`: `{ id, name }`, `text`: 1–1000 characters, optional `to` (User ID) and `toName` for private messages, `createdAt`).
 
@@ -156,6 +156,8 @@ sequenceDiagram
 | `POST /api/auth/register` | REST | Public | Rate limited (5/hr/IP), Zod schema |
 | `POST /api/auth/login` | REST | Public | Rate limited (10/15m/IP+email), bcrypt comparison |
 | `GET /api/auth/me` | REST | Authenticated User | Bearer JWT verification |
+| `PATCH /api/auth/me` | REST | Authenticated User | Validates name, timeZone, defaultWaitingRoom, defaultMuteOnEntry. Email is read-only. |
+| `POST /api/auth/change-password` | REST | Authenticated User | Requires valid current password, min 8 chars for new password, rate limited (5/15m). |
 | `POST /api/meetings` | REST | Authenticated User | Bearer JWT verification, Zod schema |
 | `GET /api/meetings` | REST | Authenticated User | Bearer JWT verification (returns user's meetings, expands recurrence series) |
 | `GET /api/meetings/:code` | REST | Public | Minimal public metadata (title, host, duration, timeZone, status) |
@@ -335,6 +337,40 @@ JoinUs provides end-to-end meeting scheduling, RFC 5545 calendar invitations, re
    - **Guest Experience:** When guests open the link, they see the host's active meeting if live, or an informative waiting card stating: *"The host has not started the room yet"* with a manual refresh button.
    - **History Preservation:** Ended and cancelled meetings are never reused, ensuring that past meeting recordings, attendance, and transcripts remain isolated and accurate.
 
+### Settings, Profile, and Notifications (`FEATURE_SETTINGS`)
+
+JoinUs provides a comprehensive settings and preferences suite with grouped panels, navigation guards, and client-side notifications:
+
+1. **Settings Page Navigation & Unsaved Changes Guard (`/settings`):**
+   - Accessible via the desktop sidebar, mobile drawer, and user profile menu **strictly when `FEATURE_SETTINGS` is ON**.
+   - Grouped into six panels: Profile, Security, Audio & Video, Meetings, Appearance, and Notifications.
+   - Form tracks dirty state across modified profile, password, device, and meeting inputs with an unsaved changes warning badge, a discard confirmation modal on tab switch, and a window `beforeunload` warning.
+
+2. **Profile & Avatar:**
+   - Full name and time zone update via `PATCH /api/auth/me` with Zod validation. Timezone options are populated using browser zone defaults and `Intl.supportedValuesOf('timeZone')`.
+   - Initials avatar automatically derived from user name with distinct background tinting (no photo upload). Email address is rendered read-only.
+
+3. **Security & Password Management:**
+   - `POST /api/auth/change-password` requires the user's current password (verified via `bcryptjs`), enforces minimum 8 characters for the new password, and is protected with dedicated rate limiting (5 attempts per 15 minutes per IP/user).
+
+4. **Audio & Video Device Preferences:**
+   - Default microphone and camera on/off states for joining calls.
+   - Preferred device selection from browser `navigator.mediaDevices.enumerateDevices()`.
+   - Real-time microphone volume test meter and live camera video preview box.
+   - All media preferences persist across sessions in browser `localStorage` (`joinus_av_preferences`).
+
+5. **Meeting Defaults:**
+   - Default waiting room admission and default mute on entry preferences stored on the User profile (`PATCH /api/auth/me`).
+   - Automatically applied as default configurations when creating new instant or scheduled meetings.
+
+6. **Appearance & Themes:**
+   - Instant switching between Light, Dark, or System themes using the client theme utility (`joinus_theme`). SSR-safe and reacts immediately to OS system theme changes.
+
+7. **Browser Notifications & In-App Bell:**
+   - Step-by-step browser notification permission flow (`Notification.requestPermission()`).
+   - Granular toggles: 'Someone is waiting', 'Meeting starting soon', and 'Chat while the tab is hidden'.
+   - In-app notification bell with real-time unread badge in the header, listing current session events and 'Meeting starting in 10 minutes' client-computed reminders for upcoming meetings. Mark all as read and clear history controls. **No fake or dummy notifications are ever generated.**
+
 ---
 
 ## Testing
@@ -346,8 +382,10 @@ JoinUs maintains extensive automated test suites across both the server and the 
 cd server
 npm test
 ```
-*Covers 23 test suites and 176 tests using Jest, Supertest, and `mongodb-memory-server`:*
+*Covers 25 test suites and 186 tests using Jest, Supertest, and `mongodb-memory-server`:*
 - `auth.test.js` & `security.test.js`: Registration, password length validation, JWT generation, error masking.
+- `profile.test.js`: Profile name/timezone/meeting defaults updates, email immutability, timezone validation, and authentication checks.
+- `changePassword.test.js`: Current password validation, 8-character minimum enforcement, rate limiting, and successful re-login with updated credentials.
 - `meetings.test.js` & `history.test.js`: Meeting creation, lifecycle states, participant authorization, chat history queries.
 - `scheduling.test.js`: Scheduling full-page metadata, duration/timeZone persistence, RFC 5545 `.ics` iCalendar output/escaping/404 handling, and recurrence series expansion.
 - `personalRoom.test.js`: `/api/rooms/:slug` host automatic meeting creation/reuse, guest waiting vs active states, ended meeting reuse prevention, and 404 for non-existent slugs.
@@ -365,8 +403,9 @@ npm test
 cd client
 npm test
 ```
-*Covers 91 unit tests using Node.js test runner (`node:test`):*
+*Covers 97 unit tests using Node.js test runner (`node:test`):*
 - `call.test.js`: Multi-party mesh offer generation, polite/impolite polarity derivation, peer cleanup, screen sharing lifecycle, active speaker audio tracking, network reconnection recovery without duplicate tiles, and room-full/ended meeting transitions.
+- `settingsUi.test.js`: Settings page grouped panels, AppShell sidebar gating (hidden when flag false, shown when true), Notification store, meeting reminders (10m window), and NotificationBell empty state.
 - `schedulingUi.test.js`: Schedule page form validation, browser timezone detection, Prompt 5 security gating (passcode & mute on entry), recurrence rule configuration, viewer local timezone display, Edit and Cancel host actions, Copy Invitation and Add to Calendar (.ics & Google Calendar), and PersonalRoomPage states ("The host has not started the room yet", live active room, and not found).
 - `chatPlusSession.test.js` & `chatPlusUi.test.js`: CallSession private and replyTo sending, optimistic updates, unread count tracking, auto link detection, in-chat search filtering, message actions, emoji popover, and recipient left status.
 - `captionsSession.test.js` & `captionsUi.test.js`: Live captions rendering, clamp/position styling, consent modal, and transcript panel.

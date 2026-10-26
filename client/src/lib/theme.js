@@ -17,10 +17,12 @@ export function getThemePreference() {
 
 export function resolveTheme(preference) {
   if (preference !== 'system') return preference;
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'light';
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 export function getResolvedTheme() {
+  if (typeof document === 'undefined') return 'light';
   return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
 }
 

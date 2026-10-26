@@ -10,7 +10,7 @@ import {
 const getSnapshot = () => `${getThemePreference()}:${getResolvedTheme()}`;
 
 export default function useTheme() {
-  const snapshot = useSyncExternalStore(subscribeTheme, getSnapshot);
+  const snapshot = useSyncExternalStore(subscribeTheme, getSnapshot, getSnapshot);
   const [preference, resolved] = snapshot.split(':');
   return { preference, resolved, setPreference: setThemePreference };
 }
