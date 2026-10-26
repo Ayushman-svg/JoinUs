@@ -170,6 +170,16 @@ const pollVoteSchema = z.object({
     .min(1, 'At least one option must be selected'),
 });
 
+// caption:segment { text, final }
+const captionSegmentSchema = z.object({
+  text: z
+    .string({ required_error: 'text is required' })
+    .trim()
+    .min(1, 'Caption text cannot be empty')
+    .max(300, 'Caption text must be at most 300 characters'),
+  final: z.boolean().optional().default(false),
+});
+
 module.exports = {
   joinSchema,
   mediaSchema,
@@ -189,6 +199,7 @@ module.exports = {
   pollLaunchSchema,
   pollCloseSchema,
   pollVoteSchema,
+  captionSegmentSchema,
   codeSchema: codeParamsSchema,
 };
 

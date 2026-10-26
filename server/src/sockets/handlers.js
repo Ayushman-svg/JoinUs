@@ -6,6 +6,7 @@ const Meeting = require('../models/Meeting');
 const Message = require('../models/Message');
 const Poll = require('../models/Poll');
 const Vote = require('../models/Vote');
+const Caption = require('../models/Caption');
 const { isFeatureEnabled } = require('../config/features');
 const RateLimiter = require('./rateLimit');
 const { passcodeLimiter } = require('../utils/passcodeLimiter');
@@ -28,6 +29,7 @@ const {
   pollLaunchSchema,
   pollCloseSchema,
   pollVoteSchema,
+  captionSegmentSchema,
   codeSchema,
 } = require('./schemas');
 
@@ -1459,6 +1461,71 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
       success: true,
       poll: registry.formatPollForUser(code, userId),
     };
+  });
+
+  // caption:segment { text, final }
+  // Only admitted peers; speaker identity comes from socket (never payload); rate limited;
+  // broadcast to room (socket ids plus user channels); store final segments in Caption model (cap 5000).
+  on(socket, 'caption:segment', async (payload) => {
+    if (!isFeatureEnabled('CAPTIONS')) {
+      throw new AppError(403, 'FEATURE_DISABLED', 'Live captions feature is disabled');
+    }
+
+    const { text, final } = parse(captionSegmentSchema, payload);
+
+    const code = registry.getRoomCode(socket.id);
+    if (!code) {
+      throw new AppError(403, 'NOT_IN_ROOM', 'Participant is not in this meeting');
+    }
+
+    if (limiters?.caption && !limiters.caption.check(socket.id)) {
+      throw new AppError(429, 'RATE_LIMITED', "You're sending captions too fast");
+    }
+
+    const { user } = socket.data;
+    const peer = registry.getPeer(socket.id);
+    const speakerName = peer?.name || user.name || 'Participant';
+    const speakerUserId = user.id;
+
+    const meeting = await Meeting.findOne({ code }).select('_id startedAt createdAt').lean();
+    let offsetMs = 0;
+    if (meeting) {
+      const baseTime = meeting.startedAt
+        ? new Date(meeting.startedAt).getTime()
+        : new Date(meeting.createdAt).getTime();
+      offsetMs = Math.max(0, Date.now() - baseTime);
+    }
+
+    const segmentPayload = {
+      peerId: socket.id,
+      userId: speakerUserId,
+      name: speakerName,
+      text,
+      final: Boolean(final),
+      offsetMs,
+      timestamp: Date.now(),
+    };
+
+    emitToAdmitted(io, registry, code, 'caption:segment', segmentPayload);
+
+    if (final && meeting) {
+      try {
+        const count = await Caption.countDocuments({ meeting: meeting._id });
+        if (count < 5000) {
+          await Caption.create({
+            meeting: meeting._id,
+            user: speakerUserId,
+            name: speakerName,
+            text,
+            offsetMs,
+          });
+        }
+      } catch (err) {
+        console.error(`Failed to persist caption segment in room ${code}:`, sanitizeError(err));
+      }
+    }
+
+    return { ...segmentPayload };
   });
 
   on(socket, 'room:leave', () => {

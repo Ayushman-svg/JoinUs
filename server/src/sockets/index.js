@@ -57,6 +57,7 @@ function initSockets(httpServer) {
     signal: new RateLimiter({ max: 300, windowMs: 10000 }),
     host: new RateLimiter({ max: 30, windowMs: 10000 }),
     reaction: new RateLimiter({ max: 1, windowMs: 1000 }),
+    caption: new RateLimiter({ max: 20, windowMs: 5000 }),
   };
 
   io.use(authenticate);
