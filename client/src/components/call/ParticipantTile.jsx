@@ -66,7 +66,7 @@ export default function ParticipantTile({
 
   return (
     <div
-      className={`tile zoom-tile ${showSpeaking ? 'tile--speaking zoom-tile--speaking' : ''}`}
+      className={`tile zoom-tile ${showSpeaking ? 'tile--speaking zoom-tile--speaking' : ''} ${isPinned ? 'zoom-tile--pinned' : ''}`}
       role="group"
       aria-label={description}
     >
