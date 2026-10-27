@@ -1406,6 +1406,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     }
 
     const { pollId } = parse(pollCloseSchema, payload || {});
+    await ensureActivePollLoaded(code);
     const active = registry.getActivePoll(code);
     const targetId = pollId || active?.id;
     if (!targetId) {
@@ -1452,6 +1453,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     const userId = socket.data.user.id.toString();
 
     // Check active poll
+    await ensureActivePollLoaded(code);
     const active = registry.getActivePoll(code);
     if (!active || active.id !== String(pollId)) {
       throw new AppError(404, 'POLL_NOT_FOUND', 'Active poll not found');

@@ -5,8 +5,13 @@ import React from 'react';
  * Adheres to: "result bars built with plain CSS and text percentages, not color only"
  */
 export default function PollResultBar({ option, totalVotes = 0, isUserVote = false }) {
-  const votes = option.votes || 0;
-  const percentage = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
+  const votes = option.voteCount ?? option.votes ?? 0;
+  const percentage =
+    option.percentage !== undefined
+      ? option.percentage
+      : totalVotes > 0
+      ? Math.round((votes / totalVotes) * 100)
+      : 0;
 
   return (
     <div className={`poll-result-item ${isUserVote ? 'poll-result-item--voted' : ''}`}>

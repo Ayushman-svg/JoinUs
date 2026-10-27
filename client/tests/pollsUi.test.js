@@ -36,6 +36,20 @@ test('PollResultBar: renders plain CSS progress bar with explicit text percentag
   assert.ok(html.includes('width:40%'), 'Must set CSS bar width to 40%');
 });
 
+test('PollResultBar: handles server voteCount schema and singular vote text', () => {
+  const option = { id: 'opt-2', text: 'Option B', voteCount: 1, percentage: 100 };
+  const totalVotes = 1;
+
+  const html = renderToStaticMarkup(
+    React.createElement(PollResultBar, { option, totalVotes, isUserVote: true })
+  );
+
+  assert.ok(html.includes('100%'), 'Must display 100%');
+  assert.ok(html.includes('1 vote'), 'Must display 1 vote (singular)');
+  assert.ok(html.includes('(Your vote)'), 'Must indicate user vote');
+  assert.ok(html.includes('width:100%'), 'Must set CSS bar width to 100%');
+});
+
 test('ParticipantPollCard: renders single-choice radio options and submit button when open', () => {
   const poll = {
     id: 'poll-single',

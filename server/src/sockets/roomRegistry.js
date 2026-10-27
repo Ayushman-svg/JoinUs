@@ -713,6 +713,7 @@ class RoomRegistry {
       if (showResults) {
         const count = counts[opt.id] || 0;
         item.voteCount = count;
+        item.votes = count;
         item.percentage = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
       }
       return item;
