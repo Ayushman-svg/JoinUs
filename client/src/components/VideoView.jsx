@@ -14,24 +14,47 @@ export default function VideoView({ stream, muted = false, mirrored = false, cla
     if (!video) return;
     video.srcObject = stream ?? null;
     setBlocked(false);
+
     if (stream) {
+      const playVideo = () => {
+        if (!video.srcObject) return;
+        video.play()?.catch((err) => {
+          if (err.name === 'NotAllowedError') setBlocked(true);
+        });
+      };
+
       const handleTrackUpdate = () => {
         if (video.srcObject !== stream) {
           video.srcObject = stream;
         }
-        video.play()?.catch(() => {});
+        playVideo();
       };
+
       stream.addEventListener?.('addtrack', handleTrackUpdate);
       stream.addEventListener?.('removetrack', handleTrackUpdate);
 
-      // Browsers can refuse to start sound before the page has been clicked
-      video.play()?.catch((err) => {
-        if (err.name === 'NotAllowedError') setBlocked(true);
+      // Track-level listener: WebRTC tracks unmute when first RTP media packets arrive
+      const tracks = typeof stream.getTracks === 'function' ? stream.getTracks() : [];
+      tracks.forEach((track) => {
+        track.addEventListener?.('unmute', playVideo);
       });
+
+      // HTML5 video readiness events
+      video.addEventListener('loadedmetadata', playVideo);
+      video.addEventListener('canplay', playVideo);
+      video.addEventListener('canplaythrough', playVideo);
+
+      playVideo();
 
       return () => {
         stream.removeEventListener?.('addtrack', handleTrackUpdate);
         stream.removeEventListener?.('removetrack', handleTrackUpdate);
+        tracks.forEach((track) => {
+          track.removeEventListener?.('unmute', playVideo);
+        });
+        video.removeEventListener('loadedmetadata', playVideo);
+        video.removeEventListener('canplay', playVideo);
+        video.removeEventListener('canplaythrough', playVideo);
       };
     }
   }, [stream]);

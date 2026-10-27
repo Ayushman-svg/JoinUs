@@ -673,12 +673,19 @@ export default function CallPage() {
                       <MonitorUp size={13} aria-hidden="true" />
                       <span>{isSelfSharing ? 'Your Shared Screen' : `${presenterName}'s Screen`}</span>
                     </div>
-                    <VideoView
-                      key={call.screenStream?.id || (call.screenShare ? `${call.screenShare.peerId}-${call.screenShare.streamId}` : 'no-screen')}
-                      stream={call.screenStream}
-                      muted={true}
-                      className="presentation-video"
-                    />
+                    {call.screenStream ? (
+                      <VideoView
+                        key={call.screenStream.id}
+                        stream={call.screenStream}
+                        muted={true}
+                        className="presentation-video"
+                      />
+                    ) : (
+                      <div className="presentation-video presentation-video--loading">
+                        <Spinner size="lg" />
+                        <span>Connecting to {isSelfSharing ? 'your shared screen' : `${presenterName}'s screen`}…</span>
+                      </div>
+                    )}
                   </div>
                   <div className="call__filmstrip">
                     <ParticipantTile

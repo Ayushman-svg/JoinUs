@@ -1193,15 +1193,18 @@ export class CallSession {
   #onScreenUpdated(screen) {
     if (this.finished) return;
     this.screenShare = screen && screen.peerId && screen.streamId ? screen : null;
-    if (this.screenShare?.peerId && this.screenShare?.streamId) {
+    if (this.screenShare?.peerId) {
       const sharer = this.peers.get(this.screenShare.peerId);
-      if (sharer && !sharer.remoteStreams.has(this.screenShare.streamId)) {
-        // If sharer has any remote stream that isn't sharer.stream and has video tracks, link it
+      if (sharer) {
         for (const s of sharer.remoteStreams.values()) {
           if (s && s !== sharer.stream && s.getVideoTracks().length > 0) {
             sharer.remoteStreams.set(this.screenShare.streamId, s);
+            sharer.screenStream = s;
             break;
           }
+        }
+        if (!sharer.screenStream && sharer.stream && sharer.stream.getVideoTracks().length > 0) {
+          sharer.screenStream = sharer.stream;
         }
       }
     }
@@ -1335,9 +1338,12 @@ export class CallSession {
           s.addTrack(track);
         }
         // If this peer is known to be the screen sharer, index this stream under screenShare.streamId too
-        if (this.screenShare && this.screenShare.peerId === peerId && this.screenShare.streamId) {
-          if (track.kind === 'video' || !entry.remoteStreams.has(this.screenShare.streamId)) {
-            entry.remoteStreams.set(this.screenShare.streamId, s);
+        if (this.screenShare && this.screenShare.peerId === peerId) {
+          if (track.kind === 'video') {
+            entry.screenStream = s;
+            if (this.screenShare.streamId) {
+              entry.remoteStreams.set(this.screenShare.streamId, s);
+            }
           }
         }
         track.onunmute = () => {
@@ -1666,7 +1672,12 @@ export class CallSession {
     const sharer = this.peers.get(this.screenShare.peerId);
     if (!sharer) return null;
 
-    // 1. Try exact streamId match in sharer.remoteStreams
+    // 1. Direct explicit screenStream property on sharer
+    if (sharer.screenStream && sharer.screenStream.getVideoTracks().some((t) => t.readyState !== 'ended')) {
+      return sharer.screenStream;
+    }
+
+    // 2. Try exact streamId match in sharer.remoteStreams
     if (this.screenShare.streamId && sharer.remoteStreams?.has(this.screenShare.streamId)) {
       const s = sharer.remoteStreams.get(this.screenShare.streamId);
       if (s && s.getVideoTracks().some((t) => t.readyState !== 'ended')) {
@@ -1674,7 +1685,7 @@ export class CallSession {
       }
     }
 
-    // 2. Find any remote stream on sharer that is NOT sharer.stream and has an active video track
+    // 3. Find any remote stream on sharer that is NOT sharer.stream and has an active video track
     if (sharer.remoteStreams && sharer.remoteStreams.size > 0) {
       for (const [id, s] of sharer.remoteStreams.entries()) {
         if (!s || s === sharer.stream) continue;
@@ -1685,7 +1696,7 @@ export class CallSession {
       }
     }
 
-    // 3. Check if sharer.stream has multiple video tracks (camera + screen on same stream)
+    // 4. Check if sharer.stream has multiple video tracks (camera + screen on same stream)
     if (sharer.stream) {
       const liveVideoTracks = sharer.stream.getVideoTracks().filter((t) => t.readyState !== 'ended');
       if (liveVideoTracks.length > 1) {
@@ -1699,15 +1710,15 @@ export class CallSession {
       }
     }
 
-    // 4. If sharer's camera is off (sharer.video === false) and sharer.stream has an active video track, it's screen share
-    if (sharer.stream && sharer.video === false) {
+    // 5. Sharer stream is the only video stream available
+    if (sharer.stream) {
       const liveVideoTracks = sharer.stream.getVideoTracks().filter((t) => t.readyState !== 'ended');
       if (liveVideoTracks.length > 0) {
         return sharer.stream;
       }
     }
 
-    // 5. Fallback: Any remote stream on sharer with an active video track
+    // 6. Fallback: Any remote stream on sharer with an active video track
     if (sharer.remoteStreams && sharer.remoteStreams.size > 0) {
       for (const s of sharer.remoteStreams.values()) {
         if (!s) continue;

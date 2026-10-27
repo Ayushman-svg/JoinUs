@@ -61,12 +61,23 @@ export class Peer {
 
   addTrack(track, stream) {
     if (this.closed) return null;
-    return this.pc.addTrack(track, stream);
+    const sender = this.pc.addTrack(track, stream);
+    this.negotiate();
+    return sender;
   }
 
   removeTrack(sender) {
     if (this.closed) return;
     this.pc.removeTrack(sender);
+    this.negotiate();
+  }
+
+  negotiate() {
+    if (this.closed) return;
+    this.needsRenegotiation = true;
+    if (this.triggerOffer && this.pc.signalingState === 'stable') {
+      this.triggerOffer();
+    }
   }
 
   getSenders() {
@@ -93,8 +104,12 @@ export class Peer {
         this.#report('NEGOTIATION_FAILED', err);
       } finally {
         this.makingOffer = false;
+        if (this.needsRenegotiation && pc.signalingState === 'stable') {
+          triggerOffer();
+        }
       }
     };
+    this.triggerOffer = triggerOffer;
 
     pc.onnegotiationneeded = triggerOffer;
     pc.onsignalingstatechange = () => {
@@ -149,7 +164,12 @@ export class Peer {
   // while the offer it belongs to is still being set up (handling an offer awaits), and a
   // candidate that arrives too early is lost, so ICE never starts.
   handleSignal(message) {
-    this.queue = this.queue.then(() => this.#processSignal(message));
+    this.queue = this.queue.then(async () => {
+      await this.#processSignal(message);
+      if (this.needsRenegotiation && this.pc.signalingState === 'stable') {
+        await this.triggerOffer?.();
+      }
+    });
     return this.queue;
   }
 
