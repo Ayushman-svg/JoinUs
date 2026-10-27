@@ -203,7 +203,7 @@ function leaveRoom(io, registry, socket, limiters) {
     socket.leave(left.code);
     io.to(left.code).emit('room:peer-left', { peerId: socket.id });
     if (left.screenShareEnded) {
-      io.to(left.code).emit('room:screen-updated', { peerId: null, streamId: null });
+      emitToAdmitted(io, registry, left.code, 'room:screen-updated', { peerId: null, streamId: null });
     }
     if (left.remaining && left.remaining.length === 0) {
       recordRoomInactive(left.code);
@@ -955,7 +955,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
 
     io.to(code).emit('room:peer-left', { peerId });
     if (removed.screenShareEnded) {
-      io.to(code).emit('room:screen-updated', { peerId: null, streamId: null });
+      emitToAdmitted(io, registry, code, 'room:screen-updated', { peerId: null, streamId: null });
     }
     if (removed.remaining && removed.remaining.length === 0) {
       recordRoomInactive(code);
@@ -1045,7 +1045,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
     }
 
     registry.startScreenShare(code, socket.id, streamId);
-    io.to(code).emit('room:screen-updated', { peerId: socket.id, streamId });
+    emitToAdmitted(io, registry, code, 'room:screen-updated', { peerId: socket.id, streamId });
     return {};
   });
 
@@ -1058,7 +1058,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
 
     const stopped = registry.stopScreenShare(code, socket.id);
     if (stopped) {
-      io.to(code).emit('room:screen-updated', { peerId: null, streamId: null });
+      emitToAdmitted(io, registry, code, 'room:screen-updated', { peerId: null, streamId: null });
     }
     return {};
   });
@@ -1069,7 +1069,7 @@ function registerHandlers(io, socket, registry, rateLimiterInput = defaultRateLi
 
     const cleared = registry.clearScreenShare(code);
     if (cleared) {
-      io.to(code).emit('room:screen-updated', { peerId: null, streamId: null });
+      emitToAdmitted(io, registry, code, 'room:screen-updated', { peerId: null, streamId: null });
     }
     return {};
   });

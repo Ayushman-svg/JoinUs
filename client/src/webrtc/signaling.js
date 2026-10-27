@@ -19,7 +19,34 @@ export const SignalingStatus = Object.freeze({
   CLOSED: 'closed', // closed by us
 });
 
-const SERVER_EVENTS = ['room:peer-joined', 'room:peer-left', 'room:peer-updated', 'room:kicked', 'signal'];
+const SERVER_EVENTS = [
+  'room:peer-joined',
+  'room:peer-left',
+  'room:peer-updated',
+  'room:screen-updated',
+  'room:waiting-updated',
+  'room:admitted',
+  'room:denied',
+  'room:removed',
+  'room:ended',
+  'room:locked',
+  'room:settings-changed',
+  'peer:role-changed',
+  'peer:renamed',
+  'host:command-mute',
+  'host:command-stop-video',
+  'host:command-request-unmute',
+  'chat:message',
+  'reaction:new',
+  'hand:changed',
+  'feedback:changed',
+  'poll:launched',
+  'poll:updated',
+  'poll:closed',
+  'caption:segment',
+  'signal',
+  'room:kicked',
+];
 const FATAL_CODES = new Set(['UNAUTHORIZED', 'INVALID_TOKEN', 'TOKEN_EXPIRED']);
 
 export class SignalingError extends Error {
@@ -73,6 +100,13 @@ export function createSignaling({ url, getToken, requestTimeout = 8000, socketOp
     });
 
     for (const event of SERVER_EVENTS) socket.on(event, (data) => emit(event, data));
+    if (typeof socket.onAny === 'function') {
+      socket.onAny((event, ...args) => {
+        if (!SERVER_EVENTS.includes(event)) {
+          emit(event, args[0]);
+        }
+      });
+    }
 
     socket.on('connect', () => {
       attempt = 0;
