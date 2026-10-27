@@ -86,7 +86,20 @@ export function useFeatures() {
 
   return {
     features,
-    isEnabled: (name) => Boolean(features && features[name]),
+    isEnabled: (name) => {
+      let viteVal;
+      try {
+        viteVal = import.meta?.env?.[`VITE_FEATURE_${name}`];
+      } catch {
+        /* ignore */
+      }
+      const isViteTrue = viteVal === 'true' || viteVal === true || viteVal === '1';
+
+      if (features && features[name] !== undefined) {
+        return Boolean(features[name]) || isViteTrue;
+      }
+      return isViteTrue;
+    },
     reload: () => fetchFeatures(true),
     ready,
   };

@@ -1340,6 +1340,9 @@ export class CallSession {
             entry.remoteStreams.set(this.screenShare.streamId, s);
           }
         }
+        track.onunmute = () => {
+          this.#update();
+        };
         track.onended = () => {
           this.#update();
         };

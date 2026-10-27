@@ -2443,27 +2443,46 @@
   backdrop-filter: blur(8px);
 }
 
-.zoom-tile__more-btn {
+.zoom-tile__top-actions {
   position: absolute;
   top: 10px;
   right: 10px;
-  z-index: 10;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.zoom-tile__pin-btn,
+.zoom-tile__more-btn {
+  position: relative;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #FFFFFF;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--color-text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s, background 0.15s;
+  padding: 0;
+  transition: transform var(--duration-fast), color var(--duration-fast), background var(--duration-fast), border-color var(--duration-fast);
 }
 
-.zoom-tile:hover .zoom-tile__more-btn {
-  opacity: 1;
+.zoom-tile__pin-btn:hover,
+.zoom-tile__more-btn:hover {
+  background: rgba(0, 0, 0, 0.85);
+  color: #FFFFFF;
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: scale(1.08);
+}
+
+.zoom-tile__pin-btn.is-pinned {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #FFFFFF;
 }
 
 .zoom-tile__name-tag {

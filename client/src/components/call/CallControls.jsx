@@ -694,6 +694,32 @@ export default function CallControls({
                   <Mic size={16} aria-hidden="true" />
                   <span>Test Audio…</span>
                 </button>
+                {pollsEnabled && (
+                  <button
+                    type="button"
+                    className="zoom-menu__item"
+                    onClick={() => {
+                      setShowMoreMenu(false);
+                      onTogglePolls?.();
+                    }}
+                  >
+                    <BarChart2 size={16} aria-hidden="true" />
+                    <span>Polls</span>
+                  </button>
+                )}
+                {captionsEnabled && (
+                  <button
+                    type="button"
+                    className="zoom-menu__item"
+                    onClick={() => {
+                      setShowMoreMenu(false);
+                      onToggleCaptions?.();
+                    }}
+                  >
+                    <Captions size={16} aria-hidden="true" />
+                    <span>{captionsActive ? 'Turn off Captions' : 'Turn on Captions'}</span>
+                  </button>
+                )}
                 {captionsEnabled && (
                   <button
                     type="button"
@@ -705,6 +731,19 @@ export default function CallControls({
                   >
                     <FileText size={16} aria-hidden="true" />
                     <span>Transcript</span>
+                  </button>
+                )}
+                {reactionsEnabled && (
+                  <button
+                    type="button"
+                    className="zoom-menu__item"
+                    onClick={() => {
+                      setShowMoreMenu(false);
+                      setShowReactionsPopover(true);
+                    }}
+                  >
+                    <Smile size={16} aria-hidden="true" />
+                    <span>Reactions</span>
                   </button>
                 )}
               </div>

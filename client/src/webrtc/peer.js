@@ -77,11 +77,14 @@ export class Peer {
   #bind() {
     const { pc } = this;
 
-    // Fires when tracks are added and when ICE restarts: the one place that creates offers
-    pc.onnegotiationneeded = async () => {
+    const triggerOffer = async () => {
       // Not the initiator: the first offer comes from the other side (it answers our tracks too)
       if (!this.initiator && !pc.remoteDescription) return;
-      if (this.makingOffer || pc.signalingState !== 'stable') return;
+      if (this.makingOffer || pc.signalingState !== 'stable') {
+        this.needsRenegotiation = true;
+        return;
+      }
+      this.needsRenegotiation = false;
       try {
         this.makingOffer = true;
         await pc.setLocalDescription(); // picks the right offer or answer by itself
@@ -90,6 +93,13 @@ export class Peer {
         this.#report('NEGOTIATION_FAILED', err);
       } finally {
         this.makingOffer = false;
+      }
+    };
+
+    pc.onnegotiationneeded = triggerOffer;
+    pc.onsignalingstatechange = () => {
+      if (pc.signalingState === 'stable' && this.needsRenegotiation) {
+        triggerOffer();
       }
     };
 
@@ -186,6 +196,7 @@ export class Peer {
     this.closed = true;
     const { pc } = this;
     pc.onnegotiationneeded = null;
+    pc.onsignalingstatechange = null;
     pc.onicecandidate = null;
     pc.ontrack = null;
     pc.onconnectionstatechange = null;
