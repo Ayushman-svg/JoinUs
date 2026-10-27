@@ -288,20 +288,32 @@ export default function Dashboard() {
   const supportsScreenShare =
     typeof navigator !== 'undefined' && Boolean(navigator?.mediaDevices?.getDisplayMedia);
 
-  // Filter meetings scheduled or active for today
+  // Filter meetings scheduled or active for today (future upcoming or currently live meetings only; past ended meetings belong in Recent/History)
   const todayMeetings = useMemo(() => {
-    return meetingsState.meetings.filter((m) => {
-      if (m.status === 'cancelled') return false;
-      const dateStr = m.scheduledAt || m.startedAt || m.createdAt;
-      if (!dateStr) return false;
-      const target = new Date(dateStr);
-      const now = new Date();
-      return (
-        target.getFullYear() === now.getFullYear() &&
-        target.getMonth() === now.getMonth() &&
-        target.getDate() === now.getDate()
-      );
-    });
+    const now = new Date();
+    return meetingsState.meetings
+      .filter((m) => {
+        // Ended, cancelled, or past meetings do NOT belong in Today's Schedule
+        if (m.status === 'ended' || m.status === 'cancelled') return false;
+        if (m.phase === 'past') return false;
+
+        // Must have a scheduled date for today (or be currently live/ongoing today)
+        const dateStr = m.scheduledAt || (m.phase === 'ongoing' ? m.startedAt : null);
+        if (!dateStr) return false;
+
+        const target = new Date(dateStr);
+        const isToday =
+          target.getFullYear() === now.getFullYear() &&
+          target.getMonth() === now.getMonth() &&
+          target.getDate() === now.getDate();
+
+        return isToday && (m.phase === 'upcoming' || m.phase === 'ongoing');
+      })
+      .sort((a, b) => {
+        const timeA = new Date(a.scheduledAt || a.startedAt || 0).getTime();
+        const timeB = new Date(b.scheduledAt || b.startedAt || 0).getTime();
+        return timeA - timeB;
+      });
   }, [meetingsState.meetings]);
 
   async function handleStartShare() {

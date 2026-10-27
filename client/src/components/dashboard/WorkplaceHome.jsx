@@ -223,10 +223,8 @@ export default function WorkplaceHome({
                     <div className="workplace-today-item__actions">
                       {isLive ? (
                         <Badge variant="success">● In progress</Badge>
-                      ) : m.phase === 'upcoming' ? (
-                        <Badge variant="info">Upcoming</Badge>
                       ) : (
-                        <Badge variant="neutral">Ended</Badge>
+                        <Badge variant="info">Upcoming</Badge>
                       )}
 
                       {m.status !== 'ended' && m.status !== 'cancelled' && (

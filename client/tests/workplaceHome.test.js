@@ -209,3 +209,43 @@ test('ClassicDashboard renders greeting, 3 cards, and preserves original layout'
   assert.ok(html.includes('Join with code or link'), 'Card 2 must be present');
   assert.ok(html.includes('Schedule for later'), 'Card 3 must be present');
 });
+
+test("Today's Schedule: does not render ended meetings and only renders active/upcoming meetings", () => {
+  const upcomingMeeting = {
+    id: 'm1',
+    code: 'abc-defg-hij',
+    title: 'Future Discussion',
+    scheduledAt: new Date(Date.now() + 3600000).toISOString(),
+    phase: 'upcoming',
+    status: 'scheduled',
+    host: { id: 'u1', name: 'Alice' },
+  };
+
+  const html = renderToStaticMarkup(
+    React.createElement(WorkplaceHome, {
+      timeString: '10:30 AM',
+      dateString: 'Monday, October 26, 2026',
+      onStartInstant: () => {},
+      onOpenJoin: () => {},
+      onOpenSchedule: () => {},
+      onStartShare: () => {},
+      supportsScreenShare: true,
+      todayMeetings: [upcomingMeeting],
+      inProgress: [],
+      upcoming: [upcomingMeeting],
+      recent: [],
+      searchQuery: '',
+      onClearSearch: () => {},
+      navigate: () => {},
+      user: { id: 'u1', name: 'Alice' },
+      getRecentBadgeKind: () => 'past',
+      meetingsStatus: 'ready',
+      meetingsError: '',
+      onRetry: () => {},
+    })
+  );
+
+  assert.ok(html.includes('Future Discussion'));
+  assert.ok(html.includes('Upcoming'));
+  assert.equal(html.includes('Ended'), false, 'Today schedule must not contain Ended badge');
+});
