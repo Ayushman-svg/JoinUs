@@ -188,5 +188,28 @@ test('Polls: CallSession receives activePoll on join, handles launched/updated/c
   call.dismissActivePoll();
   assert.equal(call.getState().activePoll, null);
 
+  // Subsequent poll:closed event for the dismissed poll must not reactivate it
+  mockSignaling.emit('poll:closed', {
+    poll: {
+      id: 'poll-1',
+      status: 'closed',
+      totalVotes: 3,
+    },
+  });
+  assert.equal(call.getState().activePoll, null, 'Dismissed poll must remain null after poll:closed');
+
+  // Launching a new poll with a new id must activate cleanly
+  mockSignaling.emit('poll:launched', {
+    poll: {
+      id: 'poll-2',
+      question: 'Next question?',
+      options: [{ id: 'opt-2a', text: 'Option A' }, { id: 'opt-2b', text: 'Option B' }],
+      status: 'open',
+      totalVotes: 0,
+    },
+  });
+  assert.ok(call.getState().activePoll, 'New poll must be active');
+  assert.equal(call.getState().activePoll.id, 'poll-2');
+
   call.leave();
 });

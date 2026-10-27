@@ -33,6 +33,39 @@ export const CallStatus = Object.freeze({
 const PENDING_LIMIT = 50;
 const PENDING_TTL_MS = 10_000;
 
+function getStoredDismissedPolls(code) {
+  try {
+    if (typeof sessionStorage === 'undefined' || !code) return new Set();
+    const raw = sessionStorage.getItem(`joinus_dismissed_polls_${code}`);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function storeDismissedPoll(code, pollId) {
+  try {
+    if (typeof sessionStorage === 'undefined' || !code || !pollId) return;
+    const key = `joinus_dismissed_polls_${code}`;
+    const raw = sessionStorage.getItem(key);
+    const list = raw ? JSON.parse(raw) : [];
+    if (!list.includes(pollId)) {
+      sessionStorage.setItem(key, JSON.stringify([...list, pollId]));
+    }
+  } catch {}
+}
+
+function removeStoredDismissedPoll(code, pollId) {
+  try {
+    if (typeof sessionStorage === 'undefined' || !code || !pollId) return;
+    const key = `joinus_dismissed_polls_${code}`;
+    const raw = sessionStorage.getItem(key);
+    const list = raw ? JSON.parse(raw) : [];
+    const filtered = list.filter((id) => id !== pollId);
+    sessionStorage.setItem(key, JSON.stringify(filtered));
+  } catch {}
+}
+
 export class CallSession {
   constructor({
     code,
@@ -86,6 +119,7 @@ export class CallSession {
     this.securityToast = null;
     this.unmuteRequestPrompt = null;
     this.activePoll = null;
+    this.dismissedPollIds = getStoredDismissedPolls(this.code);
     this.selfId = null;
     this.screenShare = null;
     this.joinAttempt = 0;
@@ -319,10 +353,15 @@ export class CallSession {
       signaling.on('hand:changed', (data) => this.#onHandChanged(data)),
       signaling.on('feedback:changed', (data) => this.#onFeedbackChanged(data)),
       signaling.on('poll:launched', ({ poll }) => {
+        if (poll?.id) {
+          this.dismissedPollIds.delete(poll.id);
+          removeStoredDismissedPoll(this.code, poll.id);
+        }
         this.activePoll = poll;
         this.#update({ activePoll: this.activePoll });
       }),
       signaling.on('poll:updated', ({ poll }) => {
+        if (poll?.id && this.dismissedPollIds.has(poll.id)) return;
         if (this.activePoll && this.activePoll.id === poll?.id) {
           this.activePoll = { ...this.activePoll, ...poll };
         } else {
@@ -331,6 +370,7 @@ export class CallSession {
         this.#update({ activePoll: this.activePoll });
       }),
       signaling.on('poll:closed', ({ poll }) => {
+        if (poll?.id && this.dismissedPollIds.has(poll.id)) return;
         if (this.activePoll && this.activePoll.id === poll?.id) {
           this.activePoll = { ...this.activePoll, ...poll, status: 'closed' };
         } else {
@@ -486,7 +526,12 @@ export class CallSession {
     return res?.poll;
   }
 
-  dismissActivePoll() {
+  dismissActivePoll(pollId) {
+    const id = pollId || this.activePoll?.id;
+    if (id) {
+      this.dismissedPollIds.add(id);
+      storeDismissedPoll(this.code, id);
+    }
     this.activePoll = null;
     this.#update({ activePoll: null });
   }
@@ -656,7 +701,18 @@ export class CallSession {
           this.#stopInCallPolling();
           this.#finish(CallStatus.REMOVED, { reason: 'REMOVED_BY_HOST' });
         } else if (res?.activePoll !== undefined) {
-          if (JSON.stringify(this.activePoll) !== JSON.stringify(res.activePoll)) {
+          const pollId = res.activePoll?.id;
+          if (pollId && this.dismissedPollIds.has(pollId)) {
+            if (this.activePoll !== null) {
+              this.activePoll = null;
+              this.#update({ activePoll: null });
+            }
+          } else if (res.activePoll?.status === 'closed' && this.activePoll === null) {
+            if (pollId) {
+              this.dismissedPollIds.add(pollId);
+              storeDismissedPoll(this.code, pollId);
+            }
+          } else if (JSON.stringify(this.activePoll) !== JSON.stringify(res.activePoll)) {
             this.activePoll = res.activePoll;
             this.#update({ activePoll: this.activePoll });
           }
@@ -1149,7 +1205,18 @@ export class CallSession {
       this.selfRaisedAt = response.raisedAt || null;
       this.selfFeedback = response.feedback || null;
       if (response.activePoll !== undefined) {
-        this.activePoll = response.activePoll;
+        const pollId = response.activePoll?.id;
+        if (pollId && this.dismissedPollIds.has(pollId)) {
+          this.activePoll = null;
+        } else if (response.activePoll?.status === 'closed' && !this.isHost && !this.isCoHost) {
+          if (pollId) {
+            this.dismissedPollIds.add(pollId);
+            storeDismissedPoll(this.code, pollId);
+          }
+          this.activePoll = null;
+        } else {
+          this.activePoll = response.activePoll;
+        }
       }
       this.#update({
         status: CallStatus.ACTIVE,
@@ -1237,7 +1304,20 @@ export class CallSession {
     if (settings) this.roomSettings = settings;
     if (locked !== undefined) this.isLocked = Boolean(locked || this.roomSettings?.locked);
     this.screenShare = screenSharer ?? null;
-    if (activePoll !== undefined) this.activePoll = activePoll;
+    if (activePoll !== undefined) {
+      const pollId = activePoll?.id;
+      if (pollId && this.dismissedPollIds.has(pollId)) {
+        this.activePoll = null;
+      } else if (activePoll?.status === 'closed' && !this.isHost && !this.isCoHost) {
+        if (pollId) {
+          this.dismissedPollIds.add(pollId);
+          storeDismissedPoll(this.code, pollId);
+        }
+        this.activePoll = null;
+      } else {
+        this.activePoll = activePoll;
+      }
+    }
     this.#update({
       status: CallStatus.ACTIVE,
       selfId: this.selfId,

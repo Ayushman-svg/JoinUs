@@ -874,7 +874,7 @@ export default function CallPage() {
             <ParticipantPollCard
               poll={call.activePoll}
               onSubmitVote={call.submitVote}
-              onDismiss={call.dismissActivePoll}
+              onDismiss={() => call.dismissActivePoll(call.activePoll?.id)}
             />
           )}
           {captionsEnabled && inCall && captionsActive && call.liveCaption && (
