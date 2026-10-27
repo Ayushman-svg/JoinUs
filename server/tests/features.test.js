@@ -16,6 +16,9 @@ describe('Feature Flags and /api/config', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv };
+    for (const name of FEATURE_NAMES) {
+      delete process.env[`FEATURE_${name}`];
+    }
   });
 
   afterAll(() => {
