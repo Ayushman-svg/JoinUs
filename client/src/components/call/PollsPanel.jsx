@@ -106,7 +106,7 @@ export default function PollsPanel({
     try {
       await onCreatePoll?.({
         question: trimmedQuestion,
-        options: trimmedOptions,
+        options: trimmedOptions.map((opt) => (typeof opt === 'string' ? { text: opt } : opt)),
         multiple,
         anonymous,
         shareResults,

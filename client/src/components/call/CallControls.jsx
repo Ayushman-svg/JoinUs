@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   BarChart2,
   Captions,
   Check,
@@ -213,8 +214,69 @@ export default function CallControls({
   const activeSpeakerName =
     audioOutputs.find((d) => d.deviceId === currentSpeakerId)?.label || 'System Default Speaker';
 
+  const [permissionNotice, setPermissionNotice] = useState(null);
+  const permissionTimerRef = useRef(null);
+
+  const showPermissionNotice = (kind) => {
+    if (permissionTimerRef.current) clearTimeout(permissionTimerRef.current);
+    const label = kind === 'video' ? 'Camera' : 'Microphone';
+    setPermissionNotice({
+      kind,
+      message: `${label} access is blocked in Chrome. Click the site settings / lock icon in your address bar to allow ${label.toLowerCase()} permission, then try again.`,
+    });
+    permissionTimerRef.current = setTimeout(() => {
+      setPermissionNotice(null);
+    }, 8000);
+  };
+
+  const handleAudioClick = async () => {
+    if (media?.hasAudio) {
+      media.toggleAudio();
+    } else {
+      try {
+        const stream = await media?.start?.();
+        if (!stream || !stream.getAudioTracks().length) {
+          showPermissionNotice('audio');
+        }
+      } catch {
+        showPermissionNotice('audio');
+      }
+    }
+  };
+
+  const handleVideoClick = async () => {
+    if (media?.hasVideo) {
+      media.toggleVideo();
+    } else {
+      try {
+        const stream = await media?.start?.();
+        if (!stream || !stream.getVideoTracks().length) {
+          showPermissionNotice('video');
+        }
+      } catch {
+        showPermissionNotice('video');
+      }
+    }
+  };
+
   return (
     <>
+      {permissionNotice && (
+        <aside className="zoom-permission-toast" role="alert">
+          <AlertTriangle size={18} className="zoom-permission-toast__icon" aria-hidden="true" />
+          <div className="zoom-permission-toast__content">
+            {permissionNotice.message}
+          </div>
+          <button
+            type="button"
+            className="zoom-permission-toast__close"
+            onClick={() => setPermissionNotice(null)}
+            aria-label="Dismiss notification"
+          >
+            <X size={15} aria-hidden="true" />
+          </button>
+        </aside>
+      )}
       <footer className="zoom-toolbar" role="toolbar" aria-label="Meeting controls">
         {/* Left controls: Audio & Video */}
         <div className="zoom-toolbar__group zoom-toolbar__group--left">
@@ -223,8 +285,7 @@ export default function CallControls({
             <button
               type="button"
               className={`zoom-btn zoom-btn--media ${!audioOn ? 'is-off' : ''}`}
-              onClick={media?.toggleAudio}
-              disabled={!media?.hasAudio}
+              onClick={handleAudioClick}
               aria-label={audioOn ? 'Mute' : 'Unmute'}
             >
               <span className="zoom-btn__icon">
@@ -333,8 +394,7 @@ export default function CallControls({
             <button
               type="button"
               className={`zoom-btn zoom-btn--media ${!videoOn ? 'is-off' : ''}`}
-              onClick={media?.toggleVideo}
-              disabled={!media?.hasVideo}
+              onClick={handleVideoClick}
               aria-label={videoOn ? 'Stop Video' : 'Start Video'}
             >
               <span className="zoom-btn__icon">

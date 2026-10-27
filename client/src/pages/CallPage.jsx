@@ -652,13 +652,6 @@ export default function CallPage() {
 
               <div className="call__notices">
                 {notice}
-                {media.error && (
-                  <Alert variant="warning" title="You joined without your camera and microphone">
-                    {media.error.message}
-                  </Alert>
-                )}
-                {!media.error && media.videoError && <Alert variant="warning">{media.videoError.message}</Alert>}
-                {!media.error && media.audioError && <Alert variant="warning">{media.audioError.message}</Alert>}
                 {media.deviceLost && (
                   <Alert variant="warning">
                     Your {media.deviceLost === 'video' ? 'camera' : 'microphone'} was disconnected.

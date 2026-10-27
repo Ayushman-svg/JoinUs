@@ -442,7 +442,13 @@ export class CallSession {
 
   async createPoll(payload) {
     if (!this.signaling?.connected) throw new Error('Not connected');
-    const res = await this.signaling.request('poll:create', payload);
+    const normalizedPayload = {
+      ...payload,
+      options: (payload?.options || []).map((opt) =>
+        typeof opt === 'string' ? { text: opt } : opt
+      ),
+    };
+    const res = await this.signaling.request('poll:create', normalizedPayload);
     if (res?.poll && payload?.launchNow) {
       this.activePoll = res.poll;
       this.#update({ activePoll: this.activePoll });

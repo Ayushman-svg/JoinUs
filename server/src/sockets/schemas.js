@@ -134,14 +134,22 @@ const hostRemoveSchema = z.object({
 });
 
 // poll:create { question, options, multiple?, anonymous?, shareResults?, launchNow? }
-const pollOptionSchema = z.object({
-  id: z.string().optional(),
-  text: z
+const pollOptionSchema = z.union([
+  z
     .string({ required_error: 'Option text is required' })
     .trim()
     .min(1, 'Option text cannot be empty')
-    .max(200, 'Option text must be at most 200 characters'),
-});
+    .max(200, 'Option text must be at most 200 characters')
+    .transform((text) => ({ text })),
+  z.object({
+    id: z.string().optional(),
+    text: z
+      .string({ required_error: 'Option text is required' })
+      .trim()
+      .min(1, 'Option text cannot be empty')
+      .max(200, 'Option text must be at most 200 characters'),
+  }),
+]);
 
 const pollCreateSchema = z.object({
   question: z
