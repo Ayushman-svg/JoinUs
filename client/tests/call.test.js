@@ -322,6 +322,70 @@ test('Screen sharing: startScreenShare, cancellation, and remote stream resoluti
   call.leave();
 });
 
+test('Remote screen sharing: resolves screen stream dynamically without requiring refresh even with mismatched stream IDs', async () => {
+  const mockSignaling = new MockSignaling();
+  mockSignaling.mockJoinPeers = [
+    { peerId: 'remote-peer-1', user: { id: 'u1', name: 'Alice' }, audio: true, video: true },
+  ];
+
+  const call = new CallSession({
+    code: 'remote-share-room',
+    url: 'http://localhost:5000',
+    getToken: () => 'token',
+    createSignalingClient: () => mockSignaling,
+    getMeetingMessagesApi: async () => [],
+  });
+
+  call.start();
+  await new Promise((r) => setTimeout(r, 10));
+
+  assert.equal(call.getState().screenShare, null);
+  assert.equal(call.getState().screenStream, null);
+
+  // 1. Signaling arrives: remote peer Alice starts sharing screen with sender ID 'sender-screen-id-999'
+  mockSignaling.emit('room:screen-updated', {
+    peerId: 'remote-peer-1',
+    streamId: 'sender-screen-id-999',
+  });
+
+  assert.deepEqual(call.getState().screenShare, {
+    peerId: 'remote-peer-1',
+    streamId: 'sender-screen-id-999',
+  });
+  // Track has not arrived yet
+  assert.equal(call.getState().screenStream, null);
+
+  // 2. WebRTC track arrives later, but browser assigned an arbitrary/different stream ID 'browser-random-uuid'
+  const mockScreenTrack = { kind: 'video', readyState: 'live', onended: null };
+  const mockBrowserStream = {
+    id: 'browser-random-uuid',
+    tracks: [mockScreenTrack],
+    getTracks: () => [mockScreenTrack],
+    getVideoTracks: () => [mockScreenTrack],
+  };
+
+  const peerEntry = call.peers.get('remote-peer-1');
+  assert.ok(peerEntry, 'Remote peer exists');
+  // Simulate WebRTC onTrack event on peer
+  peerEntry.peer.onTrack({
+    track: mockScreenTrack,
+    stream: mockBrowserStream,
+    streams: [mockBrowserStream],
+  });
+
+  // Screen stream must now be resolved immediately without refreshing!
+  const resolved = call.getState().screenStream;
+  assert.ok(resolved, 'Remote screen stream resolved without refresh');
+  assert.equal(resolved.id, 'browser-random-uuid');
+
+  // 3. Remote peer stops sharing
+  mockSignaling.emit('room:screen-updated', null);
+  assert.equal(call.getState().screenShare, null);
+  assert.equal(call.getState().screenStream, null);
+
+  call.leave();
+});
+
 test('Active speaker: AudioActivityTracker tracks and untracks streams gracefully', () => {
   let currentSpeaker = null;
   const tracker = new AudioActivityTracker({

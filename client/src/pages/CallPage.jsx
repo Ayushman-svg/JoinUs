@@ -674,6 +674,7 @@ export default function CallPage() {
                       <span>{isSelfSharing ? 'Your Shared Screen' : `${presenterName}'s Screen`}</span>
                     </div>
                     <VideoView
+                      key={call.screenStream?.id || (call.screenShare ? `${call.screenShare.peerId}-${call.screenShare.streamId}` : 'no-screen')}
                       stream={call.screenStream}
                       muted={true}
                       className="presentation-video"
@@ -1135,66 +1136,68 @@ export default function CallPage() {
         </div>
       </Modal>
 
-      {inCall && isHost && toastGuest && (
-        <aside className="call__waiting-toast" role="status" aria-live="polite">
-          <Avatar name={toastGuest.user?.name ?? 'Guest'} size="sm" />
-          <span className="call__waiting-toast-text">
-            <strong>{toastGuest.user?.name ?? 'Guest'}</strong> is waiting
-          </span>
-          <div className="call__waiting-toast-actions">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                call.admitPeer(toastGuest.peerId);
-                setToastGuest(null);
-              }}
-            >
-              Admit
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                call.denyPeer(toastGuest.peerId);
-                setToastGuest(null);
-              }}
-            >
-              Deny
-            </Button>
-          </div>
-        </aside>
-      )}
-
-      {inCall && isHost && reactionsEnabled && call.handToast && (
-        <aside className="call__waiting-toast call__hand-toast" role="status" aria-live="polite">
-          <Avatar name={call.handToast.name ?? 'Guest'} size="sm" />
-          <span className="call__waiting-toast-text">
-            <strong>{call.handToast.name ?? 'Guest'}</strong> raised a hand
-          </span>
-          <div className="call__waiting-toast-actions">
-            {call.handToast.peerId && (
+      <div className="call__toasts-stack">
+        {inCall && (isHost || call.canModerate) && toastGuest && (
+          <aside className="call__waiting-toast" role="status" aria-live="polite">
+            <Avatar name={toastGuest.user?.name ?? 'Guest'} size="sm" />
+            <span className="call__waiting-toast-text">
+              <strong>{toastGuest.user?.name ?? 'Guest'}</strong> is waiting
+            </span>
+            <div className="call__waiting-toast-actions">
               <Button
                 variant="primary"
                 size="sm"
                 onClick={() => {
-                  call.lowerPeerHand(call.handToast.peerId);
-                  call.clearHandToast();
+                  call.admitPeer(toastGuest.peerId);
+                  setToastGuest(null);
                 }}
               >
-                Lower hand
+                Admit
               </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => call.clearHandToast()}
-            >
-              Dismiss
-            </Button>
-          </div>
-        </aside>
-      )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  call.denyPeer(toastGuest.peerId);
+                  setToastGuest(null);
+                }}
+              >
+                Deny
+              </Button>
+            </div>
+          </aside>
+        )}
+
+        {inCall && (isHost || call.canModerate) && reactionsEnabled && call.handToast && (
+          <aside className="call__waiting-toast call__hand-toast" role="status" aria-live="polite">
+            <Avatar name={call.handToast.name ?? 'Guest'} size="sm" />
+            <span className="call__waiting-toast-text">
+              <strong>{call.handToast.name ?? 'Guest'}</strong> raised a hand
+            </span>
+            <div className="call__waiting-toast-actions">
+              {call.handToast.peerId && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    call.lowerPeerHand(call.handToast.peerId);
+                    call.clearHandToast();
+                  }}
+                >
+                  Lower hand
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => call.clearHandToast()}
+              >
+                Dismiss
+              </Button>
+            </div>
+          </aside>
+        )}
+      </div>
 
       {/* Remove Confirm Modal */}
       <Modal

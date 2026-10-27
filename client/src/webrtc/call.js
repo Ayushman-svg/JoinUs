@@ -1193,6 +1193,18 @@ export class CallSession {
   #onScreenUpdated(screen) {
     if (this.finished) return;
     this.screenShare = screen && screen.peerId && screen.streamId ? screen : null;
+    if (this.screenShare?.peerId && this.screenShare?.streamId) {
+      const sharer = this.peers.get(this.screenShare.peerId);
+      if (sharer && !sharer.remoteStreams.has(this.screenShare.streamId)) {
+        // If sharer has any remote stream that isn't sharer.stream and has video tracks, link it
+        for (const s of sharer.remoteStreams.values()) {
+          if (s && s !== sharer.stream && s.getVideoTracks().length > 0) {
+            sharer.remoteStreams.set(this.screenShare.streamId, s);
+            break;
+          }
+        }
+      }
+    }
     this.#update({ screenShare: this.screenShare });
   }
 
@@ -1314,7 +1326,7 @@ export class CallSession {
         this.audioTracker?.trackStream(peerId, stream);
         this.#update();
       },
-      onTrack: ({ track, stream }) => {
+      onTrack: ({ track, stream, streams }) => {
         let s = entry.remoteStreams.get(stream.id);
         if (!s) {
           s = stream;
@@ -1322,6 +1334,15 @@ export class CallSession {
         } else if (!s.getTracks().includes(track)) {
           s.addTrack(track);
         }
+        // If this peer is known to be the screen sharer, index this stream under screenShare.streamId too
+        if (this.screenShare && this.screenShare.peerId === peerId && this.screenShare.streamId) {
+          if (track.kind === 'video' || !entry.remoteStreams.has(this.screenShare.streamId)) {
+            entry.remoteStreams.set(this.screenShare.streamId, s);
+          }
+        }
+        track.onended = () => {
+          this.#update();
+        };
         this.#update();
       },
       onConnectionState: (connectionState) => {
@@ -1641,7 +1662,60 @@ export class CallSession {
     }
     const sharer = this.peers.get(this.screenShare.peerId);
     if (!sharer) return null;
-    return sharer.remoteStreams?.get(this.screenShare.streamId) ?? null;
+
+    // 1. Try exact streamId match in sharer.remoteStreams
+    if (this.screenShare.streamId && sharer.remoteStreams?.has(this.screenShare.streamId)) {
+      const s = sharer.remoteStreams.get(this.screenShare.streamId);
+      if (s && s.getVideoTracks().some((t) => t.readyState !== 'ended')) {
+        return s;
+      }
+    }
+
+    // 2. Find any remote stream on sharer that is NOT sharer.stream and has an active video track
+    if (sharer.remoteStreams && sharer.remoteStreams.size > 0) {
+      for (const [id, s] of sharer.remoteStreams.entries()) {
+        if (!s || s === sharer.stream) continue;
+        const videoTracks = s.getVideoTracks().filter((t) => t.readyState !== 'ended');
+        if (videoTracks.length > 0) {
+          return s;
+        }
+      }
+    }
+
+    // 3. Check if sharer.stream has multiple video tracks (camera + screen on same stream)
+    if (sharer.stream) {
+      const liveVideoTracks = sharer.stream.getVideoTracks().filter((t) => t.readyState !== 'ended');
+      if (liveVideoTracks.length > 1) {
+        if (
+          !sharer.extractedScreenStream ||
+          sharer.extractedScreenStream.getVideoTracks()[0] !== liveVideoTracks[1]
+        ) {
+          sharer.extractedScreenStream = new MediaStream([liveVideoTracks[1]]);
+        }
+        return sharer.extractedScreenStream;
+      }
+    }
+
+    // 4. If sharer's camera is off (sharer.video === false) and sharer.stream has an active video track, it's screen share
+    if (sharer.stream && sharer.video === false) {
+      const liveVideoTracks = sharer.stream.getVideoTracks().filter((t) => t.readyState !== 'ended');
+      if (liveVideoTracks.length > 0) {
+        return sharer.stream;
+      }
+    }
+
+    // 5. Fallback: Any remote stream on sharer with an active video track
+    if (sharer.remoteStreams && sharer.remoteStreams.size > 0) {
+      for (const s of sharer.remoteStreams.values()) {
+        if (!s) continue;
+        const videoTracks = s.getVideoTracks().filter((t) => t.readyState !== 'ended');
+        if (videoTracks.length > 0) {
+          return s;
+        }
+      }
+    }
+
+    return null;
   }
 
   #update(patch = {}) {

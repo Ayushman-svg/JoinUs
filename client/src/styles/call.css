@@ -910,20 +910,39 @@
   border: 1px solid var(--color-border);
 }
 
-/* ---------- Host Waiting Toast (bottom-left) ---------- */
+/* ---------- Host Waiting / Hand Toast Stack (bottom-left) ---------- */
+.call__toasts-stack {
+  position: fixed;
+  bottom: calc(76px + max(var(--space-3), env(safe-area-inset-bottom)));
+  left: max(var(--space-4), env(safe-area-inset-left));
+  z-index: 100;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  pointer-events: none;
+  max-width: calc(100vw - 2rem);
+}
+
+.call__toasts-stack > * {
+  pointer-events: auto;
+  position: relative;
+  bottom: auto;
+  left: auto;
+}
+
 .call__waiting-toast {
   position: fixed;
-  bottom: max(var(--space-4), env(safe-area-inset-bottom));
+  bottom: calc(76px + max(var(--space-3), env(safe-area-inset-bottom)));
   left: max(var(--space-4), env(safe-area-inset-left));
-  z-index: 30;
+  z-index: 100;
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  background: #151A21;
-  border: 1px solid #2D3742;
+  background: #18191D;
+  border: 1px solid #363942;
   border-radius: var(--radius-lg);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
   animation: ui-rise 0.25s var(--ease) both;
   max-width: calc(100vw - 2rem);
 }

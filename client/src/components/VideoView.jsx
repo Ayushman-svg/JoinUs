@@ -15,10 +15,24 @@ export default function VideoView({ stream, muted = false, mirrored = false, cla
     video.srcObject = stream ?? null;
     setBlocked(false);
     if (stream) {
+      const handleTrackUpdate = () => {
+        if (video.srcObject !== stream) {
+          video.srcObject = stream;
+        }
+        video.play()?.catch(() => {});
+      };
+      stream.addEventListener?.('addtrack', handleTrackUpdate);
+      stream.addEventListener?.('removetrack', handleTrackUpdate);
+
       // Browsers can refuse to start sound before the page has been clicked
       video.play()?.catch((err) => {
         if (err.name === 'NotAllowedError') setBlocked(true);
       });
+
+      return () => {
+        stream.removeEventListener?.('addtrack', handleTrackUpdate);
+        stream.removeEventListener?.('removetrack', handleTrackUpdate);
+      };
     }
   }, [stream]);
 

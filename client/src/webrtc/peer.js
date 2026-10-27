@@ -81,6 +81,7 @@ export class Peer {
     pc.onnegotiationneeded = async () => {
       // Not the initiator: the first offer comes from the other side (it answers our tracks too)
       if (!this.initiator && !pc.remoteDescription) return;
+      if (this.makingOffer || pc.signalingState !== 'stable') return;
       try {
         this.makingOffer = true;
         await pc.setLocalDescription(); // picks the right offer or answer by itself
