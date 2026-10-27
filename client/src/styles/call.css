@@ -196,9 +196,9 @@
   position: relative;
   min-height: 0;
   overflow: hidden;
-  background: #151A21;
-  border: 1px solid #2D3742;
-  border-radius: 12px;
+  background: #121418;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
   aspect-ratio: 16 / 9;
   display: flex;
   align-items: center;
@@ -207,10 +207,10 @@
   transition: all 200ms ease, border-color 150ms ease, box-shadow 150ms ease;
 }
 
-/* Active speaker indicator: 2px primary ring (#2563EB) with soft glow and 150ms transition */
+/* Active speaker indicator: Zoom iconic 2px emerald green border with glow */
 .tile.tile--speaking {
-  border-color: #2563EB;
-  box-shadow: 0 0 0 2px #2563EB, 0 0 16px rgba(37, 99, 235, 0.45);
+  border-color: #23D160;
+  box-shadow: 0 0 0 2px #23D160, 0 0 16px rgba(35, 209, 96, 0.45);
 }
 
 .tile .video-view {
@@ -290,7 +290,7 @@
 
 .tile__bar {
   flex: 1;
-  background: #38BDF8;
+  background: #23D160;
   border-radius: 1px;
   animation: audio-bar-dance 0.7s ease-in-out infinite alternate;
 }
@@ -2088,19 +2088,25 @@
 
 /* Zoom Share Screen Button (Iconic Emerald Green) */
 .zoom-btn--share .zoom-btn__icon {
-  color: #22C55E;
+  color: #0FB35A;
 }
 
-.zoom-btn--share.is-sharing .zoom-btn__icon {
+.zoom-btn--share .zoom-btn__label {
+  color: #0FB35A;
+  font-weight: 600;
+}
+
+.zoom-btn--share.is-sharing .zoom-btn__icon,
+.zoom-btn--share.is-sharing .zoom-btn__label {
   color: #EF4444;
 }
 
 .zoom-btn--share:hover {
-  background: rgba(34, 197, 94, 0.12);
+  background: rgba(15, 179, 90, 0.15);
 }
 
-.zoom-btn--share.is-sharing:hover {
-  background: rgba(239, 68, 68, 0.15);
+.zoom-btn--share:hover .zoom-btn__label {
+  color: #23D160;
 }
 
 /* Security icon */
@@ -2725,12 +2731,12 @@
   color: #FFFFFF;
 }
 
-/* Active Speaker: 2px Primary Ring + Audio-bars Icon */
+/* Active Speaker: 2px Emerald Green Ring + Audio-bars Icon */
 .tile--speaking,
 .zoom-tile--speaking {
-  outline: 2px solid var(--color-primary) !important;
+  outline: 2px solid #23D160 !important;
   outline-offset: -2px;
-  box-shadow: 0 0 16px rgba(14, 114, 237, 0.4) !important;
+  box-shadow: 0 0 16px rgba(35, 209, 96, 0.45) !important;
 }
 
 .zoom-tile__speaking-bars {
@@ -2743,7 +2749,7 @@
 
 .zoom-tile__speaking-bars .tile__bar {
   width: 2.5px;
-  background-color: var(--color-primary);
+  background-color: #23D160;
   border-radius: var(--radius-full);
   animation: zoom-audio-bar-pulse 0.75s ease-in-out infinite alternate;
 }

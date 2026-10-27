@@ -369,6 +369,19 @@ export default function AppShell() {
 
             <ThemeToggle />
 
+            {settingsEnabled && (
+              <Tooltip label="Settings" side="bottom">
+                <button
+                  type="button"
+                  className="shell-header__icon-btn"
+                  aria-label="Settings"
+                  onClick={() => navigate('/settings')}
+                >
+                  <Settings size={18} aria-hidden="true" />
+                </button>
+              </Tooltip>
+            )}
+
             {/* Profile Dropdown Menu */}
             <Dropdown
               label="Account settings"
@@ -380,7 +393,10 @@ export default function AppShell() {
                   aria-label="Account menu"
                   {...props}
                 >
-                  <Avatar name={user?.name || 'User'} size="sm" />
+                  <span className="shell-header__avatar-wrapper">
+                    <Avatar name={user?.name || 'User'} size="sm" />
+                    <span className="shell-presence-dot" title="Available" aria-hidden="true" />
+                  </span>
                   <span className="shell-header__profile-name">{user?.name}</span>
                   <ChevronDown size={14} className="shell-header__profile-chevron" aria-hidden="true" />
                 </button>

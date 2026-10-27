@@ -289,6 +289,13 @@
 .shell-header__search .ui-input {
   min-height: 38px;
   background-color: var(--color-surface-2);
+  border-radius: var(--radius-full);
+  border-color: var(--color-border);
+}
+
+.shell-header__search .ui-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
 }
 
 .shell-header__right {
@@ -296,6 +303,25 @@
   align-items: center;
   gap: var(--space-3);
   flex-shrink: 0;
+}
+
+.shell-header__avatar-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shell-presence-dot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 9px;
+  height: 9px;
+  background-color: #23d160;
+  border: 1.5px solid var(--color-surface);
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(35, 209, 96, 0.4);
 }
 
 .shell-header__profile-btn {

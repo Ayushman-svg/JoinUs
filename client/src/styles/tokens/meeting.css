@@ -1,15 +1,16 @@
 /* The meeting room is always dark. Add class "theme-meeting" to its root element. */
 .theme-meeting {
-  --color-background: #0f1015;
-  --color-surface: #18191d;
+  --color-background: #000000;
+  --color-surface: #18191b;
   --color-surface-2: #23252c;
-  --color-border: #282a30;
+  --color-border: rgba(255, 255, 255, 0.1);
   --color-border-input: #434753;
-  --color-text: #f8fafc;
+  --color-text: #ffffff;
   --color-text-secondary: #9da3ae;
   --color-text-muted: #6e7380;
-  --color-primary: #0E72ED;
-  --color-primary-hover: #0b5ed7;
+  --color-primary: #0E71EB;
+  --color-primary-hover: #2d8cff;
+  --color-speaking: #23d160;
 
   background: var(--color-background);
   color: var(--color-text);

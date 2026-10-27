@@ -2,11 +2,11 @@
 .brand-mark {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
-  font-size: 1.25rem;
-  font-weight: var(--weight-bold);
-  letter-spacing: -0.02em;
-  color: var(--color-text);
+  gap: 0.65rem;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--color-primary);
   text-decoration: none;
 }
 
@@ -16,18 +16,20 @@
   justify-content: center;
   width: 2.25rem;
   height: 2.25rem;
-  color: var(--color-on-primary);
+  color: #ffffff;
   background: var(--color-primary);
-  border-radius: var(--radius-md);
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(14, 113, 235, 0.35);
 }
 
 .brand-mark--inverse {
-  color: var(--color-on-brand);
+  color: #ffffff;
 }
 
 .brand-mark--inverse .brand-mark__icon {
-  color: var(--color-brand-surface);
-  background: var(--color-on-brand);
+  color: var(--color-primary);
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 /* ---------- Auth layout ---------- */
