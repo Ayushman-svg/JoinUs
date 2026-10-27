@@ -234,13 +234,26 @@ export default function CallControls({
       media.toggleAudio();
     } else {
       try {
-        const stream = await media?.start?.();
-        if (!stream || !stream.getAudioTracks().length) {
-          showPermissionNotice('audio');
+        if (typeof navigator !== 'undefined' && navigator.permissions?.query) {
+          const res = await navigator.permissions.query({ name: 'microphone' }).catch(() => null);
+          if (res?.state === 'denied') {
+            showPermissionNotice('audio');
+            return;
+          }
         }
-      } catch {
-        showPermissionNotice('audio');
+      } catch {}
+
+      if (media?.switchDevice) {
+        const newTrack = await media.switchDevice(
+          'audio',
+          currentMicId && currentMicId !== 'default' ? currentMicId : null
+        );
+        if (newTrack) {
+          if (onReplaceTrack) await onReplaceTrack('audio', newTrack);
+          return;
+        }
       }
+      showPermissionNotice('audio');
     }
   };
 
@@ -249,13 +262,26 @@ export default function CallControls({
       media.toggleVideo();
     } else {
       try {
-        const stream = await media?.start?.();
-        if (!stream || !stream.getVideoTracks().length) {
-          showPermissionNotice('video');
+        if (typeof navigator !== 'undefined' && navigator.permissions?.query) {
+          const res = await navigator.permissions.query({ name: 'camera' }).catch(() => null);
+          if (res?.state === 'denied') {
+            showPermissionNotice('video');
+            return;
+          }
         }
-      } catch {
-        showPermissionNotice('video');
+      } catch {}
+
+      if (media?.switchDevice) {
+        const newTrack = await media.switchDevice(
+          'video',
+          currentCamId && currentCamId !== 'default' ? currentCamId : null
+        );
+        if (newTrack) {
+          if (onReplaceTrack) await onReplaceTrack('video', newTrack);
+          return;
+        }
       }
+      showPermissionNotice('video');
     }
   };
 

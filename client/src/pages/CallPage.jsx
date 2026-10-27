@@ -203,7 +203,11 @@ export default function CallPage() {
   }, []);
 
   const { status: mediaStatus, start: startMedia } = media;
-  const mediaSettled = mediaStatus === 'ready' || mediaStatus === 'error';
+  const initialMediaSettledRef = useRef(false);
+  if (mediaStatus === 'ready' || mediaStatus === 'error') {
+    initialMediaSettledRef.current = true;
+  }
+  const mediaSettled = initialMediaSettledRef.current;
 
   const handleMuteDirective = () => {
     if (media.audioEnabled) {
